@@ -62,7 +62,7 @@ The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support
 
 ## Framework source
 
-`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `1f6776fa7ececa766188df5201eefec6ba781b5d`. It supplies source, examples, and documentation matching the installed preview. Application imports resolve through the npm packages.
+`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `1f6776fa7ececa766188df5201eefec6ba781b5d`. It supplies source, examples, and documentation matching the installed preview. Application imports resolve through the npm packages. The app's formatting commands use its root configuration and skip the subtree.
 
 When upgrading Foldkit, pull the subtree at the commit or release tag matching the new package versions:
 

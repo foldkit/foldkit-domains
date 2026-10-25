@@ -7,10 +7,10 @@
     "build": "vite build",
     "preview": "vite preview --outDir dist/client",
     "typecheck": "tsc --noEmit",
-    "format": "oxfmt",
+    "format": "oxfmt --disable-nested-config",
     "test": "vitest run",
     "lint": "oxlint src && effect-tsgo patch --no-typescript --oxlint && oxlint --config .oxlintrc.effect.json --deny-warnings src",
-    "format:check": "oxfmt --check",
+    "format:check": "oxfmt --check --disable-nested-config",
     "test:e2e": "playwright test"
   },
   "dependencies": {
