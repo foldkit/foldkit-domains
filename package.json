@@ -1,0 +1,44 @@
+{
+  "name": "foldkit-domains",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --outDir dist/client",
+    "typecheck": "tsc --noEmit",
+    "format": "oxfmt",
+    "test": "vitest run",
+    "lint": "oxlint src && effect-tsgo patch --no-typescript --oxlint && oxlint --config .oxlintrc.effect.json --deny-warnings src",
+    "format:check": "oxfmt --check",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "effect": "4.0.0",
+    "foldkit": "0.169.0-canary.1f6776fa7ece"
+  },
+  "devDependencies": {
+    "@effect/tsgo": "0.50.0",
+    "@foldkit/devtools": "0.169.0-canary.1f6776fa7ece",
+    "@foldkit/devtools-mcp": "0.25.0-canary.1f6776fa7ece",
+    "@foldkit/oxlint-plugin": "0.15.3-canary.1f6776fa7ece",
+    "@foldkit/vite-plugin": "0.28.0-canary.1f6776fa7ece",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "26.4.0",
+    "happy-dom": "^20.14.5",
+    "oxfmt": "^0.66.0",
+    "oxlint": "1.85.0",
+    "oxlint-tsgolint": "7.0.2003",
+    "typescript": "7.1.0-beta",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.2"
+  },
+  "private": true,
+  "description": "A statically rendered domain search example built with Foldkit",
+  "license": "MIT",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=22.22.2"
+  }
+}
