@@ -1,0 +1,28 @@
+import { Block } from 'foldkit'
+
+const OutMessage = defineMessageUnion({
+  SelectedEndDate: { date: Schema.String },
+  CompletedRange: { startDate: Schema.String, endDate: Schema.String },
+})
+
+const DateRangeDefinition = Block.makeDefinition('DateRange', {
+  Model,
+  Message,
+  OutMessage,
+})
+
+const EndDatePickerBinding = DateRangeDefinition.makeBinding(
+  DatePicker.DatePickerBlock,
+  {
+    field: 'endDatePicker',
+  },
+).withOutMessagePolicy({
+  fold: foldEndDateOutMessage,
+  forward: DateRangeDefinition.makeOutMessageForward({
+    SelectedDate: ({ date }) => OutMessage.SelectedEndDate({ date }),
+  }),
+})
+
+const restoreEndDate = DateRangeDefinition.makeStep(() =>
+  EndDatePickerBinding.requestRestore(),
+)

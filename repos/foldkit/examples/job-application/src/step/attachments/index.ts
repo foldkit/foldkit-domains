@@ -1,0 +1,1 @@
+export { AttachmentsBlock } from './block'

@@ -1,0 +1,1 @@
+export { CoverLetterBlock } from './block'

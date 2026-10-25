@@ -1,0 +1,1 @@
+export { SkillsEntryBlock } from './block'

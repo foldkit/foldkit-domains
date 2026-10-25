@@ -1,0 +1,1 @@
+export { WorkHistoryBlock } from './block'

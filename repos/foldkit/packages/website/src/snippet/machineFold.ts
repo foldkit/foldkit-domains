@@ -1,0 +1,43 @@
+import { Match, Option, Schema } from 'effect'
+import { Block } from 'foldkit'
+import { Machine } from 'foldkit/experimental'
+import { modifyFields } from 'foldkit/struct'
+
+import { CheckoutState, Message, checkoutMachine } from './machineDefinition'
+
+export const Model = Schema.Struct({
+  checkout: CheckoutState,
+  isHelpOpen: Schema.Boolean,
+})
+const ApplicationComposition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+}).makeComposition()
+
+export const initialModel = Model.make({
+  checkout: checkoutMachine.initial,
+  isHelpOpen: false,
+})
+
+export const foldCheckout = Machine.fold({
+  machine: checkoutMachine,
+  read: (model: typeof Model.Type) => Option.some(model.checkout),
+  write: (model, nextCheckout) =>
+    modifyFields(model, { checkout: () => nextCheckout }),
+})
+
+export const update = ApplicationComposition.makeUpdate((model, message) =>
+  Match.value(message).pipe(
+    Match.tag('ToggledHelp', ({ isOpen }) => ({
+      model: modifyFields(model, { isHelpOpen: () => isOpen }),
+    })),
+    Match.tag(
+      'SelectedEdition',
+      'ClickedContinue',
+      'ClickedBack',
+      'ClickedCancel',
+      () => foldCheckout(model, message),
+    ),
+    Match.exhaustive,
+  ),
+)

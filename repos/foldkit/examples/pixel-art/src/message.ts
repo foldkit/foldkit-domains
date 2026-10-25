@@ -1,0 +1,26 @@
+import { Schema } from 'effect'
+import { defineMessageUnion } from 'foldkit/message'
+
+import { PaletteIndex, Tool } from './model'
+
+export const Message = defineMessageUnion({
+  PressedCell: { x: Schema.Number, y: Schema.Number },
+  EnteredCell: { x: Schema.Number, y: Schema.Number },
+  LeftCanvas: {},
+  ReleasedMouse: {},
+  SelectedColor: { colorIndex: PaletteIndex },
+  SelectedTool: { tool: Tool },
+  SelectedGridSize: { size: Schema.Number },
+  ToggledMirrorHorizontal: {},
+  ToggledMirrorVertical: {},
+  ClickedUndo: {},
+  ClickedRedo: {},
+  ClickedHistoryStep: { stepIndex: Schema.Number },
+  ClickedRedoStep: { stepIndex: Schema.Number },
+  ClickedClear: {},
+  ClickedExport: {},
+  SucceededExportPng: {},
+  FailedExportPng: { error: Schema.String },
+  ConfirmedGridSizeChange: {},
+  CompletedSaveCanvas: {},
+})
