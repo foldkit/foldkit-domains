@@ -13,7 +13,7 @@ pnpm install
 pnpm dev
 ```
 
-This app uses a local build of the unreleased Blocks and Layers preview from `codex/workspace-example`, pinned to `732258ae40bfb4642e72a68f21f4d0cf70043d6b`. The six Foldkit package archives live in `vendor/foldkit-preview`; a fresh clone installs them directly. Its [manifest](vendor/foldkit-preview/manifest.json) records the source revision, package versions, and archive integrity. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
+This app uses the published Blocks and Layers preview at [commit `f3be22cfeefe`](https://github.com/foldkit/foldkit/commit/f3be22cfeefed437164ad614d08b16d9000e0703). All six Foldkit packages are pinned to exact npm versions with the same canary suffix. The lockfile records their registry integrity. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
 
 ## Build and deploy
 
@@ -72,11 +72,11 @@ Stories in `src/story.test.ts` exercise search transitions and stale responses. 
 
 The browser suite builds production output and starts its own preview server on port 5180. Chromium and WebKit cover early typing, focus, selection, input identity, mobile placement, names while prices load, reloads, history, filters, sorting, and the cart. The development check uses port 5181 and holds client scripts back to verify the initial page has its styles. Both suites refuse to reuse an existing server on their port.
 
-The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support agent-assisted development. The MCP server uses the installed preview archive.
+The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support agent-assisted development. The MCP server uses the installed preview package.
 
 ## Framework source
 
-`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `732258ae40bfb4642e72a68f21f4d0cf70043d6b`. It supplies source, examples, and documentation matching the installed preview archives. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
+`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `f3be22cfeefed437164ad614d08b16d9000e0703`. It supplies source, examples, and documentation matching the installed preview packages. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
 
 When upgrading Foldkit, pull the subtree at the commit or release tag matching the new package versions:
 
