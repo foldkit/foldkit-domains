@@ -83,9 +83,9 @@ test('preserves early typing, focus, selection, and the input node through hydra
     await expect(page.locator('.domain-card').first()).toContainText(
       'typed-before-hydration.com',
     )
-    await expect(page.locator('.all-results li').last()).toContainText(
-      'typed-before-hydration.tools',
-    )
+    await expect(
+      page.locator('.results-preview .domain-row').last(),
+    ).toContainText('typed-before-hydration.')
     await expect(page.locator('.results .price')).toHaveCount(0)
     releaseBundle()
 
@@ -221,9 +221,16 @@ test('searches, filters, sorts, and manages the cart', async ({
   )
   await page.screenshot({ path: testInfo.outputPath('domains-desktop.png') })
   await page.getByLabel('Filter availability').selectOption('Available')
-  await expect(page.locator('.all-results li')).toHaveCount(22)
+  await expect(page.locator('.result-count')).toHaveText(
+    '554 domains · Prices per year in USD',
+  )
+  expect(
+    await page.locator('#domain-results .domain-row').count(),
+  ).toBeLessThan(60)
   await page.getByLabel('Sort results').selectOption('PriceAscending')
-  await expect(page.locator('.all-results li').first()).toContainText('$1.99')
+  await expect(
+    page.locator('#domain-results .domain-row').first(),
+  ).toContainText('$1.99')
   await page.getByLabel('Filter by TLD').selectOption('Com')
   await expect(page.getByRole('status')).toContainText([
     'No domains match',
@@ -274,12 +281,12 @@ test('updates domain names while prices and availability wait for the current lo
     'new-idea.app',
     'new-idea.io',
   ])
-  await expect(page.locator('.all-results li').first()).toContainText(
-    'new-idea.com',
-  )
-  await expect(page.locator('.all-results li').last()).toContainText(
-    'new-idea.tools',
-  )
+  await expect(
+    page.locator('#domain-results .domain-row').first(),
+  ).toContainText('new-idea.com')
+  await expect(
+    page.locator('#domain-results .domain-row').last(),
+  ).toContainText('new-idea.')
   await expect(page.locator('.results .price')).toHaveCount(0)
   await expect(page.locator('.results .unavailable')).toHaveCount(0)
   await expect(page.locator('.results button')).toHaveCount(0)
@@ -327,5 +334,86 @@ test('restores queries on reload and browser navigation and ignores superseded s
   await input.fill('valid-domain')
   await expect(page.locator('.domain-card').first()).toContainText(
     'valid-domain.com',
+  )
+})
+
+test('virtualizes the catalog and preserves scrolling and cart selections across query changes', async ({
+  page,
+}) => {
+  await page.goto('/?q=acme')
+  const viewport = page.locator('#domain-results')
+  const rows = viewport.locator('.domain-row')
+  await expect(page.locator('.result-count')).toHaveText(
+    '556 domains · Prices per year in USD',
+  )
+  await expect(rows.first()).toContainText('acme.com')
+  expect(await rows.count()).toBeLessThan(60)
+  await expect(viewport.getByText('acme.zone', { exact: true })).toHaveCount(0)
+
+  await expect
+    .poll(async () => {
+      await viewport.evaluate(element => {
+        element.scrollTop = element.scrollHeight
+      })
+      return rows.last().textContent()
+    })
+    .toContain('acme.zone')
+  await expect(viewport.getByText('acme.com', { exact: true })).toHaveCount(0)
+  expect(await rows.count()).toBeLessThan(60)
+  await viewport.getByRole('button', { name: 'Add acme.zone to cart' }).click()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(
+    viewport.getByRole('button', { name: 'Remove acme.zone from cart' }),
+  ).toBeVisible()
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
+    .toBeLessThanOrEqual(390)
+
+  await page.getByRole('searchbox', { name: 'Search domains' }).fill('fresh')
+  await expect
+    .poll(() =>
+      viewport
+        .locator('[data-domain-label]')
+        .evaluateAll(
+          elements =>
+            elements.length > 0 &&
+            elements.every(element => element.textContent === 'fresh'),
+        ),
+    )
+    .toBe(true)
+  await expect
+    .poll(() => viewport.evaluate(element => element.scrollTop))
+    .toBeGreaterThan(0)
+  await expect(page.locator('.result-count')).toHaveText(
+    '556 domains · Prices per year in USD',
+  )
+  await expect
+    .poll(async () => {
+      await viewport.evaluate(element => {
+        element.scrollTop = element.scrollHeight
+      })
+      return rows.last().textContent()
+    })
+    .toContain('fresh.zone')
+  await page.getByLabel('Sort results').selectOption('PriceAscending')
+  await expect
+    .poll(async () => {
+      await viewport.evaluate(element => {
+        element.scrollTop = 0
+      })
+      return rows.first().textContent()
+    })
+    .toContain('fresh.space')
+  await page.getByLabel('Filter by TLD').selectOption('App')
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toContainText('fresh.app')
+  await expect
+    .poll(() => viewport.evaluate(element => element.scrollTop))
+    .toBe(0)
+
+  await page.getByRole('button', { name: 'Cart, 1 domains' }).click()
+  await expect(page.getByRole('region', { name: 'Your cart' })).toContainText(
+    'acme.zone',
   )
 })

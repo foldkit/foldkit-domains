@@ -2,6 +2,7 @@ import { Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import { AvailabilityFilter, Domain, SortOrder, TldFilter } from './domain'
+import { ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
 
 export const SearchState = defineTaggedUnion({
@@ -15,6 +16,7 @@ export const Model = Schema.Struct({
   route: ApplicationRoute,
   searchGeneration: Schema.Number,
   search: SearchState,
+  resultsList: ResultsListBlock.Model,
   tldFilter: TldFilter,
   availabilityFilter: AvailabilityFilter,
   sortOrder: SortOrder,

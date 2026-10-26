@@ -1,9 +1,10 @@
 import { Array, Match, Number, Option, Schema, String, pipe } from 'effect'
-import { type Html } from 'foldkit/html'
+import { type Html, childAttributes } from 'foldkit/html'
 
 import {
   ApplicationComposition,
   type ApplicationViewBuilder,
+  ResultsListBinding,
 } from './composition'
 import {
   AvailabilityFilter,
@@ -13,16 +14,18 @@ import {
   SortOrder,
   TldFilter,
   formatPrice,
-  matchesTldFilter,
   pendingDomains,
-  visibleDomains,
 } from './domain'
 import * as Icon from './icon'
 import { Message } from './message'
 import { Model, SearchState } from './model'
+import { visibleResultListings } from './results'
+import { RESULTS_LIST_ID, groupResults } from './resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from './route'
 
 const TOP_RESULT_COUNT = 4
+const PREVIEW_RESULT_COUNT = 36
+const RESULTS_OVERSCAN = 2
 
 const searchFormView = (
   model: typeof Model.Type,
@@ -313,6 +316,54 @@ const filtersView = (
     ],
   )
 
+const resultsListView = (
+  results: ReadonlyArray<typeof DomainListing.Type>,
+  model: typeof Model.Type,
+  h: ApplicationViewBuilder,
+): Html =>
+  h.div(
+    [h.Class('all-results')],
+    [
+      h.block(
+        ResultsListBinding.embedView({
+          slotId: RESULTS_LIST_ID,
+          model: model.resultsList,
+          viewInputs: {
+            items: groupResults(results),
+            itemToKey: row => row.id,
+            itemToView: row =>
+              h.ul(
+                [h.Class('domain-row-group')],
+                Array.map(row.domains, domain =>
+                  domainRowView(domain, model, h),
+                ),
+              ),
+            dynamicRowHeights: true,
+            overscan: RESULTS_OVERSCAN,
+            containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
+            containerAttributes: childAttributes([
+              h.AriaLabel('All domain results'),
+              h.Tabindex(0),
+            ]),
+          },
+        }),
+      ),
+      h.ul(
+        [h.Class('results-preview'), h.AriaHidden(true)],
+        Array.map(Array.take(results, PREVIEW_RESULT_COUNT), domain =>
+          domainRowView(
+            DomainListing.Pending({
+              name: domain.name,
+              tld: domain.tld,
+            }),
+            model,
+            h,
+          ),
+        ),
+      ),
+    ],
+  )
+
 const resultsGridView = (
   domains: ReadonlyArray<typeof DomainListing.Type>,
   results: ReadonlyArray<typeof DomainListing.Type>,
@@ -343,68 +394,56 @@ const resultsGridView = (
               'No domains match your filters. Try another extension or show all domains.',
             ],
           ),
-        onNonEmpty: results =>
-          h.ul(
-            [h.Class('all-results')],
-            Array.map(results, domain => domainRowView(domain, model, h)),
-          ),
+        onNonEmpty: results => resultsListView(results, model, h),
       }),
     ],
   )
 
-const pendingResultsView = (
+const searchResultsView = (
   model: typeof Model.Type,
   h: ApplicationViewBuilder,
 ): Html => {
-  const domains = pendingDomains(routeToQuery(model.route))
-  const results = Array.filter(domains, domain =>
-    matchesTldFilter(domain, model.tldFilter),
-  )
-
-  return h.div(
-    [h.Class('loading-results')],
-    [
-      resultsGridView(domains, results, model, h),
-      h.p(
-        [
-          h.Class('result-count'),
-          h.Role('status'),
-          h.AriaLabel('Searching domains'),
-        ],
-        ['Checking availability and prices…'],
-      ),
-    ],
-  )
-}
-
-const readyResultsView = (
-  domains: ReadonlyArray<typeof Domain.Type>,
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
-  const results = visibleDomains(
-    domains,
-    model.tldFilter,
-    model.availabilityFilter,
-    model.sortOrder,
-  )
+  const results = visibleResultListings(model)
+  const domains = SearchState.match(model.search, {
+    Idle: () => pendingDomains(routeToQuery(model.route)),
+    Loading: () => pendingDomains(routeToQuery(model.route)),
+    Ready: ({ domains }) => Array.map(domains, DomainListing.Ready),
+    Failed: () => [],
+  })
 
   return h.div(
     [],
     [
-      resultsGridView(
-        Array.map(domains, domain => DomainListing.Ready(domain)),
-        Array.map(results, domain => DomainListing.Ready(domain)),
-        model,
-        h,
-      ),
-      h.p(
-        [h.Class('result-count'), h.Role('status')],
-        [`${Array.length(results)} domains · Prices per year in USD`],
-      ),
+      resultsGridView(domains, results, model, h),
+      model.search._tag === 'Ready'
+        ? h.p(
+            [h.Class('result-count'), h.Role('status')],
+            [`${Array.length(results)} domains · Prices per year in USD`],
+          )
+        : h.p(
+            [
+              h.Class('result-count'),
+              h.Role('status'),
+              h.AriaLabel('Searching domains'),
+            ],
+            ['Checking availability and prices…'],
+          ),
     ],
   )
 }
+
+const searchErrorView = (error: string, h: ApplicationViewBuilder): Html =>
+  h.div(
+    [h.Class('search-error'), h.Role('alert')],
+    [
+      h.h2([], ['Let’s try that again']),
+      h.p([], [error]),
+      h.button(
+        [h.Class('button'), h.OnClick(Message.ClickedRetrySearch())],
+        ['Try again'],
+      ),
+    ],
+  )
 
 const resultsView = (
   model: typeof Model.Type,
@@ -417,23 +456,9 @@ const resultsView = (
       h.AriaBusy(model.search._tag === 'Loading'),
     ],
     [
-      SearchState.match(model.search, {
-        Idle: () => pendingResultsView(model, h),
-        Loading: () => pendingResultsView(model, h),
-        Ready: ({ domains }) => readyResultsView(domains, model, h),
-        Failed: ({ error }) =>
-          h.div(
-            [h.Class('search-error'), h.Role('alert')],
-            [
-              h.h2([], ['Let’s try that again']),
-              h.p([], [error]),
-              h.button(
-                [h.Class('button'), h.OnClick(Message.ClickedRetrySearch())],
-                ['Try again'],
-              ),
-            ],
-          ),
-      }),
+      model.search._tag === 'Failed'
+        ? searchErrorView(model.search.error, h)
+        : searchResultsView(model, h),
     ],
   )
 

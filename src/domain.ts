@@ -1,5 +1,16 @@
-import { Array, Match, Option, Order, Schema, String, pipe } from 'effect'
+import {
+  Array,
+  Match,
+  Option,
+  Order,
+  Schema,
+  String,
+  Tuple,
+  pipe,
+} from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
+
+import { supportedTlds } from './tld'
 
 export const DomainName = Schema.Struct({
   name: Schema.String,
@@ -33,7 +44,7 @@ export const SortOrder = Schema.Literals([
   'PriceDescending',
 ])
 
-const extensions: ReadonlyArray<readonly [string, number]> = [
+const featuredExtensions: ReadonlyArray<readonly [string, number]> = [
   ['com', 12],
   ['dev', 12],
   ['app', 9.99],
@@ -59,6 +70,20 @@ const extensions: ReadonlyArray<readonly [string, number]> = [
   ['page', 9.99],
   ['tools', 24.99],
 ]
+
+const DEFAULT_DEMO_PRICE = 19.99
+
+const extensions = Array.appendAll(
+  featuredExtensions,
+  Array.map(
+    Array.filter(
+      supportedTlds,
+      tld =>
+        !Array.some(featuredExtensions, ([featuredTld]) => featuredTld === tld),
+    ),
+    tld => Tuple.make(tld, DEFAULT_DEMO_PRICE),
+  ),
+)
 
 export const queryToMaybeDomainLabel = (
   query: string,

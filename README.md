@@ -2,7 +2,7 @@
 
 A [Foldkit](https://foldkit.dev) example of the [Vercel Domains](https://vercel.com/domains) search interaction. The search field arrives in static HTML, accepts edits before hydration, and moves into the header without replacing the input. Domain names update as you type; prices and availability use placeholders until the current lookup completes.
 
-Availability and prices are illustrative. The cart supports adding and removing domains. Replace the `FetchDomains` handler in `src/command.ts` to connect a registrar.
+The catalog contains 556 extensions from Vercel’s [supported domains](https://vercel.com/docs/domains/supported-domains) list. Availability and prices are illustrative. The cart supports adding and removing domains. Replace the `FetchDomains` handler in `src/command.ts` to connect a registrar.
 
 ## Run locally
 
@@ -36,6 +36,7 @@ Build and deploy the HTML and assets together. Foldkit assigns a coordinated bui
 - `src/init.ts` starts a search from the URL; `src/update.ts` owns search, filter, and cart transitions.
 - `src/command.ts` defines the EffectsLayer, including the interruptible lookup and URL synchronization.
 - `src/route.ts` defines the bidirectional search router; its query Schema handles URL parsing and encoding. The Model stores the parsed Route. Input changes replace the URL, and `ChangedUrl` updates the Route and starts its lookup.
+- `src/resultsList.ts` creates the Foldkit UI VirtualList Block. `src/composition.ts` binds it to the root Model; `src/results.ts` selects visible listings.
 - `src/composition.ts` connects the root Definition; `src/block.ts` assembles the application.
 - `src/view.ts` contains named views and Tailwind layout utilities; `src/styles.css` defines the Tailwind theme, base styles, reusable components, and single-input positioning.
 - `src/icon.ts` renders Lucide icons with Foldkit SVG builders; attribution and licenses are in `THIRD_PARTY_NOTICES.md`.
@@ -44,6 +45,8 @@ Build and deploy the HTML and assets together. Foldkit assigns a coordinated bui
 Unknown paths render a NotFound page with a link back to search. Request-time rendering returns HTTP 404 for those paths.
 
 Each lookup carries a search generation. Changing or clearing the query immediately invalidates and cancels pending work; the URL-change Message starts the new lookup. An outdated response cannot replace current results, even when a query is repeated. Pending listings have no price, availability, or cart action until their lookup completes.
+
+All Results uses Foldkit UI’s VirtualList in a scrollable panel. Groups of six domains preserve the responsive three-column/two-column grid, and measured heights account for wrapping and viewport changes. VirtualList preserves the scroll anchor as results change. A bounded static skeleton preview covers the initial measurement before VirtualList renders its visible window.
 
 ## Before hydration
 

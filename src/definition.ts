@@ -9,10 +9,12 @@ export const ApplicationDefinition = Block.makeDefinition('Application', {
 })
 
 export const {
+  makeBinding,
   makeCommand,
   makeCommandsStep,
   makeComposition,
   makeFieldsStep,
   makeNoopStep,
+  makeOutMessageFold,
   makeStep,
 } = ApplicationDefinition

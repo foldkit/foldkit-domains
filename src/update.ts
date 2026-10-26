@@ -11,7 +11,7 @@ import {
   ReplaceSearchUrl,
   cancelSearch,
 } from './command'
-import { ApplicationComposition } from './composition'
+import { ApplicationComposition, ResultsListBinding } from './composition'
 import {
   makeCommandsStep,
   makeFieldsStep,
@@ -19,10 +19,13 @@ import {
   makeStep,
 } from './definition'
 import { queryToMaybeDomainLabel } from './domain'
+import { Message } from './message'
 import { SearchState } from './model'
+import { visibleResultListings } from './results'
+import { groupResults } from './resultsList'
 import { routeToQuery, urlToApplicationRoute } from './route'
 
-export const searchCurrentQueryStep = makeStep(model => {
+const updateCurrentSearchStep = makeStep(model => {
   const query = routeToQuery(model.route)
   const baseCommands = [cancelSearch()]
 
@@ -68,6 +71,17 @@ export const searchCurrentQueryStep = makeStep(model => {
   )
 })
 
+const informResultsListStep = makeStep(model =>
+  ResultsListBinding.informItemsChanged(
+    Array.map(groupResults(visibleResultListings(model)), row => row.id),
+  ),
+)
+
+export const searchCurrentQueryStep = Update.combineSteps([
+  updateCurrentSearchStep,
+  informResultsListStep,
+])
+
 const makeChangeSearchQueryStep = (query: string) =>
   makeStep(model => {
     const replaceSearchUrl = ReplaceSearchUrl({
@@ -96,35 +110,49 @@ export const update = ApplicationComposition.makeUpdate({
     clearSearchStep,
     makeCommandsStep(() => [FocusSearchInput()]),
   ]),
-  ChangedUrl: (model, { url }) => {
+  ChangedUrl: makeStep((model, { url }: typeof Message.ChangedUrl.Type) => {
     const nextRoute = urlToApplicationRoute(url)
-    const modelWithNextRoute = modifyFields(model, { route: () => nextRoute })
 
     const isSearchRefreshNeeded =
       nextRoute._tag !== model.route._tag ||
       routeToQuery(nextRoute) !== routeToQuery(model.route)
 
     if (isSearchRefreshNeeded) {
-      return searchCurrentQueryStep(modelWithNextRoute)
+      return Update.combineSteps([
+        makeFieldsStep(() => ({ route: () => nextRoute })),
+        searchCurrentQueryStep,
+      ])
     } else {
-      return { model: modelWithNextRoute }
+      return { model: modifyFields(model, { route: () => nextRoute }) }
     }
-  },
+  }),
   ClickedLink: makeCommandsStep.fromMessage(({ request }) =>
     UrlRequest.match(request, {
       Internal: ({ url }) => [NavigateInternal({ url: Url.toString(url) })],
       External: ({ href }) => [LoadExternal({ href })],
     }),
   ),
-  UpdatedTldFilter: makeFieldsStep.fromMessage(({ value }) => ({
-    tldFilter: () => value,
-  })),
-  UpdatedAvailabilityFilter: makeFieldsStep.fromMessage(({ value }) => ({
-    availabilityFilter: () => value,
-  })),
-  UpdatedSortOrder: makeFieldsStep.fromMessage(({ value }) => ({
-    sortOrder: () => value,
-  })),
+  UpdatedTldFilter: makeStep(
+    (_model, { value }: typeof Message.UpdatedTldFilter.Type) =>
+      Update.combineSteps([
+        makeFieldsStep(() => ({ tldFilter: () => value })),
+        informResultsListStep,
+      ]),
+  ),
+  UpdatedAvailabilityFilter: makeStep(
+    (_model, { value }: typeof Message.UpdatedAvailabilityFilter.Type) =>
+      Update.combineSteps([
+        makeFieldsStep(() => ({ availabilityFilter: () => value })),
+        informResultsListStep,
+      ]),
+  ),
+  UpdatedSortOrder: makeStep(
+    (_model, { value }: typeof Message.UpdatedSortOrder.Type) =>
+      Update.combineSteps([
+        makeFieldsStep(() => ({ sortOrder: () => value })),
+        informResultsListStep,
+      ]),
+  ),
   ClickedAddDomain: makeFieldsStep((model, { domain }) =>
     domain.isAvailable &&
     !Array.some(model.cart, item => item.name === domain.name)
@@ -140,11 +168,22 @@ export const update = ApplicationComposition.makeUpdate({
   ClickedCloseCart: makeFieldsStep(() => ({
     cartVisibility: () => 'Closed',
   })),
-  SucceededFetchDomains: makeFieldsStep(
-    (model, { searchGeneration, domains }) =>
-      searchGeneration === model.searchGeneration
-        ? { search: () => SearchState.Ready({ domains }) }
-        : {},
+  SucceededFetchDomains: makeStep(
+    (
+      model,
+      { searchGeneration, domains }: typeof Message.SucceededFetchDomains.Type,
+    ) => {
+      if (searchGeneration === model.searchGeneration) {
+        return Update.combineSteps([
+          makeFieldsStep(() => ({
+            search: () => SearchState.Ready({ domains }),
+          })),
+          informResultsListStep,
+        ])
+      } else {
+        return { model }
+      }
+    },
   ),
   FailedFetchDomains: makeFieldsStep((model, { searchGeneration, error }) =>
     searchGeneration === model.searchGeneration

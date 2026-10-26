@@ -1,7 +1,16 @@
-import { Option } from 'effect'
+import { Array, Option } from 'effect'
 import { UrlRequest } from 'foldkit/navigation'
-import { Command, given, message, model, story } from 'foldkit/story'
+import {
+  Command,
+  type StorySimulation,
+  given,
+  message,
+  model,
+  story,
+} from 'foldkit/story'
 import { expect, test } from 'vitest'
+
+import { VirtualList } from '@foldkit/ui'
 
 import {
   FetchDomains,
@@ -15,8 +24,26 @@ import { searchDomains } from './domain'
 import { Message } from './message'
 import { SearchState } from './model'
 import { emptyModel, readyModel, urlOrThrow } from './model.fixture'
+import { ResultsListBlock } from './resultsList'
 import { ApplicationRoute, routeToQuery } from './route'
 import { update } from './update'
+
+const resolveResultsListScrolls = <Model, Message, OutMessage>(
+  simulation: StorySimulation<Model, Message, OutMessage>,
+): StorySimulation<Model, Message, OutMessage> =>
+  Array.reduce(simulation.commands, simulation, (current, command) =>
+    Option.match(Command.argsOf(VirtualList.test.ApplyScroll)(command), {
+      onNone: () => current,
+      onSome: args =>
+        Command.resolve(
+          VirtualList.test.ApplyScroll(args),
+          ResultsListBlock.Message.CompletedApplyScroll({
+            version: args.version,
+            outcome: VirtualList.ApplyScrollOutcome.Skipped(),
+          }),
+        )(current),
+    }),
+  )
 
 test('only the current search can supply results when a query is repeated', () => {
   story(
@@ -81,6 +108,7 @@ test('only the current search can supply results when a query is repeated', () =
         SearchState.Ready({ domains: searchDomains('acme') }),
       )
     }),
+    resolveResultsListScrolls,
     Command.resolveAllExact(
       [cancelSearch(), Message.CompletedCancelSearch()],
       [cancelSearch(), Message.CompletedCancelSearch()],
@@ -126,6 +154,7 @@ test('clearing the input prevents an in-flight search from reopening results', (
       expect(routeToQuery(model.route)).toBe('')
       expect(model.search._tag).toBe('Idle')
     }),
+    resolveResultsListScrolls,
     Command.resolveAllExact(
       [cancelSearch(), Message.CompletedCancelSearch()],
       [cancelSearch(), Message.CompletedCancelSearch()],
@@ -164,6 +193,7 @@ test('typing requests URL synchronization before the new route starts a lookup',
         domains: searchDomains('fresh'),
       }),
     ),
+    resolveResultsListScrolls,
     Command.resolveAllExact(
       [cancelSearch(), Message.CompletedCancelSearch()],
       [cancelSearch(), Message.CompletedCancelSearch()],
@@ -185,6 +215,7 @@ test('an unknown path enters NotFound and cancels the search', () => {
       expect(model.search._tag).toBe('Idle')
     }),
     Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
+    resolveResultsListScrolls,
   )
 })
 
@@ -248,6 +279,7 @@ test('typing invalidates an in-flight result before the URL changes', () => {
         domains: searchDomains('fresh'),
       }),
     ),
+    resolveResultsListScrolls,
     Command.resolveAllExact(
       [cancelSearch(), Message.CompletedCancelSearch()],
       [cancelSearch(), Message.CompletedCancelSearch()],
@@ -282,6 +314,7 @@ test('clearing invalidates an in-flight result before the URL changes', () => {
       expect(model.route).toEqual(ApplicationRoute.Search({ q: Option.none() }))
       expect(model.search._tag).toBe('Idle')
     }),
+    resolveResultsListScrolls,
     Command.resolveAllExact(
       [cancelSearch(), Message.CompletedCancelSearch()],
       [cancelSearch(), Message.CompletedCancelSearch()],
@@ -316,5 +349,6 @@ test('an unchanged search value keeps its pending lookup', () => {
       )
     }),
     Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
+    resolveResultsListScrolls,
   )
 })

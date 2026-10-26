@@ -1,5 +1,8 @@
+import { Array, Option } from 'effect'
 import {
   Command,
+  Mount,
+  type SceneSimulation,
   all,
   change,
   click,
@@ -10,26 +13,72 @@ import {
   label,
   role,
   scene,
+  selector,
   submit,
   text,
 } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
+import { VirtualList } from '@foldkit/ui'
+
 import { FetchDomains, cancelSearch } from './command'
 import { searchDomains } from './domain'
 import { Message } from './message'
 import { emptyModel, readyModel } from './model.fixture'
+import { RESULTS_LIST_ID, ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
 import { update } from './update'
 import { view } from './view'
 
+const resolveResultsListScrolls = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+): SceneSimulation<Model, Message, OutMessage> =>
+  Array.reduce(simulation.commands, simulation, (current, command) =>
+    Option.match(Command.argsOf(VirtualList.test.ApplyScroll)(command), {
+      onNone: () => current,
+      onSome: args =>
+        Command.resolve(
+          VirtualList.test.ApplyScroll(args),
+          ResultsListBlock.Message.CompletedApplyScroll({
+            version: args.version,
+            outcome: VirtualList.ApplyScrollOutcome.Skipped(),
+          }),
+        )(current),
+    }),
+  )
+
+const measureResultsList = Mount.resolve(
+  VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
+  ResultsListBlock.Message.ResizedContainer({
+    containerWidth: 1000,
+    containerHeight: 400,
+  }),
+)
+
 describe('domain search', () => {
+  test('renders a bounded window of the complete catalog after measurement', () => {
+    scene(
+      { update, view },
+      given(readyModel('acme')),
+      measureResultsList,
+      inside(
+        role('list', { name: 'All domain results' }),
+        expect(text('acme.com')).toExist(),
+        expect(text('acme.zone')).toBeAbsent(),
+      ),
+      expect(selector('#domain-results')).toHaveAttr('tabIndex', '0'),
+      expect(text('556 domains · Prices per year in USD')).toExist(),
+    )
+  })
+
   test('hides prices and cart actions while refreshed domain prices are pending', () => {
     scene(
       { update, view },
       given(readyModel('fresh')),
+      measureResultsList,
       submit(role('search')),
+      resolveResultsListScrolls,
       expect(role('status', { name: 'Searching domains' })).toExist(),
       inside(
         first(all.role('article')),
@@ -45,6 +94,7 @@ describe('domain search', () => {
         }),
       ),
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
+      resolveResultsListScrolls,
       inside(
         first(all.role('article')),
         expect(text('fresh.com')).toExist(),
@@ -58,13 +108,16 @@ describe('domain search', () => {
     scene(
       { update, view },
       given(readyModel('foldkit')),
+      measureResultsList,
       change(label('Filter availability'), 'Available'),
+      resolveResultsListScrolls,
       change(label('Sort results'), 'PriceAscending'),
+      resolveResultsListScrolls,
       inside(
-        role('list'),
+        selector('#domain-results'),
         expect(text('foldkit.com')).toBeAbsent(),
         inside(
-          first(all.role('listitem')),
+          first(all.selector('.domain-row')),
           expect(text('foldkit.space')).toExist(),
           expect(text('$1.99')).toExist(),
         ),
@@ -76,7 +129,11 @@ describe('domain search', () => {
     scene(
       { update, view },
       given(readyModel('acme')),
-      click(role('button', { name: 'Add acme.com to cart' })),
+      measureResultsList,
+      inside(
+        first(all.role('article')),
+        click(role('button', { name: 'Add acme.com to cart' })),
+      ),
       expect(role('button', { name: 'Remove acme.com from cart' })).toExist(),
       click(role('button', { name: 'Cart, 1 domains' })),
       inside(
