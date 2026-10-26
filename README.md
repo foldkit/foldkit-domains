@@ -13,7 +13,7 @@ pnpm install
 pnpm dev
 ```
 
-This app uses the published Blocks and Layers preview from [1f6776fa7ece](https://github.com/foldkit/foldkit/commit/1f6776fa7ececa766188df5201eefec6ba781b5d). The Foldkit packages are pinned to that release. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
+This app uses a local build of the unreleased Blocks and Layers preview from `codex/workspace-example`, pinned to `732258ae40bfb4642e72a68f21f4d0cf70043d6b`. The six Foldkit package archives live in `vendor/foldkit-preview`; a fresh clone installs them directly. Its [manifest](vendor/foldkit-preview/manifest.json) records the source revision, package versions, and archive integrity. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
 
 ## Build and deploy
 
@@ -24,6 +24,10 @@ pnpm preview
 
 The Vite plugin builds the browser and server bundles and prerenders `/` in one command. Publish `dist/client` to a static host. A query such as `/?q=acme` is restored before the main bundle executes. The server bundle at `dist/server/fetch.js` also exports a Fetch handler for request-time rendering.
 
+Development HTML links the stylesheet directly so the page is styled before client JavaScript runs. Production HTML uses the generated stylesheet manifest.
+
+Development reloads refresh the SSR module graph so Block Definitions and their Commands are recreated together. This avoids duplicate-declaration errors after editing Command modules in the pinned preview.
+
 Build and deploy the HTML and assets together. Foldkit assigns a coordinated build id so an old document cannot hydrate with an unrelated client bundle. Let the plugin generate the id when one `pnpm build` produces both artifacts.
 
 ## Code map
@@ -31,11 +35,15 @@ Build and deploy the HTML and assets together. Foldkit assigns a coordinated bui
 - `src/model.ts` and `src/message.ts` declare the state and events.
 - `src/init.ts` starts a search from the URL; `src/update.ts` owns search, filter, and cart transitions.
 - `src/command.ts` defines the EffectsLayer, including the interruptible lookup and URL synchronization.
+- `src/route.ts` defines the bidirectional search router; its query Schema handles URL parsing and encoding. The Model stores the parsed Route. Input changes replace the URL, and `ChangedUrl` updates the Route and starts its lookup.
 - `src/composition.ts` connects the root Definition; `src/block.ts` assembles the application.
-- `src/view.ts` contains named views; `src/styles.css` positions the single search field.
+- `src/view.ts` contains named views and Tailwind layout utilities; `src/styles.css` defines the Tailwind theme, base styles, reusable components, and single-input positioning.
+- `src/icon.ts` renders Lucide icons with Foldkit SVG builders; attribution and licenses are in `THIRD_PARTY_NOTICES.md`.
 - `src/entry.server.ts` renders the same Block for static generation and request-time SSR.
 
-Each lookup carries a revision. An outdated response cannot replace current results, even when a query is repeated. Pending listings have no price, availability, or cart action until their lookup completes.
+Unknown paths render a NotFound page with a link back to search. Request-time rendering returns HTTP 404 for those paths.
+
+Each lookup carries a search generation. Changing or clearing the query immediately invalidates and cancels pending work; the URL-change Message starts the new lookup. An outdated response cannot replace current results, even when a query is repeated. Pending listings have no price, availability, or cart action until their lookup completes.
 
 ## Before hydration
 
@@ -54,15 +62,18 @@ pnpm lint
 pnpm test
 pnpm exec playwright install chromium webkit
 pnpm test:e2e
+pnpm test:e2e:dev
 ```
 
-The browser suite builds production output and starts its own preview server on port 5180. Chromium and WebKit cover early typing, focus, selection, input identity, mobile placement, names while prices load, reloads, history, filters, sorting, and the cart. Tests refuse to reuse an existing server on that port.
+Stories in `src/story.test.ts` exercise search transitions and stale responses. Scenes in `src/scene.test.ts` drive the view through search, filtering, sorting, and cart interactions.
 
-The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support agent-assisted development. The MCP server uses the locally installed preview version.
+The browser suite builds production output and starts its own preview server on port 5180. Chromium and WebKit cover early typing, focus, selection, input identity, mobile placement, names while prices load, reloads, history, filters, sorting, and the cart. The development check uses port 5181 and holds client scripts back to verify the initial page has its styles. Both suites refuse to reuse an existing server on their port.
+
+The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support agent-assisted development. The MCP server uses the installed preview archive.
 
 ## Framework source
 
-`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `1f6776fa7ececa766188df5201eefec6ba781b5d`. It supplies source, examples, and documentation matching the installed preview. Application imports resolve through the npm packages. The app's formatting commands use its root configuration and skip the subtree.
+`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `732258ae40bfb4642e72a68f21f4d0cf70043d6b`. It supplies source, examples, and documentation matching the installed preview archives. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
 
 When upgrading Foldkit, pull the subtree at the commit or release tag matching the new package versions:
 

@@ -1,130 +1,160 @@
-import { Array, Option, String } from 'effect'
-import { Url } from 'foldkit'
+import { Array, Match, Number, Option, String } from 'effect'
+import { Update, Url } from 'foldkit'
 import { UrlRequest } from 'foldkit/navigation'
 import { modifyFields } from 'foldkit/struct'
 
-import { FetchDomains, FocusSearch, Navigate, SyncSearchUrl } from './command'
+import {
+  FetchDomains,
+  FocusSearchInput,
+  LoadExternal,
+  NavigateInternal,
+  ReplaceSearchUrl,
+  cancelSearch,
+} from './command'
 import { ApplicationComposition } from './composition'
-import { domainLabel, queryFromUrl } from './domain'
-import { Message } from './message'
-import { Model, SearchState } from './model'
+import {
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+} from './definition'
+import { queryToMaybeDomainLabel } from './domain'
+import { SearchState } from './model'
+import { routeToQuery, urlToApplicationRoute } from './route'
 
-const cancelSearch = () =>
-  FetchDomains.Interrupt(() => Message.CompletedCancelSearch())
+export const searchCurrentQueryStep = makeStep(model => {
+  const query = routeToQuery(model.route)
+  const baseCommands = [cancelSearch()]
 
-export const startSearch = (model: typeof Model.Type, query: string) => {
-  const revision = model.revision + 1
-  const nextModel = modifyFields(model, {
-    query: () => query,
-    revision: () => revision,
+  return Match.value({
+    query,
+    maybeDomainLabel: queryToMaybeDomainLabel(query),
+  }).pipe(
+    Match.when({ query: String.isEmpty }, () => ({
+      model: modifyFields(model, {
+        searchGeneration: Number.increment,
+        search: () => SearchState.Idle(),
+      }),
+      commands: baseCommands,
+    })),
+    Match.when({ maybeDomainLabel: Option.isSome }, ({ maybeDomainLabel }) => {
+      const nextSearchGeneration = Number.increment(model.searchGeneration)
+
+      return {
+        model: modifyFields(model, {
+          searchGeneration: () => nextSearchGeneration,
+          search: () => SearchState.Loading(),
+        }),
+        commands: Array.append(
+          baseCommands,
+          FetchDomains({
+            label: maybeDomainLabel.value,
+            searchGeneration: nextSearchGeneration,
+          }),
+        ),
+      }
+    }),
+    Match.orElse(() => ({
+      model: modifyFields(model, {
+        searchGeneration: Number.increment,
+        search: () =>
+          SearchState.Failed({
+            error:
+              'Enter a domain name using letters, numbers, and hyphens (up to 63 characters).',
+          }),
+      }),
+      commands: baseCommands,
+    })),
+  )
+})
+
+const makeChangeSearchQueryStep = (query: string) =>
+  makeStep(model => {
+    const replaceSearchUrl = ReplaceSearchUrl({
+      q: Option.liftPredicate(query, String.isNonEmpty),
+    })
+
+    const currentQuery = routeToQuery(model.route)
+
+    return Match.value(currentQuery).pipe(
+      Match.when(query, () => ({ model, commands: [replaceSearchUrl] })),
+      Match.orElse(() => ({
+        model: modifyFields(model, { searchGeneration: Number.increment }),
+        commands: [cancelSearch(), replaceSearchUrl],
+      })),
+    )
   })
 
-  if (String.isEmpty(query)) {
-    return {
-      model: modifyFields(nextModel, { search: () => SearchState.Idle() }),
-      commands: [cancelSearch()],
+const clearSearchStep = makeChangeSearchQueryStep('')
+
+export const update = ApplicationComposition.makeUpdate({
+  UpdatedSearch: (model, { value }) => makeChangeSearchQueryStep(value)(model),
+  SubmittedSearch: searchCurrentQueryStep,
+  ClickedRetrySearch: searchCurrentQueryStep,
+  PressedEscape: clearSearchStep,
+  ClickedClearSearch: Update.combineSteps([
+    clearSearchStep,
+    makeCommandsStep(() => [FocusSearchInput()]),
+  ]),
+  ChangedUrl: (model, { url }) => {
+    const nextRoute = urlToApplicationRoute(url)
+    const modelWithNextRoute = modifyFields(model, { route: () => nextRoute })
+
+    const isSearchRefreshNeeded =
+      nextRoute._tag !== model.route._tag ||
+      routeToQuery(nextRoute) !== routeToQuery(model.route)
+
+    if (isSearchRefreshNeeded) {
+      return searchCurrentQueryStep(modelWithNextRoute)
+    } else {
+      return { model: modelWithNextRoute }
     }
-  } else {
-    return Option.match(domainLabel(query), {
-      onNone: () => ({
-        model: modifyFields(nextModel, {
-          search: () =>
-            SearchState.Failed({
-              error:
-                'Enter a domain name using letters, numbers, and hyphens (up to 63 characters).',
-            }),
-        }),
-        commands: [cancelSearch()],
-      }),
-      onSome: label => ({
-        model: modifyFields(nextModel, { search: () => SearchState.Loading() }),
-        commands: [cancelSearch(), FetchDomains({ label, revision })],
-      }),
-    })
-  }
-}
-
-const changeSearch = (model: typeof Model.Type, query: string) => {
-  const searchChange = startSearch(model, query)
-  return {
-    model: searchChange.model,
-    commands: [...(searchChange.commands ?? []), SyncSearchUrl({ query })],
-  }
-}
-
-export const update = ApplicationComposition.makeUpdate((model, message) =>
-  Message.match(message, {
-    UpdatedSearch: ({ value }) => changeSearch(model, value),
-    SubmittedSearch: () => startSearch(model, model.query),
-    ClickedRetrySearch: () => startSearch(model, model.query),
-    PressedEscape: () => changeSearch(model, ''),
-    ClickedClearSearch: () => {
-      const searchClear = changeSearch(model, '')
-      return {
-        model: searchClear.model,
-        commands: [...(searchClear.commands ?? []), FocusSearch()],
-      }
-    },
-    ChangedUrl: ({ url }) => {
-      const query = queryFromUrl(url)
-      return query === model.query ? { model } : startSearch(model, query)
-    },
-    ClickedLink: ({ request }) =>
-      UrlRequest.match(request, {
-        Internal: ({ url }) => ({
-          model,
-          commands: [Navigate({ href: Url.toString(url), isExternal: false })],
-        }),
-        External: ({ href }) => ({
-          model,
-          commands: [Navigate({ href, isExternal: true })],
-        }),
-      }),
-    UpdatedTld: ({ value }) => ({
-      model: modifyFields(model, { tld: () => value }),
+  },
+  ClickedLink: makeCommandsStep.fromMessage(({ request }) =>
+    UrlRequest.match(request, {
+      Internal: ({ url }) => [NavigateInternal({ url: Url.toString(url) })],
+      External: ({ href }) => [LoadExternal({ href })],
     }),
-    UpdatedAvailability: ({ value }) => ({
-      model: modifyFields(model, { availability: () => value }),
-    }),
-    UpdatedSorting: ({ value }) => ({
-      model: modifyFields(model, { sorting: () => value }),
-    }),
-    ClickedAddDomain: ({ domain }) => ({
-      model:
-        domain.isAvailable &&
-        !model.cart.some(item => item.name === domain.name)
-          ? modifyFields(model, { cart: Array.append(domain) })
-          : model,
-    }),
-    ClickedRemoveDomain: ({ name }) => ({
-      model: modifyFields(model, {
-        cart: Array.filter(domain => domain.name !== name),
-      }),
-    }),
-    ClickedCart: () => ({
-      model: modifyFields(model, { cartVisibility: () => 'Open' }),
-    }),
-    ClickedCloseCart: () => ({
-      model: modifyFields(model, { cartVisibility: () => 'Closed' }),
-    }),
-    SucceededFetchDomains: ({ revision, domains }) => ({
-      model:
-        revision === model.revision
-          ? modifyFields(model, {
-              search: () => SearchState.Ready({ domains }),
-            })
-          : model,
-    }),
-    FailedFetchDomains: ({ revision, error }) => ({
-      model:
-        revision === model.revision
-          ? modifyFields(model, { search: () => SearchState.Failed({ error }) })
-          : model,
-    }),
-    CompletedSyncSearchUrl: () => ({ model }),
-    CompletedNavigate: () => ({ model }),
-    CompletedFocusSearch: () => ({ model }),
-    CompletedCancelSearch: () => ({ model }),
-    CompletedReleaseEarlySearchListeners: () => ({ model }),
-  }),
-)
+  ),
+  UpdatedTldFilter: makeFieldsStep.fromMessage(({ value }) => ({
+    tldFilter: () => value,
+  })),
+  UpdatedAvailabilityFilter: makeFieldsStep.fromMessage(({ value }) => ({
+    availabilityFilter: () => value,
+  })),
+  UpdatedSortOrder: makeFieldsStep.fromMessage(({ value }) => ({
+    sortOrder: () => value,
+  })),
+  ClickedAddDomain: makeFieldsStep((model, { domain }) =>
+    domain.isAvailable &&
+    !Array.some(model.cart, item => item.name === domain.name)
+      ? { cart: Array.append(domain) }
+      : {},
+  ),
+  ClickedRemoveDomain: makeFieldsStep.fromMessage(({ name }) => ({
+    cart: Array.filter(domain => domain.name !== name),
+  })),
+  ClickedCart: makeFieldsStep(() => ({
+    cartVisibility: () => 'Open',
+  })),
+  ClickedCloseCart: makeFieldsStep(() => ({
+    cartVisibility: () => 'Closed',
+  })),
+  SucceededFetchDomains: makeFieldsStep(
+    (model, { searchGeneration, domains }) =>
+      searchGeneration === model.searchGeneration
+        ? { search: () => SearchState.Ready({ domains }) }
+        : {},
+  ),
+  FailedFetchDomains: makeFieldsStep((model, { searchGeneration, error }) =>
+    searchGeneration === model.searchGeneration
+      ? { search: () => SearchState.Failed({ error }) }
+      : {},
+  ),
+  CompletedReplaceSearchUrl: makeNoopStep(),
+  CompletedNavigateInternal: makeNoopStep(),
+  CompletedLoadExternal: makeNoopStep(),
+  CompletedFocusSearchInput: makeNoopStep(),
+  CompletedCancelSearch: makeNoopStep(),
+  CompletedReleaseEarlySearchListeners: makeNoopStep(),
+})

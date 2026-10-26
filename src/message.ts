@@ -3,7 +3,7 @@ import { defineMessageUnion } from 'foldkit/message'
 import { UrlRequest } from 'foldkit/navigation'
 import { Url } from 'foldkit/url'
 
-import { Availability, Domain, Sorting, Tld } from './domain'
+import { AvailabilityFilter, Domain, SortOrder, TldFilter } from './domain'
 
 export const Message = defineMessageUnion({
   UpdatedSearch: { value: Schema.String },
@@ -12,22 +12,23 @@ export const Message = defineMessageUnion({
   ClickedClearSearch: {},
   ChangedUrl: { url: Url },
   ClickedLink: { request: UrlRequest },
-  UpdatedTld: { value: Tld },
-  UpdatedAvailability: { value: Availability },
-  UpdatedSorting: { value: Sorting },
+  UpdatedTldFilter: { value: TldFilter },
+  UpdatedAvailabilityFilter: { value: AvailabilityFilter },
+  UpdatedSortOrder: { value: SortOrder },
   ClickedAddDomain: { domain: Domain },
   ClickedRemoveDomain: { name: Schema.String },
   ClickedCart: {},
   ClickedCloseCart: {},
   ClickedRetrySearch: {},
   SucceededFetchDomains: {
-    revision: Schema.Number,
+    searchGeneration: Schema.Number,
     domains: Schema.Array(Domain),
   },
-  FailedFetchDomains: { revision: Schema.Number, error: Schema.String },
-  CompletedSyncSearchUrl: {},
-  CompletedNavigate: {},
-  CompletedFocusSearch: {},
+  FailedFetchDomains: { searchGeneration: Schema.Number, error: Schema.String },
+  CompletedReplaceSearchUrl: {},
+  CompletedNavigateInternal: {},
+  CompletedLoadExternal: {},
+  CompletedFocusSearchInput: {},
   CompletedCancelSearch: {},
   CompletedReleaseEarlySearchListeners: {},
 })

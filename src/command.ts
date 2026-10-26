@@ -1,30 +1,32 @@
 import { Duration, Effect, Layer, Schema } from 'effect'
+import { Dom } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
-import { ApplicationDefinition } from './definition'
+import { makeCommand } from './definition'
 import { searchDomains } from './domain'
 import { Message } from './message'
+import { searchRouter } from './route'
 
 const SEARCH_DELAY_MILLISECONDS = 450
 
-export const FetchDomains = ApplicationDefinition.makeCommand('FetchDomains', {
-  args: { label: Schema.String, revision: Schema.Number },
+export const FetchDomains = makeCommand('FetchDomains', {
+  args: { label: Schema.String, searchGeneration: Schema.Number },
   messages: [Message.SucceededFetchDomains, Message.FailedFetchDomains],
   interrupt: true,
   handler: function* () {
-    return ({ label, revision }) =>
+    return ({ label, searchGeneration }) =>
       Effect.gen(function* () {
         yield* Effect.sleep(Duration.millis(SEARCH_DELAY_MILLISECONDS))
         const domains = yield* Effect.try(() => searchDomains(label))
         return Message.SucceededFetchDomains({
-          revision,
+          searchGeneration,
           domains,
         })
       }).pipe(
         Effect.catch(() =>
           Effect.succeed(
             Message.FailedFetchDomains({
-              revision,
+              searchGeneration,
               error: 'Could not search domains. Please try again.',
             }),
           ),
@@ -33,54 +35,52 @@ export const FetchDomains = ApplicationDefinition.makeCommand('FetchDomains', {
   },
 })
 
-export const SyncSearchUrl = ApplicationDefinition.makeCommand(
-  'SyncSearchUrl',
-  {
-    args: { query: Schema.String },
-    messages: [Message.CompletedSyncSearchUrl],
-    handler: function* () {
-      return ({ query }) =>
-        Effect.gen(function* () {
-          const url = new URL(window.location.href)
-
-          if (query) {
-            url.searchParams.set('q', query)
-          } else {
-            url.searchParams.delete('q')
-          }
-
-          yield* replaceUrl(`${url.pathname}${url.search}${url.hash}`)
-
-          return Message.CompletedSyncSearchUrl()
-        })
-    },
-  },
-)
-
-export const Navigate = ApplicationDefinition.makeCommand('Navigate', {
-  args: { href: Schema.String, isExternal: Schema.Boolean },
-  messages: [Message.CompletedNavigate],
+export const ReplaceSearchUrl = makeCommand('ReplaceSearchUrl', {
+  args: { q: Schema.Option(Schema.String) },
+  messages: [Message.CompletedReplaceSearchUrl],
   handler: function* () {
-    return ({ href, isExternal }) =>
-      (isExternal ? load(href) : pushUrl(href)).pipe(
-        Effect.as(Message.CompletedNavigate()),
+    return fields =>
+      Effect.gen(function* () {
+        yield* replaceUrl(searchRouter(fields))
+
+        return Message.CompletedReplaceSearchUrl()
+      })
+  },
+})
+
+export const cancelSearch = () =>
+  FetchDomains.Interrupt(() => Message.CompletedCancelSearch())
+
+export const NavigateInternal = makeCommand('NavigateInternal', {
+  args: { url: Schema.String },
+  messages: [Message.CompletedNavigateInternal],
+  handler: function* () {
+    return ({ url }) =>
+      pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal()))
+  },
+})
+
+export const LoadExternal = makeCommand('LoadExternal', {
+  args: { href: Schema.String },
+  messages: [Message.CompletedLoadExternal],
+  handler: function* () {
+    return ({ href }) =>
+      load(href).pipe(Effect.as(Message.CompletedLoadExternal()))
+  },
+})
+
+export const FocusSearchInput = makeCommand('FocusSearchInput', {
+  messages: [Message.CompletedFocusSearchInput],
+  handler: function* () {
+    return () =>
+      Dom.focus('#domain-search', { preventScroll: true }).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusSearchInput()),
       )
   },
 })
 
-export const FocusSearch = ApplicationDefinition.makeCommand('FocusSearch', {
-  messages: [Message.CompletedFocusSearch],
-  handler: function* () {
-    return () =>
-      Effect.sync(() =>
-        document
-          .getElementById('domain-search')
-          ?.focus({ preventScroll: true }),
-      ).pipe(Effect.as(Message.CompletedFocusSearch()))
-  },
-})
-
-export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
+export const ReleaseEarlySearchListeners = makeCommand(
   'ReleaseEarlySearchListeners',
   {
     messages: [Message.CompletedReleaseEarlySearchListeners],
@@ -95,8 +95,9 @@ export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
 
 export const EffectsLayer = Layer.mergeAll(
   FetchDomains.layer,
-  SyncSearchUrl.layer,
-  Navigate.layer,
-  FocusSearch.layer,
+  ReplaceSearchUrl.layer,
+  NavigateInternal.layer,
+  LoadExternal.layer,
+  FocusSearchInput.layer,
   ReleaseEarlySearchListeners.layer,
 )

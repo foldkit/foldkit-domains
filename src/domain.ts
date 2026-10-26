@@ -1,5 +1,4 @@
-import { Array, Option, Order, Schema, String, pipe } from 'effect'
-import { Url } from 'foldkit'
+import { Array, Match, Option, Order, Schema, String, pipe } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 export const DomainName = Schema.Struct({
@@ -18,7 +17,7 @@ export const DomainListing = defineTaggedUnion({
   Ready: Domain.fields,
 })
 
-export const Tld = Schema.Literals([
+export const TldFilter = Schema.Literals([
   'All',
   'Com',
   'Dev',
@@ -27,8 +26,8 @@ export const Tld = Schema.Literals([
   'Ai',
   'Org',
 ])
-export const Availability = Schema.Literals(['All', 'Available'])
-export const Sorting = Schema.Literals([
+export const AvailabilityFilter = Schema.Literals(['All', 'Available'])
+export const SortOrder = Schema.Literals([
   'Relevance',
   'PriceAscending',
   'PriceDescending',
@@ -61,83 +60,88 @@ const extensions: ReadonlyArray<readonly [string, number]> = [
   ['tools', 24.99],
 ]
 
-export const queryFromUrl = (url: Url.Url): string =>
-  new URLSearchParams(Option.getOrElse(url.search, () => '')).get('q') ?? ''
+export const queryToMaybeDomainLabel = (
+  query: string,
+): Option.Option<string> => {
+  const label = pipe(
+    query,
+    String.trim,
+    String.toLowerCase,
+    String.replace(/^https?:\/\//, ''),
+    String.split(/[./]/),
+    Array.headNonEmpty,
+  )
 
-export const searchHref = (query: string): string => {
-  const parameters = new URLSearchParams()
-  if (String.isNonEmpty(query)) {
-    parameters.set('q', query)
-  }
-  const search = parameters.toString()
-  return String.isEmpty(search)
-    ? import.meta.env.BASE_URL
-    : `${import.meta.env.BASE_URL}?${search}`
-}
-
-export const domainLabel = (query: string): Option.Option<string> => {
-  const label =
-    query
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .split(/[./]/)
-      .at(0) ?? ''
-  return Option.liftPredicate(label, value =>
-    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(value),
+  return pipe(
+    label,
+    String.match(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/),
+    Option.flatMap(Array.head),
   )
 }
 
 export const searchDomains = (
   label: string,
 ): ReadonlyArray<typeof Domain.Type> =>
-  extensions.map(([tld, price]) =>
-    Domain.make({
-      name: `${label}.${tld}`,
-      tld,
-      price,
-      isAvailable: !(
-        ['vercel', 'google', 'github', 'foldkit'].includes(label) &&
-        ['com', 'dev'].includes(tld)
-      ),
-    }),
-  )
+  Array.map(extensions, ([tld, price]) => {
+    const isAvailable = !(
+      Array.contains(['vercel', 'google', 'github', 'foldkit'], label) &&
+      Array.contains(['com', 'dev'], tld)
+    )
+
+    return Domain.make({ name: `${label}.${tld}`, tld, price, isAvailable })
+  })
 
 export const pendingDomains = (
   query: string,
 ): ReadonlyArray<typeof DomainListing.Pending.Type> => {
-  const label = Option.getOrElse(domainLabel(query), () => '')
+  const label = Option.getOrElse(queryToMaybeDomainLabel(query), () => '')
 
-  return extensions.map(([tld]) =>
+  return Array.map(extensions, ([tld]) =>
     DomainListing.Pending({ name: `${label}.${tld}`, tld }),
   )
 }
 
+export const matchesTldFilter = (
+  domain: typeof DomainName.Type,
+  tldFilter: typeof TldFilter.Type,
+): boolean =>
+  tldFilter === 'All' || domain.tld === String.toLowerCase(tldFilter)
+
+const matchesAvailabilityFilter = (
+  domain: typeof Domain.Type,
+  availabilityFilter: typeof AvailabilityFilter.Type,
+): boolean =>
+  Match.value(availabilityFilter).pipe(
+    Match.when('All', () => true),
+    Match.when('Available', () => domain.isAvailable),
+    Match.exhaustive,
+  )
+
 export const visibleDomains = (
   domains: ReadonlyArray<typeof Domain.Type>,
-  tld: typeof Tld.Type,
-  availability: typeof Availability.Type,
-  sorting: typeof Sorting.Type,
+  tldFilter: typeof TldFilter.Type,
+  availabilityFilter: typeof AvailabilityFilter.Type,
+  sortOrder: typeof SortOrder.Type,
 ): ReadonlyArray<typeof Domain.Type> => {
-  const filtered = domains.filter(
+  const filteredDomains = Array.filter(
+    domains,
     domain =>
-      (tld === 'All' || domain.tld === tld.toLowerCase()) &&
-      (availability === 'All' || domain.isAvailable),
+      matchesTldFilter(domain, tldFilter) &&
+      matchesAvailabilityFilter(domain, availabilityFilter),
   )
-  if (sorting === 'Relevance') {
-    return filtered
-  } else {
-    const priceOrder = Order.mapInput(
-      Order.Number,
-      (domain: typeof Domain.Type) => domain.price,
-    )
-    return pipe(
-      filtered,
-      Array.sort(
-        sorting === 'PriceAscending' ? priceOrder : Order.flip(priceOrder),
-      ),
-    )
-  }
+  const priceOrder = Order.mapInput(
+    Order.Number,
+    (domain: typeof Domain.Type) => domain.price,
+  )
+
+  return Match.value(sortOrder).pipe(
+    Match.when('Relevance', () => filteredDomains),
+    Match.when('PriceAscending', () => Array.sort(filteredDomains, priceOrder)),
+    Match.when('PriceDescending', () =>
+      Array.sort(filteredDomains, Order.flip(priceOrder)),
+    ),
+    Match.exhaustive,
+  )
 }
 
 export const formatPrice = (price: number): string => `$${price.toFixed(2)}`

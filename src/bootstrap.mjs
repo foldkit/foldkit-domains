@@ -8,7 +8,7 @@
 
   const controller = new AbortController()
   const options = { signal: controller.signal }
-  const showResults = () => {
+  const updatePendingResults = () => {
     const label =
       input.value
         .trim()
@@ -19,20 +19,20 @@
 
     app.setAttribute('data-search', input.value ? 'active' : 'idle')
 
-    app.querySelectorAll('[data-domain-label]').forEach(name => {
-      name.textContent = label
+    app.querySelectorAll('[data-domain-label]').forEach(labelElement => {
+      labelElement.textContent = label
     })
   }
-  const showQuery = () => {
+  const restoreQueryFromUrl = () => {
     const query = new URLSearchParams(location.search).get('q') ?? ''
 
     if (input.value !== query) {
       input.value = query
     }
 
-    showResults()
+    updatePendingResults()
   }
-  const syncQuery = () => {
+  const replaceSearchUrl = () => {
     const url = new URL(location.href)
 
     if (input.value) {
@@ -42,23 +42,23 @@
     }
 
     history.replaceState(history.state, '', url)
-    showResults()
+    updatePendingResults()
   }
 
   if (input.value !== input.defaultValue) {
-    syncQuery()
+    replaceSearchUrl()
   } else {
-    showQuery()
+    restoreQueryFromUrl()
   }
 
-  input.addEventListener('input', syncQuery, options)
+  input.addEventListener('input', replaceSearchUrl, options)
   input.addEventListener(
     'keydown',
     event => {
       if (event.key === 'Escape' && !event.isComposing) {
         event.preventDefault()
         input.value = ''
-        syncQuery()
+        replaceSearchUrl()
       }
     },
     options,
@@ -72,12 +72,12 @@
     'click',
     () => {
       input.value = ''
-      syncQuery()
+      replaceSearchUrl()
       input.focus({ preventScroll: true })
     },
     options,
   )
-  window.addEventListener('popstate', showQuery, options)
+  window.addEventListener('popstate', restoreQueryFromUrl, options)
   document.addEventListener('domains:ready', () => controller.abort(), {
     once: true,
   })
