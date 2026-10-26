@@ -8,6 +8,104 @@ Preserve concurrent edits. Preview integration targets `codex/layers-and-submode
 
 The user has explicitly held publication pending approval. Prepare and verify locally; pushing the integration branch would itself trigger publication and is outside this preparation step. [Release handoff](next-preview-release-handoff.md).
 
+## Final approval preparation, October 26
+
+- [x] Apply the two approved small wins from the new foldkit-plus report:
+      reject duplicate `OnMount` attributes before handler acquisition and
+      group existing Block customization options with a checked alternate-view
+      snippet. Preserve the other integration requests as open design proposals.
+- [x] Freeze this hardening followup, refresh its exact package/browser evidence
+      and obtain a scoped security addendum before restoring final readiness.
+      [Exact source, verification, artifacts and limits](preview-final-hardening-20261026.md).
+
+- [x] Use one local Subscription registry per owning Block. Consolidate Website,
+      audit examples, Typing Game, UI, DevTools and active snippets, and document
+      aggregate Layer composition in active guides, scaffolds and skills.
+      [Audit and verification scope](subscription-registry-organization.md).
+- [x] Profile the repeatable Lustre gap against main, identify the dominant added
+      update/view/patch/framework work and verify a reduction before release
+      sign-off. Preserve earlier paired measurements and source pins. The new
+      optimized workload improves 12.7%; naive performance is similar and main
+      remains faster. [Investigation, remaining costs and proofs](preview-runtime-investigation-20261026.md).
+- [x] Freeze the runtime followup and refresh all nine local packages, installed
+      Coverchart/scaffold acceptance and browser checks. Candidate `fa96bf7d90`
+      passes the fresh local rehearsal, including all 32 Workspace browser tests.
+      [Artifacts, source scope and retained qualifications](preview-runtime-investigation-20261026.md#fresh-packed-package-rehearsal).
+      The preceding package rehearsal retains its original implementation pin.
+- [x] Name assigned Step values with a descriptive `Step` suffix across current
+      consumers, framework examples/tests, active snippets and guidance. Preserve
+      operation registry names, ordinary direct-result handler names, factory APIs, applied
+      results, historical published content and unchanged compiler-performance fixtures.
+- [x] Refresh affected source/runtime/lint/declaration checks and inspect realistic
+      split-file consumers. Record intentional naming exceptions by value contract.
+- [x] Freeze a coherent candidate and refresh packed-package, Coverchart and
+      scaffold acceptance for the accumulated post-preparation changes. Keep the
+      actual Coverchart checkout and the user's running servers intact.
+- [x] Check new feedback only within the Blocks + Effect Layers preview scope.
+      The October 26 foldkit-plus report on #1655 is assessed, its two concrete
+      behavior claims reproduce on published/current code, and envelope
+      portability guidance is clarified. Broader proposed APIs are explicitly
+      open, not counted as implemented. #1737 has no newer replies.
+      [Current dispositions and reproduction limits](preview-feedback-20261026.md).
+- [x] Complete the exact-candidate Daybreak review and refresh dependency
+      reachability dispositions. Record source identity, review limits and any
+      required repairs before release approval; publication stays held.
+      [Final verdict and inherited limitations](next-preview-security-review.md#october-26-final-review).
+- [x] After source and verification jobs settle, compare the final preview with
+      pinned main in the Lustre harness, including naive and optimized views,
+      correctness checks, balanced repeated runs and bundle provenance.
+- [x] Prepare a concise final approval summary with public API changes, measured
+      results, retained limitations and publication steps. Do not publish or push
+      the integration branch before approval.
+
+The [final approval summary](preview-approval-20261026.md) pins the coherent
+implementation and package evidence. [Naming adoption](named-step-convention.md)
+and [main/published-preview rendering comparisons](preview-lustre-20261026.md)
+are complete. Base/application/Effect lint and release metadata checks are clean;
+intentional erasure proofs and compiler budgets remain intact. User release
+approval is still pending. The measured main cost is part of that review; no
+performance win or published acceptance is inferred from local preparation.
+
+## Initialization helpers authorized after preparation
+
+Publication remains held. The previously verified preparation checkpoint is
+`732258ae40`; the following approved exploration reopens affected verification.
+
+- [x] Audit actual dynamic child initialization across direct fields, optional
+      direct/keyed slots, Record/HashMap fields and whole tagged variants. Distinguish
+      shared storage wiring from purposeful parent transitions.
+- [x] Prototype the smallest coherent helper family alongside `initAndAppend`.
+      Preserve parent-owned metadata, explicit replacement/insertion intent, passive
+      recipes, exact args/Commands/Services/registration and native lifecycle behavior.
+      Require source/emitted/relocated rejection and unchanged compiler ceilings.
+- [x] Independently review realistic consumer code and inference/performance
+      tradeoffs before migrating eligible consumers. Keep explicit writers where
+      mixed parent work or custom relationships make them clearer.
+- [x] Migrate adopted helpers, update active guidance and refresh affected
+      installed-consumer/browser/editor evidence before restoring release readiness.
+
+The set/append/insert family, five singular consumer migrations and Auth recipe
+correction pass combined source/emitted/runtime and installed-package checks.
+All six ceilings remain unchanged. Paired editor measurements retain the moderate
+Workspace error-appearance cost; publication remains held.
+[Scope, consumer choices, evidence and limits](child-initialization-family.md).
+
+## Feature-local Step authoring
+
+- [x] Export used Step helpers from split Definition modules, destructure them
+      privately in colocated features, and retain owner qualification when several
+      Definitions share a module. Migrate all eligible example, Website and Typing
+      Game consumers, active snippets, scaffold guidance and skills; preserve the
+      completed-Block barrel boundary.
+- [x] Preserve lint ownership through local/imported helper aliases and
+      `.fromMessage`, including wrong-owner and shadowing controls. Verify consumer
+      source/tests/lint, strict relocated Workspace declarations, all six unchanged
+      compiler fixtures and three alternating native editor pairs per workload.
+      [Adoption, measurements, scope and remaining limits](step-helper-authoring.md).
+
+Publication remains held. This authoring followup is distinct from the previously
+packed release candidate and does not promote the published Ready snapshot.
+
 ## Followups authorized after the review summary
 
 The reviewed candidate `679d2d5e7fae638f7aa0dbce65440da0ce767331` is pushed only to `codex/workspace-example`. The user authorized the following work after that checkpoint. Its existing verification does not automatically cover this subsequent delta; refresh affected release evidence before presenting another candidate.

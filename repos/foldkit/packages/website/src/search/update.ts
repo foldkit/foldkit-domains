@@ -6,9 +6,15 @@ import { modifyFields } from 'foldkit/struct'
 
 import { PagefindService } from '../pagefind'
 import { SEARCH_INPUT_ID } from '../searchDom'
-import { clearSearchQuery } from './clear'
+import { clearSearchQueryStep } from './clear'
 import { DialogBinding, SearchComposition } from './composition'
-import { SearchDefinition } from './definition'
+import {
+  SearchDefinition,
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+} from './definition'
 import { SearchResult, SearchState, resultsFromState } from './domain'
 import { Message } from './message'
 
@@ -98,12 +104,10 @@ export const FocusSearchInput = SearchDefinition.makeCommand(
   },
 )
 
-const focusSearchInput = SearchDefinition.makeCommandsStep(() => [
-  FocusSearchInput(),
-])
+const focusSearchInputStep = makeCommandsStep(() => [FocusSearchInput()])
 
-const open = SearchDefinition.makeStep(() =>
-  Update.combineSteps([DialogBinding.requestOpen(), focusSearchInput]),
+const openStep = makeStep(() =>
+  Update.combineSteps([DialogBinding.requestOpen(), focusSearchInputStep]),
 )
 
 export const update = SearchComposition.makeUpdate({
@@ -134,18 +138,16 @@ export const update = SearchComposition.makeUpdate({
     }
   },
 
-  CompletedFetchSearchResults: SearchDefinition.makeFieldsStep(
-    (model, { results, query }) => {
-      if (query !== model.query) {
-        return {}
-      }
+  CompletedFetchSearchResults: makeFieldsStep((model, { results, query }) => {
+    if (query !== model.query) {
+      return {}
+    }
 
-      return {
-        searchState: () => SearchState.Ok({ results }),
-        activeResultIndex: () => 0,
-      }
-    },
-  ),
+    return {
+      searchState: () => SearchState.Ok({ results }),
+      activeResultIndex: () => 0,
+    }
+  }),
 
   SelectedSearchResult: (model, { url }) => ({
     model: modifyFields(model, {
@@ -156,12 +158,12 @@ export const update = SearchComposition.makeUpdate({
     commands: [NavigateToResult({ url })],
   }),
 
-  ClearedSearchQuery: clearSearchQuery,
+  ClearedSearchQuery: clearSearchQueryStep,
 
-  RequestedOpen: open,
+  RequestedOpen: openStep,
 
   InformedOfRouteChange: Update.combineSteps([
-    clearSearchQuery,
+    clearSearchQueryStep,
     DialogBinding.requestClose(),
   ]),
 
@@ -189,7 +191,7 @@ export const update = SearchComposition.makeUpdate({
     }
   },
 
-  CompletedNavigateToResult: SearchDefinition.makeNoopStep(),
-  CompletedScrollToResult: SearchDefinition.makeNoopStep(),
-  CompletedFocusSearchInput: SearchDefinition.makeNoopStep(),
+  CompletedNavigateToResult: makeNoopStep(),
+  CompletedScrollToResult: makeNoopStep(),
+  CompletedFocusSearchInput: makeNoopStep(),
 })

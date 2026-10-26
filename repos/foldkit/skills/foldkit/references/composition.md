@@ -95,11 +95,11 @@ without the matching finisher do not establish this boundary. `replaceEffectsLay
 and `provideHandlers` preserve the assembly brand, object metadata, and passive
 runtime behavior.
 
-Author an exhaustive `Composition.makeUpdate({ Tag: (model, message) => result })` record. Each case receives the contextual Model and exact Message payload, and operations retain the selected case's Command requirements and OutMessage contract. Use `makeUpdate.withContext(context => cases)` for additional dispatch arguments; the factory runs for local dispatch, not routed child-only delivery. Generic Step values inside that context factory may need `model => step(model)` for inference. Ordinary handlers return results directly; do not wrap every case with `makeStep`. A Model-preserving no-op record value is `Definition.makeNoopStep()`, not the bare factory.
+Author an exhaustive `Composition.makeUpdate({ Tag: (model, message) => result })` record. Each case receives the contextual Model and exact Message payload, and operations retain the selected case's Command requirements and OutMessage contract. Use `makeUpdate.withContext(context => cases)` for additional dispatch arguments; the factory runs for local dispatch, not routed child-only delivery. Generic Step values inside that context factory may need `model => step(model)` for inference. Ordinary handlers return results directly; do not wrap every case with `makeStep`. A Model-preserving no-op record value is `makeNoopStep()`, not the bare factory.
 
 When a handler only applies an existing compatible Model-first Step, use that Step point-free as the record value: `ClickedOpenSearch: SearchBinding.requestOpen()`. Keep a callback when it uses the Message payload, derives arguments from the Model, defers argument construction until dispatch, supplies context, or provides necessary contextual inference. A `Message.match` branch receives the Message payload first, so it cannot use a Model-first Step in the same way.
 
-`Composition.makeUpdate` accepts only an exhaustive handler record; its callback overload is removed. Use `makeUpdate({})` when there are no local Messages. Each handler receives `(model, message)`; name extracted single-Message handlers `handle<MessageTag>` and pass compatible handlers or Steps directly. Keep shared Steps named for their operation. If one handler mixes connected Binding recipes with local results, author its local branches through Definition-owned Steps. A raw `{ model }` beside a connected recipe is rejected; ordinary raw-only handlers can return results directly. Do not hide errors with casts or broad return annotations: a later wrapper cannot recover channels already erased upstream.
+`Composition.makeUpdate` accepts only an exhaustive handler record; its callback overload is removed. Use `makeUpdate({})` when there are no local Messages. Each handler receives `(model, message)`; name extracted single-Message handlers `handle<MessageTag>` and pass compatible handlers or Steps directly. Give every named Model-first Step value a descriptive name ending in `Step`, such as `refreshStep`. Give a purposeful transition factory that returns a Step an operation name ending in `Step` too. Factory methods, imported authoring helpers, named OutMessage folds and matchers, direct inline handlers, public operation keys, Message tags, and applied update-like results keep their established names. If one handler mixes connected Binding recipes with local results, author its local branches through Definition-owned Steps. A raw `{ model }` beside a connected recipe is rejected; ordinary raw-only handlers can return results directly. Do not hide errors with casts or broad return annotations: a later wrapper cannot recover channels already erased upstream.
 
 For a package shipping declarations, name each ordinary public completed contract with a same-name interface extending the matching checked `FromAssembly*<typeof Model, typeof prepare>`, followed by `export const FeatureBlock: FeatureBlock = Block.assemble(prepare)`. Keep producer, interface, and value adjacent as one assembly unit. A reusable named generic `Completed` interface can provide that boundary for a generic factory. JavaScript-only applications retain the existing checked value annotation. Verify declaration emission for actual public entrypoints and external consumption; `noEmit` alone is insufficient and there is no reliable child-count threshold. Naming the header prevents repeated child expansion, but it does not guarantee arbitrary root serialization or seal deliberate ambient augmentation.
 
@@ -119,9 +119,11 @@ update in a unary adapter that supplies every required context argument.
 
 Use `FeatureDefinition.makeFieldsStep(producer)` for owning field transformations, `FeatureDefinition.makeCommandsStep(producer)` for Commands with an unchanged Model, and `FeatureDefinition.makeOutMessageStep(producer)` for one declared OutMessage with an unchanged Model.
 
-All three take callbacks, evaluated when the Step or handler is applied. An ordinary producer receives the current Model and, when authored as a Message-dependent handler, its exact Message. Use `.fromMessage(message => value)` for payload-only producers and `() => value` for fixed producers. Commands-only and OutMessage-only helpers preserve the incoming Model identity. `FeatureDefinition.makeNoopStep()` stays unchanged; in an OutMessage fold, pass its factory point-free when appropriate.
+In a split feature, `definition.ts` exports the Step helpers used by its implementation and those modules named-import the helpers from that file. A colocated feature destructures helpers beside its Definition in the scope that uses them. Keep Definition-qualified calls when several Definitions in one module need visible ownership. Feature barrels keep authoring helpers private and export the completed Block.
 
-Pass compatible Steps directly as handler-record values. Extracted Message-dependent producers need a precise Message variant contract when no surrounding handler record supplies it. Map payloads explicitly when constructing a different Message or OutMessage; do not pass a constructor that could forward the incoming `_tag`. Keep cohesive mixed transitions as direct results, and use `FeatureDefinition.makeStep` for reusable mixed, connected, initialization, delegated, or composed operations. Local branches mixed with connected recipes still need canonical Definition-owned results.
+All three take callbacks, evaluated when the Step or handler is applied. An ordinary producer receives the current Model and, when authored as a Message-dependent handler, its exact Message. Use `.fromMessage(message => value)` for payload-only producers and `() => value` for fixed producers. Commands-only and OutMessage-only helpers preserve the incoming Model identity. `makeNoopStep()` stays unchanged; in an OutMessage fold, pass its factory point-free when appropriate.
+
+Pass compatible Steps directly as handler-record values. Extracted Message-dependent producers need a precise Message variant contract when no surrounding handler record supplies it. Map payloads explicitly when constructing a different Message or OutMessage; do not pass a constructor that could forward the incoming `_tag`. Keep cohesive mixed transitions as direct results, and use the owning `makeStep` helper for reusable mixed, connected, initialization, delegated, or composed operations. Local branches mixed with connected recipes still need canonical Definition-owned results.
 
 `Update.combineSteps` accepts unary non-emitting Steps and preserves its OutMessage rejection. Use `Update.withOutMessage` for an existing plain result or an optional OutMessage. Do not construct and immediately invoke local Steps solely for uniformity.
 
@@ -133,12 +135,17 @@ Parent-facing operation names describe the communication: `requestCloseMenu` pro
 
 Choose parent inputs by ownership. Use view inputs for current render data and update context (`delivery.toUpdateContext`) for current data read while handling a Message. Use an `inform*` operation when an external event requires a child transition, Command, or OutMessage. View inputs and context do not dispatch Messages when their values change. Keep an independent editing baseline in the child Model when needed, while passing current comments or other display data through view inputs. Do not mirror parent data merely to read it, or notify a child back about a change it already applied unless another transition is required.
 
-An owned `Definition.makeSubscriptions(...)` registry exposes `subscriptions.layer`
-when every entry has an attached handler. Merge that passive recipe into
-`EffectsLayer`; constructor errors and ordinary Services remain precise. An empty
-record supplies an empty Layer. Mixed host contracts have no aggregate: provide
-those contracts explicitly. The entry key `layer` is reserved. Individual entry
-Layers remain available when intentionally selecting only part of a registry.
+Create one `Definition.makeSubscriptions(...)` registry for all Subscriptions
+owned by a Block. Extract a substantial Stream implementation into a focused
+helper instead of creating another registry for the same owner. Distinct child
+Blocks retain their own registries. A fully attached registry exposes
+`subscriptions.layer`; merge that passive recipe into `EffectsLayer`. Constructor
+errors and ordinary Services remain precise. An empty record supplies an empty
+Layer. Mixed host contracts have no registry `.layer`: provide those contracts explicitly.
+The entry key `layer` is reserved. Individual entry Layers remain available when
+intentionally selecting only part of a registry. Use `Subscription.aggregate` at
+graph, adapter, or test boundaries that join independent records, not to rebuild
+one Block's registry.
 
 `managedResources.layer` selects every attached handler
 from an explicit closed resource registry without changing it. It preserves exact
@@ -434,13 +441,20 @@ child placement, and exactly one requested keyed occurrence. The available runti
 metadata cannot reconstruct TypeScript's required, optional, defaulted, and rest
 parameter distinctions.
 
-For a pure append to an exact keyed array with an existing startup policy, use
-`initAndAppend(Binding, model, { key, args })` from `foldkit/bindingInit`. It
-reuses `init.toItem` and returns the same passive initialization recipe with
-child Commands and registration evidence. An existing key is rejected. Keep a
-presence check when an existing occurrence should be retained. Other storage,
-replacement, and mixed parent transitions retain the explicit initializer;
-do not add a startup policy solely to enable the helper.
+For dynamic initialization that only places the child, use the optional
+`foldkit/bindingInit` helpers with the Binding, current parent Model and `{ args }`,
+plus `key` for keyed storage. `initAndSet` replaces a required/optional direct
+field or a keyed Option wrapper containing only its key and child fields. Direct
+fields need no startup policy; a custom unkeyed accessor can reuse an existing
+`init.toParentFields` projection. `initAndAppend` reuses a keyed array's existing
+`init.instances` and `init.toItem` policy. `initAndInsert` inserts into direct-value
+Record/HashMap storage declared through `makeMapBinding`.
+
+All preserve passive recipes, child init Commands and registration. Append and
+insert reject occupied keys; the caller owns any presence check. Additional
+wrapper metadata, sibling changes, parent Commands, custom relationships,
+array/map replacement and whole tagged variants retain explicit `Binding.init`.
+Do not add a startup policy solely to enable a helper.
 
 Prefer a child Message-backed `requestReset` or domain operation for reset
 behavior, composed with the parent's `makeFieldsStep` for parent-owned fields.
@@ -454,8 +468,9 @@ For a keyed array of wrappers, prefer `init.instances` and `init.toItem` when
 startup creates the complete collection. Each occurrence supplies child init
 args and the parent metadata needed by `toItem`, such as an ID or server
 revision. Dynamic pure appends can reuse this policy through `initAndAppend`.
-Use explicit `Binding.init` for other storage, replacement, additional parent
-changes or Commands, or custom interleaving. All these paths retain and lift the
+Use the matching storage helper for singular fields or direct-value maps. Keep
+explicit `Binding.init` for additional metadata, mixed parent changes or Commands,
+array/map replacement, or custom interleaving. All these paths retain and lift the
 child initializer's Commands; never take only its Model.
 
 `init.instances` accepts keyed arrays only. An Option-wrapped keyed occurrence
@@ -499,6 +514,12 @@ when the bundle is substantial or reused. Name a single provider `FooLayer`
 only when it is public or independently reused. Import Effect's module as
 `Layer` and reserve `ApplicationLayer` for the root's ordinary Service
 providers.
+
+When Subscription declarations are split from Block assembly, that module
+exports the Block's one `subscriptions` registry. Compose
+`Feature.subscriptions.layer` directly in the local handler bundle. When that
+registry supplies all local handlers, pass `EffectsLayer: subscriptions.layer`
+directly to `prepareBlock`.
 
 `config.handler` defines a recipe; it does not build it. Its generator runs
 once when the Runtime builds the application Layer. A Command, Subscription, or

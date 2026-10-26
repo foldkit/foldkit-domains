@@ -6,25 +6,24 @@ import {
   Model,
   OutMessage,
   SaveTheme,
-  SettingsDefinition,
   SettingsComposition,
   Theme,
+  makeNoopStep,
+  makeStep,
 } from './blockDefinition'
 
-const changeTheme = SettingsDefinition.makeStep(
-  (model, theme: typeof Theme.Type) => ({
-    model: modifyFields(model, { theme: () => theme }),
-    commands: [SaveTheme({ theme })],
-    outMessage: OutMessage.ChangedTheme({ theme }),
-  }),
-)
+const changeThemeStep = makeStep((model, theme: typeof Theme.Type) => ({
+  model: modifyFields(model, { theme: () => theme }),
+  commands: [SaveTheme({ theme })],
+  outMessage: OutMessage.ChangedTheme({ theme }),
+}))
 
 const update = SettingsComposition.makeUpdate({
-  ChangedTheme: (model, { theme }) => changeTheme(model, theme),
-  RequestedThemeChange: (model, { theme }) => changeTheme(model, theme),
-  RequestedReset: model => changeTheme(model, 'System'),
-  CompletedSaveTheme: SettingsDefinition.makeNoopStep(),
-  FailedSaveTheme: SettingsDefinition.makeNoopStep(),
+  ChangedTheme: (model, { theme }) => changeThemeStep(model, theme),
+  RequestedThemeChange: (model, { theme }) => changeThemeStep(model, theme),
+  RequestedReset: model => changeThemeStep(model, 'System'),
+  CompletedSaveTheme: makeNoopStep(),
+  FailedSaveTheme: makeNoopStep(),
 })
 
 const view = SettingsComposition.makeView((model, h) =>

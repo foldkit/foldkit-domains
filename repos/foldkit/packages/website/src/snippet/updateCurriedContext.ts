@@ -14,6 +14,9 @@ const ContextualRefreshDefinition = Block.makeDefinition('ContextualRefresh', {
   Model,
   Message,
 })
+
+const { makeFieldsStep } = ContextualRefreshDefinition
+
 const ContextualRefreshComposition =
   ContextualRefreshDefinition.makeComposition()
 const update = ContextualRefreshComposition.makeUpdate.withContext(
@@ -24,12 +27,12 @@ const update = ContextualRefreshComposition.makeUpdate.withContext(
   }),
 )
 
-const refresh = (model: typeof Model.Type) =>
+const refreshStep = (model: typeof Model.Type) =>
   update(Message.RequestedRefresh())(model, { requestId: 'current' })
 
-const countRefresh = ContextualRefreshDefinition.makeFieldsStep(() => ({
+const countRefreshStep = makeFieldsStep(() => ({
   refreshCount: count => count + 1,
 }))
 
-export const requestRefresh = (model: typeof Model.Type) =>
-  Update.combineSteps(model, [refresh, countRefresh])
+export const requestRefreshStep = (model: typeof Model.Type) =>
+  Update.combineSteps(model, [refreshStep, countRefreshStep])

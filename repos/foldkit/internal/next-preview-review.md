@@ -2,27 +2,49 @@
 
 ## Status
 
-The preparation is on development branch `codex/workspace-example`. The latest
-implementation checkpoint is `1b89a2325553`; the
-[final preparation report](preview-ready-20261025.md) supersedes older verification
-counts below. Publication remains held for your approval. Published Ready stays
-`1f6776fa7ece`; release integration and main have not been updated.
+The [October 26 approval summary](preview-approval-20261026.md) identifies frozen
+implementation `f5506b7e240a4d8987338f22427a2bd1ecdf9cb5` and local package
+source digest `b8b162accc756093e0516fbc0d0c12378915370b2eb680514d377fc0086f2abe`.
+Current affected source, runtime, lint, contract, compiler-budget, packed-consumer
+and browser gates pass. The earlier broad source sweep retains its own pin.
+The [Step naming convention](named-step-convention.md) is adopted across current
+consumers and guidance.
+
+The [runtime investigation at fa96](preview-runtime-investigation-20261026.md) verifies a
+12.7% optimized-workload reduction while preserving registration checks. The
+measured candidate is 22.0% above main in that screen; naive time is effectively
+unchanged. The [earlier Lustre report](preview-lustre-20261026.md) retains its
+separate main/published-preview comparisons. Earlier editor and verification
+numbers below retain their original pins and are not relabeled as fresh
+measurements. The subsequent [hardening pass](preview-final-hardening-20261026.md)
+adds duplicate-Mount rejection and customization guidance, refreshes all nine
+packages and obtains a passing Daybreak addendum without adding timing claims.
+
+Publication remains held for user approval. Published Ready stays `1f6776fa7ece`;
+integration and main are unchanged. The following table remains the public API
+review since that published snapshot.
 
 ## Public API changes since that preview
 
-| Change                                            | Consumer action                                                                                                                                                                                                                                               |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Composition.makeUpdate` is record-only           | Replace aggregate callbacks with exhaustive `(model, message)` handlers. `.withContext(context => handlers)` and direct/curried returned updates remain. Empty/routed-only updates use `{}`.                                                                  |
-| All three focused Step helpers use producers      | `makeFieldsStep`, `makeCommandsStep` and `makeOutMessageStep` receive callbacks. Use `.fromMessage` for payload-only producers, Model-aware producers when needed and zero-argument callbacks for fixed output. Commands/OutMessages preserve Model identity. |
-| ManagedResource aggregation matches Subscriptions | Fully attached owned registries expose `managedResources.layer`; empty registries provide `Layer.empty`. The key `layer` is reserved. Mixed/host-owned entries use explicit providers.                                                                        |
-| Record/HashMap child storage                      | Optional `makeMapBinding` derives storage and occurrence keys from the parent Schema. Ordinary operations preserve membership and ignore absent occurrences.                                                                                                  |
-| Captured Command arguments                        | Optional `Story.Command.argsOf` / `Scene.Command.argsOf` project exact args by Definition identity. Occurrence selection remains explicit.                                                                                                                    |
-| Headless child facts                              | Optional `toParentMessage` from `foldkit/test` replaces mapper-only embeds and manually decoded test envelopes. Supply the actual Binding and decoded Message/key.                                                                                            |
-| Concurrent Story Messages                         | Ordinary `Story.message` retains pending Commands; resolve them explicitly before Story completion. Scene retains its boundary checks, with the explicit `keepPending` operation described below.                                                             |
-| Dynamic keyed-array initialization                | Optional `initAndAppend` from `foldkit/bindingInit` reuses an existing `init.toItem` policy. Other storage and mixed parent transitions keep explicit `Binding.init`.                                                                                         |
-| Testing event delivery                            | Optional `Story.messageWith`, `Story.Subscription.from(...).emit` and `Scene.Command.keepPending` model concurrent inputs while keeping resolution explicit.                                                                                                  |
-| Keyed Command cancellation                        | `toKey` receives only own selected fields on both paths. Precise tuple policies retain exact cancellation args; broad or mixed policies need accurate optional fields or narrowing.                                                                           |
-| Whole tagged child variants                       | Optional `makeVariantBinding` from `foldkit/variantBinding` derives exact whole-member storage from the parent Union. Other storage keeps existing accessors.                                                                                                 |
+| Change                                            | Consumer action                                                                                                                                                                                                                                                               |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Composition.makeUpdate` is record-only           | Replace aggregate callbacks with exhaustive `(model, message)` handlers. `.withContext(context => handlers)` and direct/curried returned updates remain. Empty/routed-only updates use `{}`.                                                                                  |
+| All three focused Step helpers use producers      | `makeFieldsStep`, `makeCommandsStep` and `makeOutMessageStep` receive callbacks. Use `.fromMessage` for payload-only producers, Model-aware producers when needed and zero-argument callbacks for fixed output. Commands/OutMessages preserve Model identity.                 |
+| ManagedResource aggregation matches Subscriptions | Fully attached owned registries expose `managedResources.layer`; empty registries provide `Layer.empty`. The key `layer` is reserved. Mixed/host-owned entries use explicit providers.                                                                                        |
+| Record/HashMap child storage                      | Optional `makeMapBinding` derives storage and occurrence keys from the parent Schema. Ordinary operations preserve membership and ignore absent occurrences.                                                                                                                  |
+| Captured Command arguments                        | Optional `Story.Command.argsOf` / `Scene.Command.argsOf` project exact args by Definition identity. Occurrence selection remains explicit.                                                                                                                                    |
+| Headless child facts                              | Optional `toParentMessage` from `foldkit/test` replaces mapper-only embeds and manually decoded test envelopes. Supply the actual Binding and decoded Message/key.                                                                                                            |
+| Concurrent Story Messages                         | Ordinary `Story.message` retains pending Commands; resolve them explicitly before Story completion. Scene retains its boundary checks, with the explicit `keepPending` operation described below.                                                                             |
+| Dynamic child storage initialization              | Optional `initAndSet` handles singular direct fields and exact key/child Option wrappers; `initAndAppend` reuses existing array `init.toItem`; `initAndInsert` inserts direct-value Record/HashMap children. Extra metadata and mixed parent transitions keep `Binding.init`. |
+| Testing event delivery                            | Optional `Story.messageWith`, `Story.Subscription.from(...).emit` and `Scene.Command.keepPending` model concurrent inputs while keeping resolution explicit.                                                                                                                  |
+| Keyed Command cancellation                        | `toKey` receives only own selected fields on both paths. Precise tuple policies retain exact cancellation args; broad or mixed policies need accurate optional fields or narrowing.                                                                                           |
+| Whole tagged child variants                       | Optional `makeVariantBinding` from `foldkit/variantBinding` derives exact whole-member storage from the parent Union. Other storage keeps existing accessors.                                                                                                                 |
+
+Consumer organization also standardizes feature-local Step helper imports and
+descriptive `Step` suffixes for named transitions/factories. These are authoring
+conventions; public operation keys and ordinary direct-result handlers retain
+their roles. The checked assembly boundary and Definition factory renames were
+already in the published preview.
 
 Handle DragAndDrop’s new `StartedKeyboardDrag` and `ChangedKeyboardTarget` OutMessages in exhaustive policies. Keep complete connected results: a handler mixing raw local branches with connected recipes needs Definition-owned local Steps. Ordinary cohesive raw handlers can return results directly. Silent operations now retain their own per-Message channels rather than inheriting unrelated OutMessages.
 
@@ -32,13 +54,14 @@ Workspace's extra implementation interface and nested producer annotation are re
 
 ## Other improvements
 
-- Nested Date/Effect DateTime/TimeZone ViewInputs are accepted while application callbacks remain rejected.
+- Nested Effect DateTime/TimeZone ViewInputs are accepted while application callbacks remain rejected. Native Date support already exists in the published preview.
 - Reciprocal/converging policies, connected OutMessage combinations, registration, and assembly diagnostics have focused regressions.
 - Public UI declaration headers and a targeted private Workspace boundary repair actual declaration expansion failures without wider requirements.
 - The Workspace example now exercises realistic shared data, routed retained drafts, optimistic board moves and rollback, creation, comments, saved views, notifications, continuous activity and accessible Foldkit UI controls.
+- Duplicate Mount attributes reject during VNode construction before either handler starts. The customization guide groups existing variation options and includes a checked alternate embedded view.
 - Examples, Website, Typing Game, UI, scaffolds, snippets and agent guidance were audited for adoption. Intentional mixed-result, guarded and domain-only exceptions are [documented](preview-api-adoption.md).
 
-## Verification
+## Earlier verification checkpoints
 
 The counts in this section describe the verified `679d2d5e7f` checkpoint. The [subsequent followup report](preview-final-followups-20261025.md) identifies its refreshed gates and the inherited explicit Mount-erasure limitation.
 
@@ -46,7 +69,7 @@ All 53 source configurations pass. Core/UI external declaration emission, reject
 
 All nine packages were packed locally. Installed Coverchart and generated SPA/SSG/SSR projects pass source, lint, tests, builds and browser checks. The actual Coverchart repository and your running Workspace server are preserved.
 
-## Performance and remaining limits
+## Earlier performance checkpoints and retained limits
 
 Official TypeScript Website hover/completion/definition are broadly similar to the published preview. Error appearance/clearing add about 56 ms; cold root Message access is 2.80 seconds versus 2.45. Workspace Block completion is about 0.77 seconds, with a sampled peak near 580 MiB in bounded fresh sessions. The runtime screen has overlapping ranges and median increases of 2.3% naive / 6.7% optimized. Bundles add about 1.6 KB gzip. [Methods, ranges and evidence](preview-framework-performance.md#october-25-final-candidate).
 

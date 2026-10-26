@@ -34,9 +34,9 @@ Ordinary source Block export review: verify one private zero-argument preparatio
 
 For a package shipping declarations, name each ordinary public completed contract with a same-name interface extending the matching checked `FromAssembly*<typeof Model, typeof prepare>`, followed by `export const FeatureBlock: FeatureBlock = Block.assemble(prepare)`. Keep producer, interface, and value adjacent as one assembly unit. A reusable named generic `Completed` interface can provide that boundary for a generic factory. JavaScript-only applications retain the existing checked value annotation. Verify declaration emission for actual public entrypoints and external consumption; `noEmit` alone is insufficient and there is no reliable child-count threshold. Naming the header prevents repeated child expansion, but it does not guarantee arbitrary root serialization or seal deliberate ambient augmentation.
 
-Author an exhaustive `Composition.makeUpdate({ Tag: (model, message) => result })` record. Each case receives the contextual Model and exact Message payload, and operations retain the selected case's Command requirements and OutMessage contract. Use `makeUpdate.withContext(context => cases)` for additional dispatch arguments; the factory runs for local dispatch, not routed child-only delivery. Generic Step values inside that context factory may need `model => step(model)` for inference. Ordinary handlers return results directly; do not wrap every case with `makeStep`. A Model-preserving no-op record value is `Definition.makeNoopStep()`, not the bare factory.
+Author an exhaustive `Composition.makeUpdate({ Tag: (model, message) => result })` record. Each case receives the contextual Model and exact Message payload, and operations retain the selected case's Command requirements and OutMessage contract. Use `makeUpdate.withContext(context => cases)` for additional dispatch arguments; the factory runs for local dispatch, not routed child-only delivery. Generic Step values inside that context factory may need `model => step(model)` for inference. Ordinary handlers return results directly; do not wrap every case with `makeStep`. A Model-preserving no-op record value is `makeNoopStep()`, not the bare factory.
 
-`Composition.makeUpdate` accepts only an exhaustive handler record; its callback overload is removed. Use `makeUpdate({})` when there are no local Messages. Each handler receives `(model, message)`; name extracted single-Message handlers `handle<MessageTag>` and pass compatible handlers or Steps directly. Keep shared Steps named for their operation. If one handler mixes connected Binding recipes with local results, author its local branches through Definition-owned Steps. A raw `{ model }` beside a connected recipe is rejected; ordinary raw-only handlers can return results directly. Do not hide errors with casts or broad return annotations: a later wrapper cannot recover channels already erased upstream.
+`Composition.makeUpdate` accepts only an exhaustive handler record; its callback overload is removed. Use `makeUpdate({})` when there are no local Messages. Each handler receives `(model, message)`; name extracted single-Message handlers `handle<MessageTag>` and pass compatible handlers or Steps directly. Give every named Model-first Step value a descriptive name ending in `Step`, such as `refreshStep`. Give a purposeful transition factory that returns a Step an operation name ending in `Step` too. Factory methods, imported authoring helpers, named OutMessage folds and matchers, direct inline handlers, public operation keys, Message tags, and applied update-like results keep their established names. If one handler mixes connected Binding recipes with local results, author its local branches through Definition-owned Steps. A raw `{ model }` beside a connected recipe is rejected; ordinary raw-only handlers can return results directly. Do not hide errors with casts or broad return annotations: a later wrapper cannot recover channels already erased upstream.
 
 ## Phase 1: Scope the audit
 
@@ -196,9 +196,11 @@ Use `Agent` with `subagent_type: general-purpose`. Suggested fan-out:
 
 Use `Definition.makeFieldsStep(producer)` for owning field transformations, `Definition.makeCommandsStep(producer)` for Commands with an unchanged Model, and `Definition.makeOutMessageStep(producer)` for one declared OutMessage with an unchanged Model.
 
-All three take callbacks, evaluated when the Step or handler is applied. An ordinary producer receives the current Model and, when authored as a Message-dependent handler, its exact Message. Use `.fromMessage(message => value)` for payload-only producers and `() => value` for fixed producers. Commands-only and OutMessage-only helpers preserve the incoming Model identity. `Definition.makeNoopStep()` stays unchanged; in an OutMessage fold, pass its factory point-free when appropriate.
+Check the helper's authoring boundary. A split `definition.ts` exports the Step helpers its implementation uses, and implementation modules named-import them from that file. A colocated feature destructures helpers beside its Definition. Definition-qualified calls remain appropriate when several Definitions in one module need visible ownership. Feature barrels keep these helpers private and export the completed Block.
 
-Pass compatible Steps directly as handler-record values. Extracted Message-dependent producers need a precise Message variant contract when no surrounding handler record supplies it. Map payloads explicitly when constructing a different Message or OutMessage; do not pass a constructor that could forward the incoming `_tag`. Keep cohesive mixed transitions as direct results, and use `Definition.makeStep` for reusable mixed, connected, initialization, delegated, or composed operations. Local branches mixed with connected recipes still need canonical Definition-owned results.
+All three take callbacks, evaluated when the Step or handler is applied. An ordinary producer receives the current Model and, when authored as a Message-dependent handler, its exact Message. Use `.fromMessage(message => value)` for payload-only producers and `() => value` for fixed producers. Commands-only and OutMessage-only helpers preserve the incoming Model identity. `makeNoopStep()` stays unchanged; in an OutMessage fold, pass its factory point-free when appropriate.
+
+Pass compatible Steps directly as handler-record values. Extracted Message-dependent producers need a precise Message variant contract when no surrounding handler record supplies it. Map payloads explicitly when constructing a different Message or OutMessage; do not pass a constructor that could forward the incoming `_tag`. Keep cohesive mixed transitions as direct results, and use the owning `makeStep` helper for reusable mixed, connected, initialization, delegated, or composed operations. Local branches mixed with connected recipes still need canonical Definition-owned results.
 
 `Update.combineSteps` accepts unary non-emitting Steps and preserves its OutMessage rejection. Use `Update.withOutMessage` for an existing plain result or an optional OutMessage. Do not construct and immediately invoke local Steps solely for uniformity.
 
@@ -212,12 +214,16 @@ Check both direct-field writer coordination caught by `foldkit/no-binding-write-
 
 Review child retention, rendering, and activity separately. Route-driven deletion should have a product reason. When editors are retained by identity, view must select the active child from the Route; hidden save completions must still reach their occurrence. Check that route-wide delivery gates do not discard those results. Require interaction cleanup only when the product actually needs it; do not add exhaustive navigation/interleaving policy to a normal example application. Name conditional initialization `initialize...IfMissing` and pure transitions for their actual Model change; vague `sync` or `observe` helpers can conceal several responsibilities.
 
-For a pure append to a keyed array that already declares `init.instances` and
-`init.toItem`, prefer `initAndAppend(Binding, model, { key, args })` from
-`foldkit/bindingInit` over repeating its wrapper writer. Verify the caller owns
-the absent-key decision. Keep explicit `Binding.init` for other storage,
-replacement, or cohesive changes to additional parent fields or Commands.
-Do not require a startup policy solely to enable this helper.
+Review dynamic initialization for the optional `foldkit/bindingInit` helpers:
+`initAndSet` for singular direct storage or exact key/child Option wrappers,
+`initAndAppend` for arrays with existing `init.instances`/`init.toItem`, and
+`initAndInsert` for direct-value Record/HashMap storage. A custom unkeyed accessor
+may reuse an existing `init.toParentFields` projection. Verify the caller owns
+presence decisions and handles duplicate-key rejection. Retain explicit
+`Binding.init` for additional wrapper metadata, mixed parent changes or Commands,
+custom relationships, array/map replacement, or whole tagged variants. Do not
+require a startup policy solely to enable a helper. Reinitializing the same
+occurrence does not reset lifecycle generations or cancel pending work.
 
 For Block, Binding, Composition, OutMessage, startup, handler Layer, and root
 Service review, read

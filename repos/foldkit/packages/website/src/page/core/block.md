@@ -375,7 +375,7 @@ An exact `Schema.Option` field can hold zero or one keyed wrapper with the same 
 
 The Option must be required on the parent Struct, and its value must be one closed Struct wrapper. The key and child fields follow the same rules as wrapped arrays. `None` means the occurrence is absent. A fold or operation replaces only the child Model when the stored key matches, preserves the wrapper's other fields, and never creates a missing occurrence. A different key leaves the exact parent Model unchanged. The Binding defaults placement to the child Block ID.
 
-The parent owns optional presence. Use `RoomBinding.init({ key, args, toParentModel })` when an update or custom startup path creates the occurrence. Automatic `init.instances` applies only to keyed arrays and is rejected for Option storage.
+The parent owns optional presence. For a wrapper containing only its key and child fields, `initAndSet` from `foldkit/bindingInit` derives the storage writer. Keep `RoomBinding.init({ key, args, toParentModel })` when creating additional parent-owned wrapper metadata. Both retain child init Commands. Automatic `init.instances` applies only to keyed arrays and is rejected for Option storage. See [dynamic storage helpers](/core/init-and-flags#dynamic-storage-helpers).
 
 Use the general keyed form when the parent or wrapper Schema is opaque, wrappers are a union or use open/index-signature storage such as `Schema.StructWithRest`, a zero-or-one occurrence does not use the exact Option wrapper shape above, or writing a child requires other parent changes. `readAll` enumerates the items, `key` selects stable identity, `read` selects the child Model, and `writeAt` stores its next value. Supply `keySchema` for this general form so the complete Message Schema can validate and serialize the selected key. Field shorthands derive that Schema from the declared key field.
 
@@ -421,6 +421,25 @@ When an external fact requires a child transition, expose an `inform*` operation
 ::Snippet{name="blockInformExternalState" label="Informing a child about URL state"}
 
 The child update handles the child-local fact and may return only `{ model }`. It does not echo an OutMessage to the parent that just supplied the fact. Keeping the notification in update centralizes the child invariant and shares transition behavior with every other cause of the same Model change. The same path remains valid when the transition later gains Commands. Pure selectors and derived view inputs remain ordinary helpers because they do not change the child Model. When a child reports a change through an OutMessage, update the parent-owned data in its policy. Notify that same child again only if it needs another transition; an acknowledgement that repeats work it already performed adds unnecessary synchronization.
+
+## Customize a Block {#customizing-a-block}
+
+Choose the approach that matches what changes:
+
+| Need                                                                            | Supported choice                                                                                                                                           |
+| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Refine a Model or Message contract, or accept stable construction configuration | Return a completed Block from a factory. Create one module-level `Block.makeNamespace` when the results share the same feature identity.                   |
+| Select different markup at one embedding site                                   | Author an alternate view with `ChildBlock.makeView` or `ChildBlock.makeView.withInputs`, then pass it as `view` to `ChildBinding.embedView`.               |
+| Supply parent-owned render-only values                                          | Declare `viewInputs` and pass them through `ChildBinding.embedView`.                                                                                       |
+| Let the parent own the elements while the child owns their behavior             | Publish checked attribute groups with `childAttributes`.                                                                                                   |
+| Select another implementation of attached handlers                              | Call `replaceEffectsLayer` with Layers built from the original definitions. Use `provideHandlers` for contracts the Block deliberately leaves to its host. |
+| Add state, Messages, public operations, or coordination policy                  | Create a wrapper Block, bind the original Block as its child, and express the new policy through operations and OutMessages.                               |
+
+An alternate view uses the completed child Block's fixed Model, Message, child Binding, and Mount graph. The parent selects it for one render position without changing the Block's primary view:
+
+::Snippet{name="blockCustomizationAlternateView" label="Selecting an alternate embedded view"}
+
+The completed Block has no general `withView`, `rename`, or `mapUpdate` transform. Use a factory for contract-level variation and a wrapper Block when the adaptation changes behavior or ownership. The sections below show handler selection and generic factories in detail; [view inputs](#wiring-the-view) and [child attributes](#child-attributes) cover the two markup boundaries.
 
 ## Select a Handler Recipe {#select-a-local-handler-recipe}
 
@@ -493,6 +512,8 @@ Use `FeatureComposition.Message` or `FeatureBlock.Message` to decode, serialize,
 
 Decoding checks the envelope's structure, placement, and key Schema. It does not establish that its occurrence is still current. Before queueing externally supplied live Messages, the Runtime checks the complete placement, key, and generation chain against the active graph. History replays previously accepted Messages; pure update, Story, and Scene replay do not repeat live admission. A Message that decodes for replay is not necessarily valid for live delivery.
 
+Generations belong to one Program runtime. They are not portable occurrence IDs or authentication tokens: a generated child envelope from another runtime can pass decoding and live admission when its placement, key, and generation happen to match. Use these envelopes for that runtime's delivery and history, not as a cross-runtime live-dispatch protocol. Replication, persisted intent, Ports, and agent integrations need an application-owned protocol. Decode its inputs into local parent Messages, then call registered Binding operations from the parent's update.
+
 ## API
 
 ### Block.makeDefinition
@@ -535,7 +556,7 @@ The parent can store exact child Models in a Record and wrapped child Models in 
 
 Record keys must decode to strings. Lookup uses own properties, and enumeration follows JavaScript's own enumerable string-key order. HashMap keys decode to strings or numbers; actual numeric occurrence keys must be finite even when the declared Schema is broader. HashMap iteration does not establish display order. Keep a separate ordered list of IDs when the application needs one.
 
-Ordinary child folds and operations replace only an existing matching entry. Wrapped writes preserve parent metadata, and absent entries leave the same parent Model unchanged. Parents own membership and explicit creation through `Binding.init({ key, args, toParentModel })`, including the initialized child's Commands. Use general keyed accessors for custom writers, custom enumeration, or composite domain keys with a separate stable primitive occurrence identity. A fresh plain object is not a structural HashMap key merely because a Struct Schema describes it.
+Ordinary child folds and operations replace only an existing matching entry. Wrapped writes preserve parent metadata, and absent entries leave the same parent Model unchanged. Parents own membership. For direct child values, `initAndInsert` from `foldkit/bindingInit` creates an absent entry and rejects occupied keys. Wrapped maps keep explicit `Binding.init({ key, args, toParentModel })` so the parent supplies their metadata. Both retain the initialized child's Commands. Use general keyed accessors for custom writers, custom enumeration, or composite domain keys with a separate stable primitive occurrence identity. A fresh plain object is not a structural HashMap key merely because a Struct Schema describes it.
 
 ### Focused Step Producers
 

@@ -7,11 +7,11 @@ import {
   IssueDetailBinding,
   ProjectSettingsBinding,
 } from '../composition'
-import { ApplicationDefinition } from '../definition'
+import { makeNoopStep, makeStep } from '../definition'
 import { ApplicationRoute, pageRoute } from '../route'
 
-const initializeIssueDetailIfMissing = (issueId: string) =>
-  ApplicationDefinition.makeStep(model => {
+const initializeIssueDetailIfMissingStep = (issueId: string) =>
+  makeStep(model => {
     if (
       Array.some(
         model.issueDetailInstances,
@@ -43,8 +43,8 @@ const initializeIssueDetailIfMissing = (issueId: string) =>
     )
   })
 
-const initializeProjectBoardIfMissing = (projectId: string) =>
-  ApplicationDefinition.makeStep(model => {
+const initializeProjectBoardIfMissingStep = (projectId: string) =>
+  makeStep(model => {
     if (
       Array.some(
         model.boardInstances,
@@ -70,8 +70,8 @@ const initializeProjectBoardIfMissing = (projectId: string) =>
     )
   })
 
-const initializeProjectSettingsIfMissing = (projectId: string) =>
-  ApplicationDefinition.makeStep(model => {
+const initializeProjectSettingsIfMissingStep = (projectId: string) =>
+  makeStep(model => {
     if (
       Array.some(
         model.projectSettingsInstances,
@@ -97,25 +97,26 @@ const initializeProjectSettingsIfMissing = (projectId: string) =>
     )
   })
 
-export const initializeActiveChildren = ApplicationDefinition.makeStep(
-  model => {
-    const initializeIssueDetail = ApplicationRoute.matchOrElse(
-      model.route,
-      { Issue: ({ issueId }) => initializeIssueDetailIfMissing(issueId) },
-      ApplicationDefinition.makeNoopStep,
-    )
+export const initializeActiveChildrenStep = makeStep(model => {
+  const initializeIssueDetailStep = ApplicationRoute.matchOrElse(
+    model.route,
+    { Issue: ({ issueId }) => initializeIssueDetailIfMissingStep(issueId) },
+    makeNoopStep,
+  )
 
-    const route = pageRoute(model.route)
-    const initializeProjectChild = ApplicationRoute.matchOrElse(
-      route,
-      {
-        Board: ({ projectId }) => initializeProjectBoardIfMissing(projectId),
-        ProjectSettings: ({ projectId }) =>
-          initializeProjectSettingsIfMissing(projectId),
-      },
-      ApplicationDefinition.makeNoopStep,
-    )
+  const route = pageRoute(model.route)
+  const initializeProjectChildStep = ApplicationRoute.matchOrElse(
+    route,
+    {
+      Board: ({ projectId }) => initializeProjectBoardIfMissingStep(projectId),
+      ProjectSettings: ({ projectId }) =>
+        initializeProjectSettingsIfMissingStep(projectId),
+    },
+    makeNoopStep,
+  )
 
-    return Update.combineSteps([initializeIssueDetail, initializeProjectChild])
-  },
-)
+  return Update.combineSteps([
+    initializeIssueDetailStep,
+    initializeProjectChildStep,
+  ])
+})

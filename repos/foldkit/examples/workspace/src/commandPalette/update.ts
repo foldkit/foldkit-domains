@@ -5,16 +5,18 @@ import { modifyFields } from 'foldkit/struct'
 import { ScrollActiveResult } from './command'
 import { CommandPaletteComposition, DialogBinding } from './composition'
 import {
-  CommandPaletteDefinition,
   Message,
   type Model,
   OutMessage,
   ResultTarget,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
 } from './definition'
 
-const keepModel = CommandPaletteDefinition.makeNoopStep()
+const keepModelStep = makeNoopStep()
 
-const closeDialog = DialogBinding.requestClose()
+const closeDialogStep = DialogBinding.requestClose()
 
 const handleUpdatedQuery = (
   model: typeof Model.Type,
@@ -27,8 +29,11 @@ const handleUpdatedQuery = (
   commands: [ScrollActiveResult({ index: 0 })],
 })
 
-const moveActiveResult = (nextActiveResultIndex: number, resultCount: number) =>
-  CommandPaletteDefinition.makeStep(model => ({
+const moveActiveResultStep = (
+  nextActiveResultIndex: number,
+  resultCount: number,
+) =>
+  makeStep(model => ({
     model: modifyFields(model, {
       activeResultIndex: () => nextActiveResultIndex,
     }),
@@ -38,13 +43,13 @@ const moveActiveResult = (nextActiveResultIndex: number, resultCount: number) =>
     ),
   }))
 
-const openPalette = CommandPaletteDefinition.makeStep(model => {
+const openPaletteStep = makeStep(model => {
   if (model.dialog.isOpen) {
     return { model }
   }
 
   return Update.combineSteps([
-    CommandPaletteDefinition.makeFieldsStep(() => ({
+    makeFieldsStep(() => ({
       query: () => '',
       activeResultIndex: () => 0,
     })),
@@ -53,14 +58,14 @@ const openPalette = CommandPaletteDefinition.makeStep(model => {
 })
 
 const selectResult = (
-  model: Parameters<typeof closeDialog>[0],
+  model: Parameters<typeof closeDialogStep>[0],
   target: typeof ResultTarget.Type,
 ) => {
   if (!model.dialog.isOpen) {
-    return keepModel(model)
+    return keepModelStep(model)
   }
 
-  const dialogClose = closeDialog(model)
+  const dialogClose = closeDialogStep(model)
 
   const outMessage = ResultTarget.match(target, {
     Issue: ({ issueId }) => OutMessage.SelectedIssue({ issueId }),
@@ -71,15 +76,15 @@ const selectResult = (
 }
 
 export const update = CommandPaletteComposition.makeUpdate({
-  RequestedOpen: openPalette,
-  PressedOpenShortcut: openPalette,
-  RequestedClose: closeDialog,
+  RequestedOpen: openPaletteStep,
+  PressedOpenShortcut: openPaletteStep,
+  RequestedClose: closeDialogStep,
   UpdatedQuery: handleUpdatedQuery,
   PressedNextResult: (model, { resultCount }) => {
     const nextActiveResultIndex =
       resultCount > 0 ? (model.activeResultIndex + 1) % resultCount : 0
 
-    return moveActiveResult(nextActiveResultIndex, resultCount)(model)
+    return moveActiveResultStep(nextActiveResultIndex, resultCount)(model)
   },
   PressedPreviousResult: (model, { resultCount }) => {
     const nextActiveResultIndex =
@@ -87,13 +92,13 @@ export const update = CommandPaletteComposition.makeUpdate({
         ? (model.activeResultIndex - 1 + resultCount) % resultCount
         : 0
 
-    return moveActiveResult(nextActiveResultIndex, resultCount)(model)
+    return moveActiveResultStep(nextActiveResultIndex, resultCount)(model)
   },
   PressedEnter: (model, { maybeTarget }) =>
     Option.match(maybeTarget, {
-      onNone: () => keepModel(model),
+      onNone: () => keepModelStep(model),
       onSome: target => selectResult(model, target),
     }),
   ClickedResult: (model, { target }) => selectResult(model, target),
-  CompletedScrollActiveResult: keepModel,
+  CompletedScrollActiveResult: keepModelStep,
 })

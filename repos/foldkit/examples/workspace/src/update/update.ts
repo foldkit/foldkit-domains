@@ -14,29 +14,34 @@ import {
   ApplicationComposition,
   CommandPaletteBinding,
   NotificationCenterBinding,
-  requestMoveIssue,
+  requestMoveIssueStep,
 } from '../composition'
-import { ApplicationDefinition } from '../definition'
-import { simulateActivity } from '../demoActivity'
+import {
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+} from '../definition'
+import { simulateActivityStep } from '../demoActivity'
 import { NotificationActivity, type WorkspaceSnapshot } from '../domain'
 import { IssueMoveState, WorkspaceAsyncData } from '../model'
 import { RepositoryError } from '../repository'
-import { handleChangedUrl } from './handleChangedUrl'
+import { handleChangedUrlStep } from './handleChangedUrl'
 import { handleClickedDeleteSavedView } from './handleClickedDeleteSavedView'
-import { initializeActiveChildren } from './initializeActiveChildren'
+import { initializeActiveChildrenStep } from './initializeActiveChildren'
 import {
-  applyIncomingIssue,
-  reconcileRetainedIssueDetails,
+  applyIncomingIssueStep,
+  reconcileRetainedIssueDetailsStep,
 } from './issueDetails'
 import {
-  applyMovedIssues,
-  informBoardMoveFailure,
+  applyMovedIssuesStep,
+  informBoardMoveFailureStep,
   mergeIssues,
-  rollbackMove,
+  rollbackMoveStep,
 } from './issueMove'
 
-const applySnapshot = (snapshot: typeof WorkspaceSnapshot.Type) =>
-  ApplicationDefinition.makeFieldsStep(() => ({
+const applySnapshotStep = (snapshot: typeof WorkspaceSnapshot.Type) =>
+  makeFieldsStep(() => ({
     workspaceAsyncData: workspaceAsyncData =>
       WorkspaceAsyncData.Success({
         data: Option.match(AsyncData.getData(workspaceAsyncData), {
@@ -50,11 +55,11 @@ const applySnapshot = (snapshot: typeof WorkspaceSnapshot.Type) =>
       }),
   }))
 
-const noop = ApplicationDefinition.makeNoopStep()
+const noopStep = makeNoopStep()
 
-const handleClickedRetryLoad = ApplicationDefinition.makeStep(model =>
+const handleClickedRetryLoadStep = makeStep(model =>
   Option.match(AsyncData.revalidateOrLoad(model.workspaceAsyncData), {
-    onNone: () => noop(model),
+    onNone: () => noopStep(model),
     onSome: workspaceAsyncData => ({
       model: modifyFields(model, {
         workspaceAsyncData: () => workspaceAsyncData,
@@ -65,34 +70,29 @@ const handleClickedRetryLoad = ApplicationDefinition.makeStep(model =>
 )
 
 export const update = ApplicationComposition.makeUpdate({
-  ClickedLink: ApplicationDefinition.makeCommandsStep.fromMessage(
-    ({ request }) =>
-      UrlRequest.match(request, {
-        Internal: ({ url }) => [NavigateInternal({ url: urlToString(url) })],
-        External: ({ href }) => [LoadExternal({ href })],
-      }),
-  ),
-  ChangedUrl: handleChangedUrl,
-  CompletedNavigateInternal: noop,
-  CompletedLoadExternal: noop,
-  CompletedReplaceInternalUrl: noop,
-  SucceededLoadWorkspace: (model, { snapshot }) =>
-    Update.combineSteps(model, [
-      applySnapshot(snapshot),
-      initializeActiveChildren,
-      reconcileRetainedIssueDetails,
-    ]),
-  FailedLoadWorkspace: ApplicationDefinition.makeFieldsStep.fromMessage(
-    ({ error }) => ({
-      workspaceAsyncData: workspaceAsyncData =>
-        AsyncData.settle(workspaceAsyncData, Result.fail(error)),
+  ClickedLink: makeCommandsStep.fromMessage(({ request }) =>
+    UrlRequest.match(request, {
+      Internal: ({ url }) => [NavigateInternal({ url: urlToString(url) })],
+      External: ({ href }) => [LoadExternal({ href })],
     }),
   ),
-  ClickedRetryLoad: handleClickedRetryLoad,
-  ClickedSimulateSaveFailure: ApplicationDefinition.makeCommandsStep(() => [
-    SimulateSaveFailure(),
-  ]),
-  CompletedSimulateSaveFailure: ApplicationDefinition.makeFieldsStep(() => ({
+  ChangedUrl: handleChangedUrlStep,
+  CompletedNavigateInternal: noopStep,
+  CompletedLoadExternal: noopStep,
+  CompletedReplaceInternalUrl: noopStep,
+  SucceededLoadWorkspace: (model, { snapshot }) =>
+    Update.combineSteps(model, [
+      applySnapshotStep(snapshot),
+      initializeActiveChildrenStep,
+      reconcileRetainedIssueDetailsStep,
+    ]),
+  FailedLoadWorkspace: makeFieldsStep.fromMessage(({ error }) => ({
+    workspaceAsyncData: workspaceAsyncData =>
+      AsyncData.settle(workspaceAsyncData, Result.fail(error)),
+  })),
+  ClickedRetryLoad: handleClickedRetryLoadStep,
+  ClickedSimulateSaveFailure: makeCommandsStep(() => [SimulateSaveFailure()]),
+  CompletedSimulateSaveFailure: makeFieldsStep(() => ({
     maybeNotice: () =>
       Option.some(
         'The next save will fail. Your draft will be kept so you can retry.',
@@ -100,12 +100,12 @@ export const update = ApplicationComposition.makeUpdate({
   })),
   ClickedOpenCommandPalette: CommandPaletteBinding.requestOpen(),
   ClickedDeleteSavedView: handleClickedDeleteSavedView,
-  TickedActivityStream: simulateActivity,
-  ClickedSimulateActivity: simulateActivity,
+  TickedActivityStream: simulateActivityStep,
+  ClickedSimulateActivity: simulateActivityStep,
   SucceededAppendActivity: (model, { issue }) =>
     Update.combineSteps(model, [
-      applyIncomingIssue(issue),
-      ApplicationDefinition.makeFieldsStep(() => ({
+      applyIncomingIssueStep(issue),
+      makeFieldsStep(() => ({
         maybeActivityError: () => Option.none(),
       })),
     ]),
@@ -127,8 +127,8 @@ export const update = ApplicationComposition.makeUpdate({
     )
 
     return Update.combineSteps(model, [
-      applyIncomingIssue(issue),
-      ApplicationDefinition.makeFieldsStep(() => ({
+      applyIncomingIssueStep(issue),
+      makeFieldsStep(() => ({
         maybeActivityError: () => Option.none(),
       })),
       isNewerAssignment
@@ -139,30 +139,26 @@ export const update = ApplicationComposition.makeUpdate({
               createdAt,
             }),
           })
-        : ApplicationDefinition.makeNoopStep(),
+        : makeNoopStep(),
     ])
   },
-  FailedAssignIssue: ApplicationDefinition.makeFieldsStep.fromMessage(
-    ({ error }) => ({
-      maybeActivityError: () => Option.some(error),
-    }),
-  ),
-  FailedAppendActivity: ApplicationDefinition.makeFieldsStep.fromMessage(
-    ({ error }) => ({
-      maybeActivityError: () => Option.some(error),
-    }),
-  ),
+  FailedAssignIssue: makeFieldsStep.fromMessage(({ error }) => ({
+    maybeActivityError: () => Option.some(error),
+  })),
+  FailedAppendActivity: makeFieldsStep.fromMessage(({ error }) => ({
+    maybeActivityError: () => Option.some(error),
+  })),
   SucceededMoveIssue: (model, { snapshot }) =>
     Update.combineSteps(model, [
-      applyMovedIssues(snapshot),
-      ApplicationDefinition.makeFieldsStep(() => ({
+      applyMovedIssuesStep(snapshot),
+      makeFieldsStep(() => ({
         issueMoveState: () => IssueMoveState.Idle(),
         maybeNotice: () => Option.some('Issue moved'),
       })),
-      reconcileRetainedIssueDetails,
+      reconcileRetainedIssueDetailsStep,
     ]),
   FailedMoveIssue: (model, { issueId, status, insertionIndex, error }) => {
-    const failedMove = ApplicationDefinition.makeFieldsStep(() => ({
+    const failedMoveStep = makeFieldsStep(() => ({
       issueMoveState: () =>
         IssueMoveState.FailedMove({
           issueId,
@@ -174,22 +170,22 @@ export const update = ApplicationComposition.makeUpdate({
 
     return RepositoryError.guards.Conflict(error)
       ? Update.combineSteps(model, [
-          rollbackMove(issueId),
-          failedMove,
-          applyIncomingIssue(error.latestIssue),
-          informBoardMoveFailure(issueId),
+          rollbackMoveStep(issueId),
+          failedMoveStep,
+          applyIncomingIssueStep(error.latestIssue),
+          informBoardMoveFailureStep(issueId),
         ])
       : Update.combineSteps(model, [
-          rollbackMove(issueId),
-          failedMove,
-          informBoardMoveFailure(issueId),
+          rollbackMoveStep(issueId),
+          failedMoveStep,
+          informBoardMoveFailureStep(issueId),
         ])
   },
   ClickedRetryMove: model =>
     IssueMoveState.match(model.issueMoveState, {
-      Idle: () => noop(model),
-      MovingIssue: () => noop(model),
+      Idle: () => noopStep(model),
+      MovingIssue: () => noopStep(model),
       FailedMove: ({ issueId, status, insertionIndex }) =>
-        requestMoveIssue(issueId, status, insertionIndex)(model),
+        requestMoveIssueStep(issueId, status, insertionIndex)(model),
     }),
 })

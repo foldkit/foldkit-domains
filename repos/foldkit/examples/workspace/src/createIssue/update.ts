@@ -6,15 +6,16 @@ import { IssueDraft } from '../domain'
 import { CreateIssue } from './command'
 import { CreateIssueComposition, DialogBinding } from './composition'
 import {
-  CreateIssueDefinition,
   CreateState,
   Message,
   type Model,
   OutMessage,
+  makeFieldsStep,
+  makeStep,
 } from './definition'
-import { editDraft } from './draft'
+import { editDraftStep } from './draft'
 
-const handleSubmittedIssueForm = CreateIssueDefinition.makeStep(model => {
+const handleSubmittedIssueFormStep = makeStep(model => {
   if (CreateState.guards.Creating(model.createState)) {
     return { model }
   }
@@ -54,7 +55,9 @@ const handleUpdatedDescription = (
   model: typeof Model.Type,
   { value }: typeof Message.UpdatedDescription.Type,
 ) =>
-  editDraft(draft => modifyFields(draft, { description: () => value }))(model)
+  editDraftStep(draft => modifyFields(draft, { description: () => value }))(
+    model,
+  )
 
 export const update = CreateIssueComposition.makeUpdate({
   RequestedOpen: (model, { projectId, status = 'Todo' }) => {
@@ -63,7 +66,7 @@ export const update = CreateIssueComposition.makeUpdate({
     }
 
     return Update.combineSteps(model, [
-      CreateIssueDefinition.makeFieldsStep(() => ({
+      makeFieldsStep(() => ({
         title: () => '',
         description: () => '',
         projectId: () => projectId,
@@ -76,15 +79,15 @@ export const update = CreateIssueComposition.makeUpdate({
   },
   RequestedClose: DialogBinding.requestClose(),
   UpdatedTitle: (model, { value }) =>
-    editDraft(draftModel => modifyFields(draftModel, { title: () => value }))(
-      model,
-    ),
+    editDraftStep(draftModel =>
+      modifyFields(draftModel, { title: () => value }),
+    )(model),
   UpdatedDescription: handleUpdatedDescription,
-  SubmittedIssueForm: handleSubmittedIssueForm,
+  SubmittedIssueForm: handleSubmittedIssueFormStep,
   SucceededCreateIssue: (model, { issue }) => {
     return pipe(
       Update.combineSteps(model, [
-        CreateIssueDefinition.makeFieldsStep(() => ({
+        makeFieldsStep(() => ({
           createState: () => CreateState.Idle(),
         })),
         DialogBinding.requestClose(),
@@ -94,7 +97,7 @@ export const update = CreateIssueComposition.makeUpdate({
   },
   FailedCreateIssue: (model, { error }) =>
     Update.combineSteps(model, [
-      CreateIssueDefinition.makeFieldsStep(() => ({
+      makeFieldsStep(() => ({
         createState: () => CreateState.Failed({ error }),
       })),
       DialogBinding.requestOpen(),

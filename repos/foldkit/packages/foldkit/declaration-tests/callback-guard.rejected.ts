@@ -1,30 +1,29 @@
 import {
-  KeyedComposition,
+  ChildBinding,
   KeyedBinding,
-  ParentModel,
+  KeyedComposition,
+  LocalSave,
   ParentComposition,
   ParentDefinition,
-  ParentMessage,
+  ParentModel,
   ParentOutMessage,
-  ChildBinding,
-  LocalSave,
 } from './callback-guard.accepted.js'
-const keepModel = ParentDefinition.makeNoopStep()
+const keepModelStep = ParentDefinition.makeNoopStep()
 const validHandlers = {
-  IgnoredRequest: keepModel,
-  RequestedChildIncrement: keepModel,
-  RequestedLocalSave: keepModel,
-  RequestedReport: keepModel,
-  CompletedLocalSave: keepModel,
+  IgnoredRequest: keepModelStep,
+  RequestedChildIncrement: keepModelStep,
+  RequestedLocalSave: keepModelStep,
+  RequestedReport: keepModelStep,
+  CompletedLocalSave: keepModelStep,
 }
 ParentComposition.makeUpdate({
-  IgnoredRequest: keepModel,
+  IgnoredRequest: keepModelStep,
   RequestedChildIncrement: ChildBinding.requestIncrement(),
   RequestedLocalSave: ParentDefinition.makeCommandsStep(() => [LocalSave()]),
   RequestedReport: ParentDefinition.makeOutMessageStep(() =>
     ParentOutMessage.Reported(),
   ),
-  CompletedLocalSave: keepModel,
+  CompletedLocalSave: keepModelStep,
 })
 
 ParentComposition.makeUpdate({

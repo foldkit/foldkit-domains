@@ -4,17 +4,17 @@ import { Url, toString as urlToString } from 'foldkit/url'
 
 import { LoadExternal, NavigateInternal } from './command'
 import { ApplicationComposition, UiBinding } from './composition'
-import { ApplicationDefinition } from './definition'
+import { makeFieldsStep, makeNoopStep } from './definition'
 import { urlToApplicationRoute } from './route'
 
-const stepRoute = (url: Url) =>
-  ApplicationDefinition.makeFieldsStep(() => ({
+const setRouteStep = (url: Url) =>
+  makeFieldsStep(() => ({
     route: () => urlToApplicationRoute(url),
   }))
 
 export const update = ApplicationComposition.makeUpdate({
-  CompletedNavigateInternal: ApplicationDefinition.makeNoopStep(),
-  CompletedLoadExternal: ApplicationDefinition.makeNoopStep(),
+  CompletedNavigateInternal: makeNoopStep(),
+  CompletedLoadExternal: makeNoopStep(),
 
   ClickedLink: (model, { request }) =>
     UrlRequest.match(request, {
@@ -30,7 +30,7 @@ export const update = ApplicationComposition.makeUpdate({
 
   ChangedUrl: (model, { url }) =>
     Update.combineSteps(model, [
-      stepRoute(url),
+      setRouteStep(url),
       UiBinding.requestCloseMobileMenu(),
     ]),
 

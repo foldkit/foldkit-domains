@@ -19,6 +19,9 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Message,
   OutMessage,
 })
+
+const { makeOutMessageStep } = ApplicationDefinition
+
 export const SettingsBinding = ApplicationDefinition.makeBinding(
   SettingsBlock,
   {
@@ -27,7 +30,7 @@ export const SettingsBinding = ApplicationDefinition.makeBinding(
 ).withOutMessagePolicy({
   fold: ApplicationDefinition.makeOutMessageFold(SettingsBlock, {
     ChangedTheme: ({ theme }) =>
-      ApplicationDefinition.makeOutMessageStep(model =>
+      makeOutMessageStep(model =>
         OutMessage.ChangedTheme({
           theme,
           changeCount: model.themeChangeCount,
@@ -36,11 +39,11 @@ export const SettingsBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-const changeTheme = (theme: typeof Theme.Type) => {
-  const requestThemeChange = SettingsBinding.requestThemeChange({ theme })
+const changeThemeStep = (theme: typeof Theme.Type) => {
+  const requestThemeChangeStep = SettingsBinding.requestThemeChange({ theme })
 
-  return (model: Parameters<typeof requestThemeChange>[0]) =>
-    requestThemeChange(
+  return (model: Parameters<typeof requestThemeChangeStep>[0]) =>
+    requestThemeChangeStep(
       modifyFields(model, { themeChangeCount: Number.increment }),
     )
 }
@@ -50,5 +53,5 @@ const ApplicationComposition = ApplicationDefinition.makeComposition({
 })
 
 export const update = ApplicationComposition.makeUpdate({
-  RequestedDarkTheme: changeTheme('Dark'),
+  RequestedDarkTheme: changeThemeStep('Dark'),
 })
