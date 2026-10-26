@@ -175,9 +175,8 @@
   }
 
   [data-search='active'] .search {
-    @apply top-[13px] left-[168px] h-[38px];
-    transform: none;
-    width: min(700px, calc(100vw - 470px));
+    @apply top-[13px] h-[38px];
+    width: min(700px, calc(100vw - 580px));
   }
 
   .hero {
@@ -397,6 +396,10 @@
       @apply grid-cols-2;
     }
 
+    [data-search='active'] .login {
+      @apply hidden;
+    }
+
     [data-search='active'] .search {
       width: calc(100vw - 440px);
     }
@@ -447,7 +450,7 @@
     }
 
     [data-search='active'] .search {
-      @apply top-3 left-[52px] h-10;
+      @apply top-3 h-10;
       width: calc(100vw - 120px);
     }
 
@@ -513,8 +516,7 @@
     }
 
     .app:has(.search input:focus) .search {
-      @apply top-3 left-[52px] h-10;
-      transform: none;
+      @apply top-3 h-10;
       width: calc(100vw - 120px);
     }
 
