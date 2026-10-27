@@ -18,6 +18,7 @@ import { Message } from './message'
 import { PageScrollKey } from './resultsList'
 import { searchRouter } from './route'
 import { DomainsClient } from './rpc'
+import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
 
 const SEARCH_DEBOUNCE_MILLISECONDS = 350
 const SEARCH_TIMEOUT = '20 seconds'
@@ -185,7 +186,7 @@ export const FocusSearchInput = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedFocusSearchInput],
     handler: function* () {
       return () =>
-        Dom.focus('#domain-search', { preventScroll: true }).pipe(
+        Dom.focus(SEARCH_INPUT_SELECTOR, { preventScroll: true }).pipe(
           Effect.ignore,
           Effect.as(Message.CompletedFocusSearchInput()),
         )
@@ -257,11 +258,10 @@ export const DismissSearchKeyboard = ApplicationDefinition.makeCommand(
     handler: function* () {
       return () =>
         Effect.sync(() => {
-          // should this be a const shared and used wherever it is currently?
-          const input = document.getElementById('domain-search')
+          const input = document.getElementById(searchInputConfig.id)
 
           if (
-            window.matchMedia('(hover: none) and (pointer: coarse)').matches &&
+            window.matchMedia(searchInputConfig.touchMediaQuery).matches &&
             input instanceof HTMLInputElement
           ) {
             input.blur()

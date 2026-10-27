@@ -1,5 +1,12 @@
-;(() => {
-  const input = document.getElementById('domain-search')
+import type { SearchInputConfig } from './searchInput'
+
+// NOTE: The server serializes this function into a classic script; shared values must arrive through its config.
+export const bootstrapSearchInput = ({
+  id,
+  touchMediaQuery,
+  desktopMediaQuery,
+}: typeof SearchInputConfig.Type) => {
+  const input = document.getElementById(id)
   const app = document.getElementById('domains-app')
 
   if (!(input instanceof HTMLInputElement) || !app) {
@@ -8,7 +15,6 @@
 
   const controller = new AbortController()
   const options = { signal: controller.signal }
-  const mobileMediaQuery = '(hover: none) and (pointer: coarse)'
   const updatePendingResults = () => {
     const label =
       input.value
@@ -69,7 +75,7 @@
     event => {
       event.preventDefault()
 
-      if (window.matchMedia(mobileMediaQuery).matches) {
+      if (window.matchMedia(touchMediaQuery).matches) {
         input.blur()
       }
     },
@@ -111,12 +117,13 @@
   }
 
   window.addEventListener('popstate', restoreQueryFromUrl, options)
-  document.addEventListener('domains:ready', () => controller.abort(), {
-    once: true,
-  })
-
-  const desktopMediaQuery =
-    '(min-width: 701px) and (hover: hover) and (pointer: fine)'
+  document.addEventListener(
+    'domains:ready',
+    () => {
+      controller.abort()
+    },
+    { once: true },
+  )
 
   if (
     window.matchMedia(desktopMediaQuery).matches &&
@@ -124,4 +131,4 @@
   ) {
     input.focus({ preventScroll: true })
   }
-})()
+}

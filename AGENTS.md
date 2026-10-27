@@ -26,7 +26,7 @@ The `domains:refresh-ssr-definitions` Vite plugin invalidates the SSR module gra
 
 Availability and registration/renewal quotes are live registrar data from the same-origin Effect backend. The cart is a demo. Keep test quotes in fixtures and never fall back to invented prices or availability. A registrar result that is unavailable or unconfirmed has no quote. Keep domain names derived from the current query, and hide prices, availability, and cart actions until that query's lookup completes. Preserve the single input node and pre-hydration edits when changing search layout or startup.
 
-`bootstrap.mjs` is a native browser boundary that runs before Foldkit starts. Its listeners end at the `domains:ready` handoff. After hydration, Model, Messages, and Commands own the search. Keep `ReplaceSearchUrl` written with `Effect.gen`.
+`bootstrap.ts` is a native browser boundary that runs before Foldkit starts. Its listeners end at the `domains:ready` handoff. After hydration, Model, Messages, and Commands own the search. Keep `ReplaceSearchUrl` written with `Effect.gen`.
 
 Use `pnpm test:e2e` for the production hydration checks. Its server port is 5180. `pnpm test:e2e:dev` checks stylesheet delivery before client scripts run on port 5181. Neither suite may reuse an existing server. The static deployment output is `dist/client`.
 

@@ -4,17 +4,22 @@ import { modifyFields } from 'foldkit/struct'
 import { FetchDomains } from './command'
 import { makeStep } from './definition'
 import {
-  QUOTE_PAGE_SIZE,
+  DomainListing,
   QueryWindow,
   domainTlds,
   queryToMaybeDomainLabel,
+  tldToMaybeQuoteWindow,
 } from './domain'
 import { QuoteRequest, SearchState } from './model'
-import { RESULTS_GROUP_HEIGHT_PX, groupResults } from './resultsList'
+import {
+  RESULTS_GROUP_HEIGHT_PX,
+  RESULTS_OVERSCAN_GROUPS,
+  ResultGroup,
+  ResultsListBlock,
+  groupResults,
+} from './resultsList'
 import { routeToQuery } from './route'
 import { visibleResultListings } from './visibleResultListings'
-
-const OVERSCAN_GROUPS = 2
 
 export const makeRequestQuotesStep = ({
   offset,
@@ -54,78 +59,78 @@ export const makeRequestQuotesStep = ({
     }
   })
 
-export const loadVisibleQuotesStep = makeStep(model => {
-  if (
-    // can we extract a const and give this a name?
-    model.search._tag !== 'Ready' ||
-    model.search.quoteRequest._tag !== 'Idle'
-  ) {
-    return { model }
-  }
-
-  const {
-    search: { domains },
-  } = model
-  // what does this do?
-  const isComplete = domains.length === domainTlds.length
-
-  if (isComplete) {
-    return { model }
-  }
-
-  if (model.sortOrder !== 'Relevance' || model.availabilityFilter !== 'All') {
-    return makeRequestQuotesStep({ offset: 0, limit: domainTlds.length })
-  }
-
-  // from here down seems pretty messy -- should we add some blank lines or do
-  // something else to clarify?
-  const groups = pipe(model, visibleResultListings, groupResults)
+const findPendingListingInViewport = (
+  groups: ReadonlyArray<typeof ResultGroup.Type>,
+  resultsList: typeof ResultsListBlock.Model.Type,
+) => {
   const groupHeight = (id: string) =>
-    Record.get(model.resultsList.measuredRowHeights, id).pipe(
+    Record.get(resultsList.measuredRowHeights, id).pipe(
       Option.getOrElse(() => RESULTS_GROUP_HEIGHT_PX),
     )
+
   const offsets = Array.scan(
     groups,
     0,
     (offset, group) => offset + groupHeight(group.id),
   )
+
+  const groupsWithOffsets = Array.zipWith(groups, offsets, (group, offset) => ({
+    group,
+    offset,
+  }))
+
   const containerHeight =
-    model.resultsList.measurement._tag === 'Measured'
-      ? model.resultsList.measurement.containerHeight
+    resultsList.measurement._tag === 'Measured'
+      ? resultsList.measurement.containerHeight
       : RESULTS_GROUP_HEIGHT_PX
-  const bufferHeight = RESULTS_GROUP_HEIGHT_PX * OVERSCAN_GROUPS
-  const viewportStart = model.resultsList.scrollTop - bufferHeight
-  const viewportEnd =
-    model.resultsList.scrollTop + containerHeight + bufferHeight
-  const maybePending = pipe(
-    Array.zipWith(groups, offsets, (group, offset) => ({ group, offset })),
+  const bufferHeight = RESULTS_GROUP_HEIGHT_PX * RESULTS_OVERSCAN_GROUPS
+  const viewportStart = resultsList.scrollTop - bufferHeight
+  const viewportEnd = resultsList.scrollTop + containerHeight + bufferHeight
+
+  return pipe(
+    groupsWithOffsets,
     Array.filter(
       ({ group, offset }) =>
         offset + groupHeight(group.id) >= viewportStart &&
         offset <= viewportEnd,
     ),
     Array.flatMap(({ group }) => group.domains),
-    Array.findFirst(listing => listing._tag === 'Pending'),
+    Array.findFirst(DomainListing.isAnyOf(['Pending'])),
+  )
+}
+
+export const loadVisibleQuotesStep = makeStep(model => {
+  const isReadyToLoadQuotes =
+    model.search._tag === 'Ready' && model.search.quoteRequest._tag === 'Idle'
+
+  if (!isReadyToLoadQuotes) {
+    return { model }
+  }
+
+  const isCatalogFullyChecked =
+    model.search.domains.length === domainTlds.length
+
+  if (isCatalogFullyChecked) {
+    return { model }
+  }
+
+  const isCompleteCatalogRequired =
+    model.sortOrder !== 'Relevance' || model.availabilityFilter !== 'All'
+
+  if (isCompleteCatalogRequired) {
+    return makeRequestQuotesStep({ offset: 0, limit: domainTlds.length })
+  }
+
+  const maybeQuoteWindow = pipe(
+    model,
+    visibleResultListings,
+    groupResults,
+    groups => findPendingListingInViewport(groups, model.resultsList),
+    Option.flatMap(listing => tldToMaybeQuoteWindow(listing.tld)),
   )
 
-  return Option.match(maybePending, {
+  return Option.match(maybeQuoteWindow, {
     onNone: () => ({ model }),
-    onSome: listing => {
-      const maybeIndex = Array.findFirstIndex(
-        domainTlds,
-        tld => tld === listing.tld,
-      )
-
-      return maybeIndex.pipe(
-        Option.match({
-          onNone: () => ({ model }),
-          onSome: index =>
-            makeRequestQuotesStep({
-              offset: Math.floor(index / QUOTE_PAGE_SIZE) * QUOTE_PAGE_SIZE,
-              limit: QUOTE_PAGE_SIZE,
-            }),
-        }),
-      )
-    },
+    onSome: makeRequestQuotesStep,
   })
 })

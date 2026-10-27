@@ -99,6 +99,20 @@ export const QueryWindow = Schema.Struct({
   ),
 })
 
+export const tldToMaybeQuoteWindow = (
+  tld: string,
+): Option.Option<typeof QueryWindow.Type> =>
+  pipe(
+    domainTlds,
+    Array.findFirstIndex(candidate => candidate === tld),
+    Option.map(index =>
+      QueryWindow.make({
+        offset: Math.floor(index / QUOTE_PAGE_SIZE) * QUOTE_PAGE_SIZE,
+        limit: QUOTE_PAGE_SIZE,
+      }),
+    ),
+  )
+
 export const mergeDomainQuotes = (
   previous: ReadonlyArray<typeof Domain.Type>,
   incoming: ReadonlyArray<typeof Domain.Type>,
@@ -204,6 +218,39 @@ export const visibleDomains = (
     ),
     Match.exhaustive,
   )
+}
+
+export const visibleDomainListings = (
+  query: string,
+  domains: ReadonlyArray<typeof Domain.Type>,
+  tldFilter: typeof TldFilter.Type,
+  availabilityFilter: typeof AvailabilityFilter.Type,
+  sortOrder: typeof SortOrder.Type,
+): ReadonlyArray<typeof DomainListing.Type> => {
+  const listings = queryToDomainListings(query, domains)
+
+  if (sortOrder === 'Relevance') {
+    return Array.filter(
+      listings,
+      listing =>
+        matchesTldFilter(tldFilter)(listing) &&
+        (availabilityFilter === 'All' ||
+          listing._tag === 'Pending' ||
+          listing.domain._tag === 'Available'),
+    )
+  } else {
+    return Array.appendAll(
+      Array.map(
+        visibleDomains(domains, tldFilter, availabilityFilter, sortOrder),
+        domainToListing,
+      ),
+      Array.filter(
+        listings,
+        listing =>
+          listing._tag === 'Pending' && matchesTldFilter(tldFilter)(listing),
+      ),
+    )
+  }
 }
 
 export const formatPrice = (price: number): string => `$${price.toFixed(2)}`

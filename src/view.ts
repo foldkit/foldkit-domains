@@ -30,15 +30,16 @@ import { Message } from './message'
 import { Model, SearchState } from './model'
 import {
   RESULTS_LIST_ID,
+  RESULTS_OVERSCAN_GROUPS,
   ResultsListScrollKey,
   groupResults,
 } from './resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from './route'
+import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
 import { visibleResultListings } from './visibleResultListings'
 
 const TOP_RESULT_COUNT = 4
 const PREVIEW_RESULT_COUNT = 36
-const RESULTS_OVERSCAN = 2
 
 const searchFormView = (
   model: typeof Model.Type,
@@ -53,7 +54,7 @@ const searchFormView = (
     [
       Icon.search(),
       h.input([
-        h.Id('domain-search'),
+        h.Id(searchInputConfig.id),
         h.Type('search'),
         h.Name('q'),
         h.AriaLabel('Search domains'),
@@ -103,7 +104,7 @@ const headerView = (
           h.Class('brand'),
           h.AriaLabel('Domains home'),
           h.OnClick(Message.ClickedDomainsHome(), {
-            focusSelector: '#domain-search',
+            focusSelector: SEARCH_INPUT_SELECTOR,
           }),
         ],
         [
@@ -424,7 +425,7 @@ const resultsListView = (
                   ),
                 dynamicRowHeights: true,
                 rowLayout: 'Absolute',
-                overscan: RESULTS_OVERSCAN,
+                overscan: RESULTS_OVERSCAN_GROUPS,
                 containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
                 containerAttributes: childAttributes([
                   h.AriaLabel('All domain results'),

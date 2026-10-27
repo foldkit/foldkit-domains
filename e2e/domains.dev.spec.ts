@@ -62,6 +62,8 @@ test('hydrates a query with coordinated development identity and loads its quote
   page,
 }) => {
   await mockDomainSearch(page)
+  const errors: Array<string> = []
+  page.on('pageerror', error => errors.push(error.message))
   await page.goto('/?q=dev-query')
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
   await expect(
@@ -71,4 +73,5 @@ test('hydrates a query with coordinated development identity and loads its quote
   await expect(
     page.getByRole('dialog', { name: 'Page unavailable' }),
   ).toHaveCount(0)
+  expect(errors).toEqual([])
 })

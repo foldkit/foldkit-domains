@@ -3,9 +3,10 @@ import { Url } from 'foldkit'
 import { Server } from 'foldkit/experimental'
 
 import { ApplicationBlock } from './block'
-import bootstrap from './bootstrap.mjs?raw'
+import { bootstrapSearchInput } from './bootstrap'
 import { DOMAINS_RPC_PATH } from './domainsRpc'
 import { ApplicationRoute, urlToApplicationRoute } from './route'
+import { searchInputConfig } from './searchInput'
 import { domainsRpc } from './server/rpc'
 
 export { DomainSearchCoordinator } from './server/domainSearchCoordinator'
@@ -31,7 +32,7 @@ export const renderDocument: Server.DocumentRenderer = (
     head: '<meta name="color-scheme" content="dark">',
   }).replace(
     '<script type="module"',
-    `<script>${bootstrap}</script><script type="module"`,
+    `<script>(${bootstrapSearchInput.toString()})(${JSON.stringify(searchInputConfig)});</script><script type="module"`,
   )
 }
 

@@ -101,7 +101,7 @@ The native input, URL handoff, pending names, and skeletons work before a regist
 
 ## Before hydration
 
-`src/bootstrap.mjs` runs after the static markup and before the main module. It reads the query from the URL, synchronizes early edits with history, and updates pending domain names. CSS positions the same input in the landing or header location, including on first mobile focus.
+`src/bootstrap.ts` supplies the inline script that runs after the static markup and before the main module. Its input ID and media queries come from `src/searchInput.ts`, shared with the hydrated app. It reads the query from the URL, synchronizes early edits with history, and updates pending domain names. CSS positions the same input in the landing or header location, including on first mobile focus.
 
 Foldkit adopts the existing input node and preserves focus. A controlled `h.Value` reconciles with the initial Model; early edits are not automatically replayed into that Model. The bootstrap stores the query in the URL so init reads it before hydration. A Command removes its listeners when the Runtime takes ownership. Framework support for this handoff is tracked in [foldkit/foldkit#1784](https://github.com/foldkit/foldkit/issues/1784).
 
