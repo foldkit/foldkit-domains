@@ -336,7 +336,7 @@
   }
 
   .results-viewport {
-    @apply m-0 list-none p-0;
+    @apply m-0 scroll-mt-[calc(var(--header-height)+1rem)] list-none p-0;
   }
 
   .results-viewport:focus-visible {

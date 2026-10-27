@@ -300,6 +300,44 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
   await expect(page.getByLabel('Sort results')).toBeFocused()
 })
 
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 664 },
+]) {
+  test(`Tab focus keeps the first virtual row below the navigation at ${viewport.width}px`, async ({
+    page,
+    browserName,
+  }) => {
+    await page.setViewportSize(viewport)
+    await mockDomainSearch(page)
+    await page.goto('/?q=acme')
+    await expect(page.locator('.domain-card .price').first()).toBeVisible()
+    const results = page.getByRole('list', { name: 'All domain results' })
+    const firstRow = results.locator('.domain-row').first()
+    const sort = page.getByLabel('Sort results')
+    const headerBottom = await page
+      .locator('.header')
+      .evaluate(element => element.getBoundingClientRect().bottom)
+
+    await sort.focus()
+    for (const entry of ['initial', 'repeated']) {
+      await page.keyboard.press(tabKeys(browserName).next)
+      await expect(results, entry).toBeFocused()
+      await expect(firstRow, entry).toContainText('acme.com')
+      await expect
+        .poll(
+          () =>
+            firstRow.evaluate(element => element.getBoundingClientRect().top),
+          { message: entry },
+        )
+        .toBeGreaterThanOrEqual(headerBottom)
+      await expect(firstRow, entry).toBeInViewport({ ratio: 1 })
+      await page.keyboard.press(tabKeys(browserName).previous)
+      await expect(sort, entry).toBeFocused()
+    }
+  })
+}
+
 test('loading announcements retain their node outside the busy region and respect reduced motion', async ({
   page,
 }) => {
