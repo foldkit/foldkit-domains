@@ -1,5 +1,8 @@
+import { Effect } from 'effect'
+
 import { devices, expect, test } from '@playwright/test'
 
+import { makeDomainFixtures } from '../src/domain.fixture'
 import { mockDomainSearch } from './api'
 
 test.beforeEach(async ({ page }) => {
@@ -367,3 +370,108 @@ test('mobile results use page scrolling beneath the pinned navigation', async ({
     page.getByRole('searchbox', { name: 'Search domains' }),
   ).toBeInViewport()
 })
+
+for (const phase of ['before hydration', 'after hydration']) {
+  test(`first mobile typing keeps Top Results in view ${phase}`, async ({
+    browser,
+    browserName,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) {
+      throw new Error('The domain example requires a base URL')
+    }
+
+    const context = await browser.newContext({
+      ...devices[browserName === 'webkit' ? 'iPhone 13' : 'Pixel 5'],
+      viewport: { width: 390, height: 664 },
+      baseURL,
+    })
+    const page = await context.newPage()
+    let releaseBundle = () => {}
+    const bundleGate = new Promise<void>(resolve => {
+      releaseBundle = resolve
+    })
+    let releaseQuotes = () => {}
+    const quoteGate = new Promise<void>(resolve => {
+      releaseQuotes = resolve
+    })
+    await mockDomainSearch(page, label =>
+      Effect.promise(() => quoteGate).pipe(
+        Effect.as(makeDomainFixtures(label)),
+      ),
+    )
+    await page.addInitScript(() => {
+      window.addEventListener('scroll', () => {
+        const maximum = Math.max(
+          Number(document.documentElement.getAttribute('data-max-page-scroll')),
+          window.scrollY,
+        )
+        document.documentElement.setAttribute(
+          'data-max-page-scroll',
+          String(maximum),
+        )
+      })
+    })
+    if (phase === 'before hydration') {
+      await page.route('**/assets/*.js', async route => {
+        await bundleGate
+        await route.continue()
+      })
+    }
+
+    try {
+      await page.goto('/', { waitUntil: 'commit' })
+      const input = page.getByRole('searchbox', { name: 'Search domains' })
+      const heading = page.getByRole('heading', {
+        name: 'Top Results',
+        exact: true,
+      })
+      if (phase === 'after hydration') {
+        await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+      }
+      await input.tap()
+      for (const query of ['d', 'de']) {
+        await input.fill(query)
+        await expect(page.locator('.domain-card').first()).toContainText(
+          `${query}.com`,
+        )
+        await expect(heading).toBeInViewport()
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+      }
+      await expect(page.locator('.results .price')).toHaveCount(0)
+      releaseBundle()
+      await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+      await expect(
+        page.locator('#domain-results [data-virtual-list-item-index]').first(),
+      ).toBeAttached()
+      await expect(heading).toBeInViewport()
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+      releaseQuotes()
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await expect(heading).toBeInViewport()
+      await input.pressSequentially('v')
+      await expect(page.locator('.domain-card').first()).toContainText(
+        'dev.com',
+      )
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await expect(heading).toBeInViewport()
+
+      await page.getByRole('button', { name: 'Clear search, Esc' }).tap()
+      await expect(input).toHaveValue('')
+      await expect(page.locator('#domain-results')).toHaveCount(0)
+      await input.fill('fresh')
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await expect(heading).toBeInViewport()
+      await expect(input).toBeFocused()
+      expect(
+        await page.evaluate(() =>
+          Number(document.documentElement.getAttribute('data-max-page-scroll')),
+        ),
+      ).toBe(0)
+    } finally {
+      releaseBundle()
+      releaseQuotes()
+      await context.close()
+    }
+  })
+}

@@ -75,6 +75,16 @@ const measureResultsList = Mount.resolve(
 )
 
 describe('domain search', () => {
+  test('idle results retain static skeletons without mounting the virtual list', () => {
+    scene(
+      { update, view },
+      given(emptyModel),
+      expect(selector('.results-preview')).toExist(),
+      expect(selector('#domain-results')).toBeAbsent(),
+      Mount.expectNone(),
+    )
+  })
+
   test('renders a bounded window of the complete catalog after measurement', () => {
     scene(
       { update, view },

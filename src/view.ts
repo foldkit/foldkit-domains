@@ -406,40 +406,45 @@ const resultsListView = (
   h.div(
     [h.Class('all-results')],
     [
-      h.block(
-        ResultsListBinding.embedView({
-          slotId: RESULTS_LIST_ID,
-          model: model.resultsList,
-          viewInputs: {
-            items: groupResults(results),
-            itemToKey: row => row.id,
-            itemToView: row =>
-              h.ul(
-                [h.Class('domain-row-group')],
-                Array.map(row.domains, domain =>
-                  domainRowView(domain, model, h),
-                ),
-              ),
-            dynamicRowHeights: true,
-            rowLayout: 'Absolute',
-            overscan: RESULTS_OVERSCAN,
-            containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
-            containerAttributes: childAttributes([
-              h.AriaLabel('All domain results'),
-              h.AriaDescription(
-                `${results.length} domains. Use arrow keys, Page Up, Page Down, Home, and End to scroll the page.`,
-              ),
-              h.Tabindex(0),
-              h.OnKeyDownSelfPreventDefault(key =>
-                Option.map(
-                  Option.liftPredicate(key, Schema.is(ResultsListScrollKey)),
-                  key => Message.PressedResultsListScrollKey({ key }),
-                ),
-              ),
-            ]),
-          },
-        }),
-      ),
+      model.search._tag === 'Idle'
+        ? h.empty
+        : h.block(
+            ResultsListBinding.embedView({
+              slotId: RESULTS_LIST_ID,
+              model: model.resultsList,
+              viewInputs: {
+                items: groupResults(results),
+                itemToKey: row => row.id,
+                itemToView: row =>
+                  h.ul(
+                    [h.Class('domain-row-group')],
+                    Array.map(row.domains, domain =>
+                      domainRowView(domain, model, h),
+                    ),
+                  ),
+                dynamicRowHeights: true,
+                rowLayout: 'Absolute',
+                overscan: RESULTS_OVERSCAN,
+                containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
+                containerAttributes: childAttributes([
+                  h.AriaLabel('All domain results'),
+                  h.AriaDescription(
+                    `${results.length} domains. Use arrow keys, Page Up, Page Down, Home, and End to scroll the page.`,
+                  ),
+                  h.Tabindex(0),
+                  h.OnKeyDownSelfPreventDefault(key =>
+                    Option.map(
+                      Option.liftPredicate(
+                        key,
+                        Schema.is(ResultsListScrollKey),
+                      ),
+                      key => Message.PressedResultsListScrollKey({ key }),
+                    ),
+                  ),
+                ]),
+              },
+            }),
+          ),
       h.ul(
         [h.Class('results-preview'), h.AriaHidden(true)],
         Array.map(Array.take(results, PREVIEW_RESULT_COUNT), domain =>
