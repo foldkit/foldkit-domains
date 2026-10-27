@@ -16,9 +16,9 @@ const program = Program.make({
   },
   devTools: {
     show: 'Always',
-    mode: 'TimeTravel',
+    mode: 'Inspect',
     banner:
-      'Built with Foldkit. Select a Message to pause the view and inspect its Model, Commands, and Mounts. Live requests continue in the background. Resume returns to the latest state.',
+      'Built with Foldkit. Select a Message to inspect its Model, Commands, and Mounts while the app stays live.',
     dispatch: true,
   },
 }).provide(ApplicationLayer)

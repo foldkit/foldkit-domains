@@ -872,7 +872,7 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
 })
 
 for (const width of [1440, 390]) {
-  test(`ships DevTools with TimeTravel and resumes the latest search at ${width}px`, async ({
+  test(`ships Inspect DevTools while searches and virtual results stay live at ${width}px`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 })
@@ -905,42 +905,43 @@ for (const width of [1440, 390]) {
       await expect(page.locator('.domain-card .price')).toHaveCount(0)
       await badge.click()
       await expect(panel).toBeVisible()
-      await expect(panel).toContainText(
-        'Live requests continue in the background.',
-      )
-      await expect(panel.locator('header')).toContainText('Live')
+      await expect(panel).toContainText('while the app stays live.')
       const successes = panel
         .locator('.message-list')
         .getByText('SucceededFetchDomains', { exact: true })
       const completedSearches = await successes.count()
       await successes.first().click()
-      await expect(panel.locator('header')).toContainText(/Paused \(\d+\)/)
-      await expect(page.locator('.dt-interaction-blocker')).toBeVisible()
-      await expect(input).toHaveValue('acme')
-      await expect(page.locator('.domain-card').first()).toContainText(
-        'acme.com',
-      )
-      releaseQuotes()
-      await expect(successes).toHaveCount(completedSearches + 1)
-      await expect(panel.locator('header')).toContainText(/Paused \(\d+\)/)
-      await expect(input).toHaveValue('acme')
-      await expect(page).toHaveURL(/q=devtools-search/)
-      await page.screenshot({
-        path: testInfo.outputPath('devtools-timetravel.png'),
-      })
-      await panel.getByRole('button', { name: 'Resume →' }).click()
-      await expect(panel.locator('header')).toContainText('Live')
+      await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
       await expect(page.locator('.dt-interaction-blocker')).toHaveCount(0)
       await expect(input).toHaveValue('devtools-search')
       await expect(page.locator('.domain-card').first()).toContainText(
         'devtools-search.com',
       )
+      releaseQuotes()
+      await expect(successes).toHaveCount(completedSearches + 1)
+      await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
+      await expect(input).toHaveValue('devtools-search')
+      await expect(page).toHaveURL(/q=devtools-search/)
       await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await page.screenshot({
+        path: testInfo.outputPath('devtools-inspect.png'),
+      })
       await badge.click()
       await expect(panel).toHaveCount(0)
-      await input.fill('devtools-resumed')
+      const viewport = page.locator('#domain-results')
+      const rows = viewport.locator('.domain-row')
+      await expect
+        .poll(async () => {
+          await viewport.evaluate(element => {
+            element.scrollTop = element.scrollHeight
+          })
+          return rows.last().textContent()
+        })
+        .toContain('devtools-search.zone')
+      expect(await rows.count()).toBeLessThan(60)
+      await input.fill('devtools-next')
       await expect(page.locator('.domain-card').first()).toContainText(
-        'devtools-resumed.com',
+        'devtools-next.com',
       )
       await expect(page.locator('.domain-card .price').first()).toBeVisible()
     } finally {
