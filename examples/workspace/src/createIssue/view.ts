@@ -19,8 +19,9 @@ import {
   ProjectListboxBinding,
   StatusListboxBinding,
 } from './composition'
-import { CreateState, Message, type Model } from './definition'
-import { canEditDraft } from './draft'
+import { isDraftEditable } from './draft'
+import { Message } from './message'
+import { CreateState, type Model } from './model'
 
 const FIELD_CLASS = 'grid gap-2'
 const LABEL_CLASS = 'text-[13px] font-medium text-slate-600'
@@ -61,7 +62,7 @@ const titleField = (
     {
       id: 'create-issue-title',
       value: model.title,
-      isDisabled: !canEditDraft(model),
+      isDisabled: !isDraftEditable(model),
       isInvalid:
         CreateState.guards.Failed(model.createState) &&
         String.isEmpty(String.trim(model.title)),
@@ -93,7 +94,7 @@ const descriptionField = (
       id: 'create-issue-description',
       value: model.description,
       rows: 4,
-      isDisabled: !canEditDraft(model),
+      isDisabled: !isDraftEditable(model),
       onInput: value => Message.UpdatedDescription({ value }),
       toView: attributes =>
         h.div(
@@ -119,7 +120,7 @@ const fields = (
   initialFocus: RenderInfo['initialFocus'],
   h: CreateIssueViewBuilder,
 ): Html => {
-  const isCreating = !canEditDraft(model)
+  const isCreating = !isDraftEditable(model)
 
   return Fieldset.view(
     {

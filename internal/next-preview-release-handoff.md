@@ -1,6 +1,38 @@
 # Next preview release handoff
 
-## Latest preparation checkpoint
+## Current stabilization preparation, October 27
+
+The subsequent [Message-only Step adapter](message-step-adapter-20261027.md)
+adds optional `makeStep.fromMessage`, repairs invalid-union validation in both
+general Step forms, and migrates the two eligible consumers. Its source,
+declaration, runtime, lint, compiler and editor evidence supplements the earlier
+release checkpoints. Publication and integration remain held for approval.
+
+The [SSG stabilization addendum](preview-stabilization-1811-20261027.md) owns
+the latest #1811 repair at `f15fa164624130f1773be20aac9090a9d1e2a9dc`,
+with affected source, packed-plugin, browser and review verification. The
+[preceding summary](preview-stabilization-final-20261027.md) retains the full
+change inventory and 93c source/performance evidence. The late #1810 report is assessed:
+preservation recovery and paired troubleshooting examples are implemented;
+missing-handler diagnostic priority remains a disclosed limitation.
+Publication and release-branch integration remain held for approval. The
+published snapshot below remains current; older preparation sections retain
+their historical source pins and states.
+
+## Verified published snapshot
+
+The published snapshot is `f3be22cfeefed437164ad614d08b16d9000e0703`.
+Its authoritative nine-package manifest, immutable Website, actual Coverchart
+upgrade and retained qualifications are recorded in the
+[October 26 publication report](preview-publication-20261026.md). The generated
+PR #1655 handoff is posted and read back after this evidence commit.
+
+The release was integrated only into `codex/layers-and-submodels`; Foldkit
+`main` was not changed. Sections below preserve their original preparation
+state, local artifact labels and evidence pins. They are historical context,
+not current installation instructions.
+
+## Historical preparation checkpoint
 
 Use the [October 26 approval summary](preview-approval-20261026.md) for frozen
 implementation `f5506b7e240a4d8987338f22427a2bd1ecdf9cb5` and local package

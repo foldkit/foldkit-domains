@@ -742,6 +742,12 @@ const checks: ReadonlyArray<
     consumers: ['commands-steps.consume.ts'],
   },
   {
+    name: 'message-steps',
+    accepted: ['message-steps.accepted.ts', 'message-steps.definition.ts'],
+    rejected: ['message-steps.rejected.ts'],
+    consumers: ['message-steps.consume.ts'],
+  },
+  {
     name: 'managed-resource-registry',
     accepted: ['managed-resource-registry.accepted.ts'],
     rejected: ['managed-resource-registry.rejected.ts'],
@@ -758,6 +764,12 @@ const checks: ReadonlyArray<
     accepted: ['keyed-map-field.accepted.ts'],
     rejected: ['keyed-map-field.rejected.ts'],
     consumers: ['keyed-map-field.consume.ts'],
+  },
+  {
+    name: 'map-binding-method',
+    accepted: ['map-binding-method.accepted.ts'],
+    rejected: ['map-binding-method.rejected.ts'],
+    consumers: ['map-binding-method.consume.ts'],
   },
   {
     name: 'variant-binding',
@@ -845,6 +857,12 @@ const checks: ReadonlyArray<
     accepted: ['strict-routing.accepted.ts'],
     rejected: ['strict-routing.rejected.ts'],
     consumers: ['strict-routing.consume.ts'],
+  },
+  {
+    name: 'route-path',
+    accepted: ['route-path.accepted.ts'],
+    rejected: ['route-path.rejected.ts'],
+    consumers: ['route-path.consume.ts'],
   },
   {
     name: 'route-step-program',
@@ -979,12 +997,14 @@ const main = async (): Promise<void> => {
     'program',
     'command-args',
     'keyed-map-field',
+    'map-binding-method',
     'variant-binding',
     'managed-resource-registry',
     'policy-graph',
     'story-concurrency',
     'test-parent-message',
     'extracted-connected-step',
+    'message-steps',
     'append-initialization',
     'set-initialization',
     'set-optional-initialization',

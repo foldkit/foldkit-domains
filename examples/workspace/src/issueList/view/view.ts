@@ -5,14 +5,14 @@ import { Button } from '@foldkit/ui'
 import { IssueListComposition } from '../composition'
 import { filterAndSortIssues } from '../filter'
 import { Message } from '../message'
-import type { ViewInputs } from '../model'
+import type { ViewInputs } from '../viewInputs'
 import { issueGroupsView } from './rows'
 import { filterToolbarView, listSummaryView } from './toolbar'
 
 export const view = IssueListComposition.makeView.withInputs<
   typeof ViewInputs.Type
->((model, inputs, h) => {
-  const issues = filterAndSortIssues(inputs.filters, inputs.issues)
+>((model, viewInputs, h) => {
+  const issues = filterAndSortIssues(viewInputs.filters, viewInputs.issues)
 
   return h.section(
     [
@@ -23,8 +23,13 @@ export const view = IssueListComposition.makeView.withInputs<
       h.div(
         [h.Class('space-y-3 border-b border-slate-200 px-4 py-4 @lg:px-5')],
         [
-          filterToolbarView(model, inputs.filters, h),
-          listSummaryView(model, inputs.filters, issues.length, h),
+          filterToolbarView(
+            model,
+            viewInputs.filters,
+            Array.isReadonlyArrayEmpty(viewInputs.projects),
+            h,
+          ),
+          listSummaryView(model, viewInputs.filters, issues.length, h),
         ],
       ),
       Array.match(issues, {
@@ -52,7 +57,7 @@ export const view = IssueListComposition.makeView.withInputs<
             ],
           ),
         onNonEmpty: issues =>
-          issueGroupsView(issues, inputs.filters, inputs, h),
+          issueGroupsView(issues, viewInputs.filters, viewInputs, h),
       }),
     ],
   )

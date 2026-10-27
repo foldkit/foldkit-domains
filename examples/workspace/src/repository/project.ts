@@ -1,6 +1,6 @@
 import { Array, Result } from 'effect'
 
-import { type Project, WorkspaceSnapshot } from '../domain'
+import { type Project, Workspace } from '../domain'
 import { RepositoryError } from './schema'
 import {
   type RepositoryState,
@@ -24,12 +24,12 @@ export const saveProjectInState = (
     ]
   }
 
-  const snapshot = WorkspaceSnapshot.make({
-    ...state.snapshot,
-    projects: Array.map(state.snapshot.projects, candidate =>
-      candidate.id === project.id ? project : candidate,
+  const nextWorkspace = Workspace.make({
+    ...state.workspace,
+    projects: Array.map(state.workspace.projects, currentProject =>
+      currentProject.id === project.id ? project : currentProject,
     ),
   })
 
-  return [Result.succeed(project), { ...state, snapshot }]
+  return [Result.succeed(project), { ...state, workspace: nextWorkspace }]
 }

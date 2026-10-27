@@ -4,15 +4,11 @@ import { modifyFields } from 'foldkit/struct'
 
 import { ScrollActiveResult } from './command'
 import { CommandPaletteComposition, DialogBinding } from './composition'
-import {
-  Message,
-  type Model,
-  OutMessage,
-  ResultTarget,
-  makeFieldsStep,
-  makeNoopStep,
-  makeStep,
-} from './definition'
+import { makeFieldsStep, makeNoopStep, makeStep } from './definition'
+import { Message } from './message'
+import type { Model } from './model'
+import { OutMessage } from './outMessage'
+import { ResultTarget } from './resultTarget'
 
 const keepModelStep = makeNoopStep()
 
@@ -61,10 +57,6 @@ const selectResult = (
   model: Parameters<typeof closeDialogStep>[0],
   target: typeof ResultTarget.Type,
 ) => {
-  if (!model.dialog.isOpen) {
-    return keepModelStep(model)
-  }
-
   const dialogClose = closeDialogStep(model)
 
   const outMessage = ResultTarget.match(target, {
