@@ -31,6 +31,7 @@ jobs:
       - run: pnpm test:e2e
       - run: pnpm test:e2e:dev
       - run: pnpm test:e2e:worker
+      - run: pnpm test:capacity
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

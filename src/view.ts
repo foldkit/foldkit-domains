@@ -1,9 +1,13 @@
-import { Array, Match, Number, Option, Schema, String, pipe } from 'effect'
+import { Array, Number, Option, Schema, String, pipe } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
+
+import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
 
 import {
   ApplicationComposition,
   type ApplicationViewBuilder,
+  CART_DIALOG_ID,
+  CartDialogBinding,
   ResultsListBinding,
 } from './composition'
 import {
@@ -13,15 +17,24 @@ import {
   DomainName,
   SortOrder,
   TldFilter,
+  domainTlds,
   formatPrice,
-  pendingDomains,
+  formatRegistrationPrice,
+  formatRenewalPrice,
+  queryToDomainListings,
+  queryToMaybeDomainLabel,
+  queryToPendingDomains,
 } from './domain'
 import * as Icon from './icon'
 import { Message } from './message'
 import { Model, SearchState } from './model'
-import { visibleResultListings } from './results'
-import { RESULTS_LIST_ID, groupResults } from './resultsList'
+import {
+  RESULTS_LIST_ID,
+  ResultsListScrollKey,
+  groupResults,
+} from './resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from './route'
+import { visibleResultListings } from './visibleResultListings'
 
 const TOP_RESULT_COUNT = 4
 const PREVIEW_RESULT_COUNT = 36
@@ -44,10 +57,18 @@ const searchFormView = (
         h.Type('search'),
         h.Name('q'),
         h.AriaLabel('Search domains'),
+        h.AriaInvalid(
+          String.isNonEmpty(routeToQuery(model.route)) &&
+            Option.isNone(queryToMaybeDomainLabel(routeToQuery(model.route))),
+        ),
+        ...(model.search._tag === 'Failed'
+          ? [h.AriaDescribedBy('search-error')]
+          : []),
         h.Placeholder('Search for a domain'),
         h.Value(routeToQuery(model.route)),
         h.Autocomplete('off'),
         h.Attribute('autocapitalize', 'none'),
+        h.Attribute('enterkeyhint', 'search'),
         h.Spellcheck(false),
         h.OnInput(value => Message.UpdatedSearch({ value })),
         h.OnKeyDownPreventDefault(key =>
@@ -60,10 +81,11 @@ const searchFormView = (
         [
           h.Type('button'),
           h.Class('clear-search'),
-          h.AriaLabel('Clear search'),
+          h.AriaLabel('Clear search, Esc'),
+          h.AriaKeyshortcuts('Escape'),
           h.OnClick(Message.ClickedClearSearch()),
         ],
-        [h.kbd([], ['Esc']), Icon.close()],
+        [h.kbd([h.AriaHidden(true)], ['Esc']), Icon.close()],
       ),
     ],
   )
@@ -76,16 +98,34 @@ const headerView = (
     [h.Class('header')],
     [
       h.a(
-        [h.Href(searchHref('')), h.Class('brand'), h.AriaLabel('Domains home')],
+        [
+          h.Href(searchHref('')),
+          h.Class('brand'),
+          h.AriaLabel('Domains home'),
+          h.OnClick(Message.ClickedDomainsHome(), {
+            focusSelector: '#domain-search',
+          }),
+        ],
         [
           h.svg(
             [
-              h.ViewBox('0 0 24 24'),
+              h.Width('20'),
+              h.Height('20'),
+              h.ViewBox('0 0 200 200'),
               h.Fill('currentColor'),
               h.Class('logo'),
               h.AriaHidden(true),
             ],
-            [h.path([h.D('M12 3 24 24H0Z')])],
+            [
+              h.rect([h.Width('92.3077'), h.Height('200')]),
+              h.rect([h.X('107.692'), h.Width('92.3077'), h.Height('38.4615')]),
+              h.rect([
+                h.X('107.692'),
+                h.Y('53.8461'),
+                h.Width('92.3077'),
+                h.Height('38.4615'),
+              ]),
+            ],
           ),
           h.span([h.Class('brand-divider')], ['/']),
           h.span([], ['Domains']),
@@ -96,9 +136,12 @@ const headerView = (
         [
           h.button(
             [
+              h.Id('cart-button'),
               h.Class('button cart-button'),
               h.OnClick(Message.ClickedCart()),
               h.AriaLabel(`Cart, ${Array.length(model.cart)} domains`),
+              h.AriaHasPopup('dialog'),
+              h.AriaControls(CART_DIALOG_ID),
             ],
             [
               Icon.cart(),
@@ -124,6 +167,21 @@ const headerView = (
             ],
             ['Sign Up'],
           ),
+        ],
+      ),
+      h.p(
+        [
+          h.Id('cart-announcement'),
+          h.Class('sr-only'),
+          h.AriaLive('polite'),
+          h.AriaAtomic(true),
+        ],
+        [
+          Array.match(model.cart, {
+            onEmpty: () => 'Your cart is empty.',
+            onNonEmpty: cart =>
+              `${Array.length(cart)} ${Array.length(cart) === 1 ? 'domain' : 'domains'} in your cart.`,
+          }),
         ],
       ),
     ],
@@ -156,7 +214,7 @@ const heroView = (h: ApplicationViewBuilder): Html =>
             h.keyed('a')(
               query,
               [h.Href(searchHref(query))],
-              [query, h.span([h.AriaHidden(true)], [' ↗'])],
+              [query, Icon.arrowUpRight()],
             ),
           ),
         ],
@@ -170,32 +228,57 @@ const readyDomainActionView = (
   h: ApplicationViewBuilder,
 ): Html => {
   const isInCart = Array.some(model.cart, item => item.name === domain.name)
-  if (!domain.isAvailable) {
-    return h.span([h.Class('unavailable')], ['Unavailable'])
-  } else {
-    return h.div(
-      [h.Class('domain-action')],
-      [
-        h.span([h.Class('price')], [formatPrice(domain.price)]),
-        h.button(
-          [
-            h.Class(`icon-button${isInCart ? ' is-added' : ''}`),
-            h.AriaLabel(
-              isInCart
-                ? `Remove ${domain.name} from cart`
-                : `Add ${domain.name} to cart`,
-            ),
-            h.OnClick(
-              isInCart
-                ? Message.ClickedRemoveDomain({ name: domain.name })
-                : Message.ClickedAddDomain({ domain }),
-            ),
-          ],
-          [isInCart ? Icon.check() : Icon.cart()],
-        ),
-      ],
-    )
-  }
+  return Domain.match(domain, {
+    Unconfirmed: () =>
+      h.div(
+        [h.Class('domain-action')],
+        [
+          h.span(
+            [
+              h.Class('unavailable'),
+              h.Title(
+                'The registrar reports this domain unavailable or could not confirm availability.',
+              ),
+            ],
+            ['Not available'],
+          ),
+        ],
+      ),
+    Available: domain =>
+      h.div(
+        [h.Class('domain-action')],
+        [
+          h.span(
+            [
+              h.Class('price'),
+              h.Title(
+                `${domain.isPremium ? 'Premium domain. ' : ''}${formatRenewalPrice(domain)}`,
+              ),
+            ],
+            [formatRegistrationPrice(domain)],
+          ),
+          h.button(
+            [
+              h.Class(`icon-button${isInCart ? ' is-added' : ''}`),
+              h.AriaLabel(
+                isInCart
+                  ? `Remove ${domain.name} from cart`
+                  : `Add ${domain.name} to cart`,
+              ),
+              h.AriaDescription(
+                `${formatRegistrationPrice(domain)}. ${domain.isPremium ? 'Premium domain. ' : ''}${formatRenewalPrice(domain)}`,
+              ),
+              h.OnClick(
+                isInCart
+                  ? Message.ClickedRemoveDomain({ name: domain.name })
+                  : Message.ClickedAddDomain({ domain }),
+              ),
+            ],
+            [isInCart ? Icon.check() : Icon.cart()],
+          ),
+        ],
+      ),
+  })
 }
 
 const domainActionView = (
@@ -212,12 +295,12 @@ const domainActionView = (
           h.span([h.Class('skeleton skeleton-action')]),
         ],
       ),
-    Ready: domain => readyDomainActionView(domain, model, h),
+    Ready: ({ domain }) => readyDomainActionView(domain, model, h),
   })
 
 const isUnavailable = DomainListing.match({
   Pending: () => false,
-  Ready: domain => !domain.isAvailable,
+  Ready: ({ domain }) => domain._tag === 'Unconfirmed',
 })
 
 const domainNameView = (
@@ -342,7 +425,16 @@ const resultsListView = (
             containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
             containerAttributes: childAttributes([
               h.AriaLabel('All domain results'),
+              h.AriaDescription(
+                `${results.length} domains. Use arrow keys, Page Up, Page Down, Home, and End to scroll the results.`,
+              ),
               h.Tabindex(0),
+              h.OnKeyDownSelfPreventDefault(key =>
+                Option.map(
+                  Option.liftPredicate(key, Schema.is(ResultsListScrollKey)),
+                  key => Message.PressedResultsListScrollKey({ key }),
+                ),
+              ),
             ]),
           },
         }),
@@ -398,35 +490,80 @@ const resultsGridView = (
     ],
   )
 
+const resultCountText = (
+  model: typeof Model.Type,
+  results: ReadonlyArray<typeof DomainListing.Type>,
+) => {
+  if (
+    model.search._tag === 'Ready' &&
+    model.search.domains.length < domainTlds.length
+  ) {
+    return `${model.search.domains.length} of ${domainTlds.length} domains checked · Registration prices in USD`
+  } else {
+    return `${results.length} domains · Registration prices in USD`
+  }
+}
+
 const searchResultsView = (
   model: typeof Model.Type,
   h: ApplicationViewBuilder,
 ): Html => {
   const results = visibleResultListings(model)
   const domains = SearchState.match(model.search, {
-    Idle: () => pendingDomains(routeToQuery(model.route)),
-    Loading: () => pendingDomains(routeToQuery(model.route)),
-    Ready: ({ domains }) => Array.map(domains, DomainListing.Ready),
+    Idle: () => queryToPendingDomains(routeToQuery(model.route)),
+    Loading: () => queryToPendingDomains(routeToQuery(model.route)),
+    Ready: ({ domains }) =>
+      queryToDomainListings(routeToQuery(model.route), domains),
     Failed: () => [],
   })
 
   return h.div(
     [],
     [
-      resultsGridView(domains, results, model, h),
-      model.search._tag === 'Ready'
-        ? h.p(
-            [h.Class('result-count'), h.Role('status')],
-            [`${Array.length(results)} domains · Prices per year in USD`],
-          )
-        : h.p(
-            [
-              h.Class('result-count'),
-              h.Role('status'),
-              h.AriaLabel('Searching domains'),
-            ],
-            ['Checking availability and prices…'],
+      h.div(
+        [
+          h.Class('results-content'),
+          h.AriaBusy(
+            model.search._tag === 'Loading' ||
+              (model.search._tag === 'Ready' &&
+                model.search.quoteRequest._tag === 'Loading'),
           ),
+        ],
+        [resultsGridView(domains, results, model, h)],
+      ),
+      model.search._tag === 'Ready' &&
+      model.search.quoteRequest._tag === 'Failed'
+        ? h.div(
+            [
+              h.Class(
+                'mt-4 flex items-center justify-between gap-4 text-sm text-gray-400',
+              ),
+              h.Role('alert'),
+            ],
+            [
+              h.p([], [model.search.quoteRequest.error]),
+              h.button(
+                [h.Class('button'), h.OnClick(Message.ClickedRetrySearch())],
+                ['Try again'],
+              ),
+            ],
+          )
+        : h.empty,
+      h.p(
+        [
+          h.Class('result-count'),
+          h.Role('status'),
+          h.AriaAtomic(true),
+          ...(model.search._tag === 'Ready'
+            ? []
+            : [h.AriaLabel('Searching domains')]),
+        ],
+        [
+          model.search._tag === 'Ready'
+            ? resultCountText(model, results)
+            : 'Checking availability and prices…',
+        ],
+      ),
     ],
   )
 }
@@ -436,7 +573,7 @@ const searchErrorView = (error: string, h: ApplicationViewBuilder): Html =>
     [h.Class('search-error'), h.Role('alert')],
     [
       h.h2([], ['Let’s try that again']),
-      h.p([], [error]),
+      h.p([h.Id('search-error')], [error]),
       h.button(
         [h.Class('button'), h.OnClick(Message.ClickedRetrySearch())],
         ['Try again'],
@@ -449,11 +586,7 @@ const resultsView = (
   h: ApplicationViewBuilder,
 ): Html =>
   h.section(
-    [
-      h.Class('results'),
-      h.AriaLabel('Domain results'),
-      h.AriaBusy(model.search._tag === 'Loading'),
-    ],
+    [h.Class('results'), h.AriaLabel('Domain results')],
     [
       model.search._tag === 'Failed'
         ? searchErrorView(model.search.error, h)
@@ -461,8 +594,9 @@ const resultsView = (
     ],
   )
 
-const openCartView = (
+const cartPanelView = (
   model: typeof Model.Type,
+  render: DialogRenderInfo,
   h: ApplicationViewBuilder,
 ): Html => {
   const total = pipe(
@@ -471,81 +605,77 @@ const openCartView = (
     Number.sumAll,
   )
 
-  return h.div(
-    [h.Class('cart-overlay')],
+  return h.section(
+    [...render.panel, h.Class('cart-panel'), h.AriaLabel('Your cart')],
     [
-      h.button([
-        h.Class('cart-backdrop'),
-        h.AriaLabel('Close cart'),
-        h.OnClick(Message.ClickedCloseCart()),
-      ]),
-      h.section(
-        [h.Class('cart-panel'), h.AriaLabel('Your cart')],
+      h.div(
+        [h.Class('cart-heading')],
         [
-          h.div(
-            [h.Class('cart-heading')],
+          h.h2([...render.title], ['Your cart']),
+          h.button(
             [
-              h.h2([], ['Your cart']),
-              h.button(
-                [
-                  h.Class('icon-button'),
-                  h.AriaLabel('Close cart panel'),
-                  h.OnClick(Message.ClickedCloseCart()),
-                ],
-                [Icon.close()],
-              ),
+              ...render.closeButton,
+              ...render.initialFocus,
+              h.Class('icon-button'),
+              h.AriaLabel('Close cart panel'),
+            ],
+            [Icon.close()],
+          ),
+        ],
+      ),
+      Array.match(model.cart, {
+        onEmpty: () =>
+          h.p(
+            [h.Class('empty-cart')],
+            [
+              'Your next idea starts with a name. Search for a domain to add it here.',
             ],
           ),
-          Array.match(model.cart, {
-            onEmpty: () =>
-              h.p(
-                [h.Class('empty-cart')],
+        onNonEmpty: domains =>
+          h.ul(
+            [h.Class('cart-items')],
+            Array.map(domains, domain =>
+              h.keyed('li')(
+                domain.name,
+                [],
                 [
-                  'Your next idea starts with a name. Search for a domain to add it here.',
-                ],
-              ),
-            onNonEmpty: domains =>
-              h.ul(
-                [h.Class('cart-items')],
-                Array.map(domains, domain =>
-                  h.keyed('li')(
-                    domain.name,
+                  h.div(
                     [],
                     [
-                      h.div(
-                        [],
-                        [
-                          h.strong([], [domain.name]),
-                          h.span([], [`${formatPrice(domain.price)} / year`]),
-                        ],
-                      ),
-                      h.button(
-                        [
-                          h.Class('icon-button'),
-                          h.AriaLabel(`Remove ${domain.name}`),
-                          h.OnClick(
-                            Message.ClickedRemoveDomain({
-                              name: domain.name,
-                            }),
-                          ),
-                        ],
-                        [Icon.close()],
+                      h.strong([], [domain.name]),
+                      h.span([], [formatRegistrationPrice(domain)]),
+                      h.span(
+                        [h.Class('text-xs text-gray-400')],
+                        [formatRenewalPrice(domain)],
                       ),
                     ],
                   ),
-                ),
+                  h.button(
+                    [
+                      h.Class('icon-button'),
+                      h.AriaLabel(`Remove ${domain.name}`),
+                      h.OnClick(
+                        Message.ClickedRemoveCartDomain({ name: domain.name }),
+                      ),
+                    ],
+                    [Icon.close()],
+                  ),
+                ],
               ),
-          }),
-          h.div(
-            [h.Class('cart-total')],
-            [h.span([], ['Yearly total']), h.strong([], [formatPrice(total)])],
+            ),
           ),
-          h.p(
-            [h.Class('demo-note')],
-            [
-              'Demo cart. Domain availability and prices are illustrative. No purchases are made.',
-            ],
-          ),
+      }),
+      h.div(
+        [h.Class('cart-total')],
+        [
+          h.span([], ['Registration total']),
+          h.strong([], [formatPrice(total)]),
+        ],
+      ),
+      h.p(
+        [...render.description, h.Class('demo-note')],
+        [
+          'Demo cart. Live registrar quotes may change; adding a domain does not reserve it. No purchases are made.',
         ],
       ),
     ],
@@ -553,11 +683,28 @@ const openCartView = (
 }
 
 const cartView = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
-  pipe(
-    Match.value(model.cartVisibility),
-    Match.when('Closed', () => h.empty),
-    Match.when('Open', () => openCartView(model, h)),
-    Match.exhaustive,
+  h.block(
+    CartDialogBinding.embedView({
+      slotId: model.cartDialog.id,
+      model: model.cartDialog,
+      viewInputs: {
+        hasDescription: true,
+        toView: render =>
+          h.dialog(
+            [...render.dialog, h.Class('cart-overlay')],
+            render.isVisible
+              ? [
+                  h.div([
+                    ...render.backdrop,
+                    h.Class('cart-backdrop'),
+                    h.AriaHidden(true),
+                  ]),
+                  cartPanelView(model, render, h),
+                ]
+              : undefined,
+          ),
+      },
+    }),
   )
 
 const footerView = (h: ApplicationViewBuilder): Html =>
@@ -565,7 +712,7 @@ const footerView = (h: ApplicationViewBuilder): Html =>
     [h.Class('footer')],
     [
       h.span([], ['A Foldkit example']),
-      h.span([], ['Demo availability & pricing']),
+      h.span([], ['Live data from Vercel · Demo cart']),
       h.a(
         [h.Href('https://github.com/foldkit/foldkit-domains')],
         ['View source', Icon.arrowUpRight()],
@@ -587,11 +734,30 @@ const searchPageView = (
       ),
     ],
     [
+      h.a(
+        [
+          h.Href('#main'),
+          h.Class('skip-link'),
+          h.OnClick(Message.ClickedSkipToMain(), {
+            defaultAction: 'Prevent',
+            focusSelector: '#main',
+          }),
+        ],
+        ['Skip to main content'],
+      ),
       headerView(model, h),
       searchFormView(model, h),
       h.main(
-        [h.Id('main'), h.Class('flex-1')],
-        [heroView(h), resultsView(model, h)],
+        [
+          h.Id('main'),
+          h.Tabindex(-1),
+          h.Class('flex-1 scroll-mt-20 focus:outline-none'),
+        ],
+        [
+          h.h1([h.Class('search-page-heading')], ['Domain search']),
+          heroView(h),
+          resultsView(model, h),
+        ],
       ),
       footerView(h),
       cartView(model, h),

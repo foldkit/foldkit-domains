@@ -2,7 +2,10 @@ import { Option } from 'effect'
 import { Url } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { searchDomains } from './domain'
+import { DialogBlock } from '@foldkit/ui'
+
+import { CART_DIALOG_ID } from './composition'
+import { makeDomainFixtures } from './domain.fixture'
 import { Model, SearchState } from './model'
 import {
   RESULTS_GROUP_HEIGHT_PX,
@@ -23,14 +26,14 @@ export const emptyModel = Model.make({
   availabilityFilter: 'All',
   sortOrder: 'Relevance',
   cart: [],
-  cartVisibility: 'Closed',
+  cartDialog: DialogBlock.init({ id: CART_DIALOG_ID }).model,
 })
 
 export const readyModel = (query: string): typeof Model.Type =>
   modifyFields(emptyModel, {
     route: () => ApplicationRoute.Search({ q: Option.some(query) }),
     searchGeneration: () => 1,
-    search: () => SearchState.Ready({ domains: searchDomains(query) }),
+    search: () => SearchState.Ready({ domains: makeDomainFixtures(query) }),
   })
 
 export const urlOrThrow = (raw: string) =>

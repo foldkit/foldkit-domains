@@ -14,6 +14,7 @@ export const searchRouter = pipe(
 )
 
 const routeParser = Route.oneOf(searchRouter)
+
 export const urlToApplicationRoute = Route.parseUrlWithFallback(
   routeParser,
   ApplicationRoute.NotFound,
@@ -24,5 +25,7 @@ export const routeToQuery = ApplicationRoute.match({
   NotFound: () => '',
 })
 
-export const searchHref = (query: string): string =>
-  searchRouter({ q: Option.liftPredicate(query, String.isNonEmpty) })
+export const searchHref = (query: string): string => {
+  const q = Option.liftPredicate(query, String.isNonEmpty)
+  return searchRouter({ q })
+}

@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array, Option, Schema } from 'effect'
 import {
   Command,
   Mount,
@@ -8,6 +8,7 @@ import {
   click,
   expect,
   expectAll,
+  expectHandled,
   first,
   given,
   inside,
@@ -22,19 +23,29 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { VirtualList } from '@foldkit/ui'
+import { Dialog, DialogBlock, VirtualList } from '@foldkit/ui'
 
 import {
+  DismissSearchKeyboard,
   FetchDomains,
+  FocusCartButton,
+  FocusCartCloseButton,
   FocusSearchInput,
   ReplaceSearchUrl,
+  ScrollResultsList,
   cancelSearch,
 } from './command'
-import { searchDomains } from './domain'
+import { CART_DIALOG_ID } from './composition'
+import { Domain, domainNames, mergeDomainQuotes } from './domain'
+import { makeDomainFixtures } from './domain.fixture'
 import { Message } from './message'
 import { SearchState } from './model'
 import { emptyModel, readyModel } from './model.fixture'
-import { RESULTS_LIST_ID, ResultsListBlock } from './resultsList'
+import {
+  RESULTS_LIST_ID,
+  ResultsListBlock,
+  ResultsListScrollKey,
+} from './resultsList'
 import { ApplicationRoute } from './route'
 import { update } from './update'
 import { view } from './view'
@@ -76,7 +87,7 @@ describe('domain search', () => {
         expect(text('acme.zone')).toBeAbsent(),
       ),
       expect(selector('#domain-results')).toHaveAttr('tabIndex', '0'),
-      expect(text('556 domains · Prices per year in USD')).toExist(),
+      expect(text('556 domains · Registration prices in USD')).toExist(),
     )
   })
 
@@ -86,9 +97,13 @@ describe('domain search', () => {
       given(readyModel('fresh')),
       measureResultsList,
       submit(role('search')),
+      Command.resolve(
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
       resolveResultsListScrolls,
       expect(role('status', { name: 'Searching domains' })).toExist(),
-      expect(selector('.results')).toHaveAttr('aria-busy', 'true'),
+      expect(selector('.results-content')).toHaveAttr('aria-busy', 'true'),
       expectAll(all.selector('.results .price')).toHaveCount(0),
       expectAll(all.selector('.results .unavailable')).toHaveCount(0),
       expectAll(all.selector('.results button')).toHaveCount(0),
@@ -106,10 +121,15 @@ describe('domain search', () => {
         expect(role('button', { name: 'Add fresh.com to cart' })).toBeAbsent(),
       ),
       Command.resolve(
-        FetchDomains({ label: 'fresh', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'fresh',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 2,
-          domains: searchDomains('fresh'),
+          domains: makeDomainFixtures('fresh'),
         }),
       ),
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
@@ -154,12 +174,31 @@ describe('domain search', () => {
         click(role('button', { name: 'Add acme.com to cart' })),
       ),
       expect(role('button', { name: 'Remove acme.com from cart' })).toExist(),
+      expect(selector('#cart-announcement')).toHaveText(
+        '1 domain in your cart.',
+      ),
+      expect(selector('#cart-announcement')).toHaveAttr('aria-live', 'polite'),
       click(role('button', { name: 'Cart, 1 domains' })),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
+      Mount.resolve(
+        Dialog.test.AcquireResources({
+          id: CART_DIALOG_ID,
+          focusSelector: Dialog.initialFocusMarkerSelector,
+        }),
+        DialogBlock.Message.SucceededAcquireResources(),
+      ),
       inside(
         role('region', { name: 'Your cart' }),
         expect(text('acme.com')).toExist(),
         expect(text('$12.00')).toExist(),
         click(role('button', { name: 'Remove acme.com' })),
+        Command.resolve(
+          FocusCartCloseButton,
+          Message.CompletedFocusCartCloseButton(),
+        ),
         expect(
           text(
             'Your next idea starts with a name. Search for a domain to add it here.',
@@ -167,6 +206,12 @@ describe('domain search', () => {
         ).toExist(),
         click(role('button', { name: 'Close cart panel' })),
       ),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
+      Command.resolve(FocusCartButton, Message.CompletedFocusCartButton()),
+      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(role('region', { name: 'Your cart' })).toBeAbsent(),
       expect(role('button', { name: 'Cart, 0 domains' })).toExist(),
     )
@@ -195,9 +240,18 @@ describe('search recovery', () => {
       given(readyModel('acme')),
       measureResultsList,
       submit(role('search')),
+      Command.resolve(
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
       resolveResultsListScrolls,
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.FailedFetchDomains({
           searchGeneration: 2,
           error: 'Temporarily unavailable',
@@ -210,6 +264,7 @@ describe('search recovery', () => {
       ),
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
       click(role('button', { name: 'Try again' })),
+      Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
       measureResultsList,
       resolveResultsListScrolls,
       expect(role('alert')).toBeAbsent(),
@@ -217,15 +272,20 @@ describe('search recovery', () => {
       expect(role('status', { name: 'Searching domains' })).toExist(),
       expectAll(all.selector('.results .price')).toHaveCount(0),
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 3 }),
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 3,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 3,
-          domains: searchDomains('acme'),
+          domains: makeDomainFixtures('acme'),
         }),
       ),
       resolveResultsListScrolls,
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
-      expect(selector('.results')).toHaveAttr('aria-busy', 'false'),
+      expect(selector('.results-content')).toHaveAttr('aria-busy', 'false'),
       inside(
         first(all.role('article')),
         expect(text('$12.00')).toExist(),
@@ -259,7 +319,7 @@ describe('search recovery', () => {
       { update, view },
       given(readyModel('acme')),
       measureResultsList,
-      click(role('button', { name: 'Clear search' })),
+      click(role('button', { name: 'Clear search, Esc' })),
       Command.expectExact(
         cancelSearch(),
         ReplaceSearchUrl({ q: Option.none() }),
@@ -293,7 +353,7 @@ describe('result controls', () => {
       change(label('Filter availability'), 'Available'),
       resolveResultsListScrolls,
       expect(role('status')).toContainText('No domains match your filters.'),
-      expect(text('0 domains · Prices per year in USD')).toExist(),
+      expect(text('0 domains · Registration prices in USD')).toExist(),
       expect(selector('#domain-results')).toBeAbsent(),
       Mount.expectEnded(
         VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
@@ -303,7 +363,7 @@ describe('result controls', () => {
       change(label('Filter by TLD'), 'App'),
       measureResultsList,
       resolveResultsListScrolls,
-      expect(text('1 domains · Prices per year in USD')).toExist(),
+      expect(text('1 domains · Registration prices in USD')).toExist(),
       expectAll(all.selector('#domain-results .domain-row')).toHaveCount(1),
       inside(
         selector('#domain-results'),
@@ -337,7 +397,7 @@ describe('result controls', () => {
         first(all.selector('#domain-results .domain-row')),
         expect(text('acme.com')).toExist(),
       ),
-      expect(text('556 domains · Prices per year in USD')).toExist(),
+      expect(text('556 domains · Registration prices in USD')).toExist(),
     )
   })
 
@@ -355,8 +415,17 @@ describe('result controls', () => {
         VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
       ),
       submit(role('search')),
+      Command.resolve(
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
       Command.keepPending(
-        FetchDomains({ label: 'foldkit', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'foldkit',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
       ),
       measureResultsList,
       resolveResultsListScrolls,
@@ -374,10 +443,15 @@ describe('result controls', () => {
       expectAll(all.selector('.results .unavailable')).toHaveCount(0),
       expectAll(all.selector('.results button')).toHaveCount(0),
       Command.resolve(
-        FetchDomains({ label: 'foldkit', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'foldkit',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 2,
-          domains: searchDomains('foldkit'),
+          domains: makeDomainFixtures('foldkit'),
         }),
       ),
       resolveResultsListScrolls,
@@ -385,7 +459,7 @@ describe('result controls', () => {
       Mount.expectEnded(
         VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
       ),
-      expect(text('0 domains · Prices per year in USD')).toExist(),
+      expect(text('0 domains · Registration prices in USD')).toExist(),
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
       change(label('Filter availability'), 'All'),
       measureResultsList,
@@ -393,7 +467,7 @@ describe('result controls', () => {
       expectAll(all.selector('#domain-results .domain-row')).toHaveCount(1),
       inside(
         selector('#domain-results'),
-        expect(text('Unavailable')).toExist(),
+        expect(text('Not available')).toExist(),
       ),
     )
   })
@@ -433,13 +507,34 @@ describe('cart presentation', () => {
         click(role('button', { name: 'Add acme.app to cart' })),
       ),
       click(role('button', { name: 'Cart, 2 domains' })),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
+      Mount.resolve(
+        Dialog.test.AcquireResources({
+          id: CART_DIALOG_ID,
+          focusSelector: Dialog.initialFocusMarkerSelector,
+        }),
+        DialogBlock.Message.SucceededAcquireResources(),
+      ),
       inside(
         role('region', { name: 'Your cart' }),
-        expect(selector('.cart-total')).toHaveText('Yearly total$21.99'),
+        expect(selector('.cart-total')).toHaveText('Registration total$21.99'),
         click(role('button', { name: 'Remove acme.com' })),
-        expect(selector('.cart-total')).toHaveText('Yearly total$9.99'),
+        Command.resolve(
+          FocusCartCloseButton,
+          Message.CompletedFocusCartCloseButton(),
+        ),
+        expect(selector('.cart-total')).toHaveText('Registration total$9.99'),
         click(role('button', { name: 'Close cart panel' })),
       ),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
+      Command.resolve(FocusCartButton, Message.CompletedFocusCartButton()),
+      Mount.expectEnded(Dialog.test.AcquireResources),
       inside(
         first(all.role('article')),
         expect(role('button', { name: 'Add acme.com to cart' })).toExist(),
@@ -459,11 +554,151 @@ describe('cart presentation', () => {
       measureResultsList,
       expect(role('button', { name: 'Add foldkit.com to cart' })).toBeAbsent(),
       expect(role('button', { name: 'Add foldkit.dev to cart' })).toBeAbsent(),
-      inside(first(all.role('article')), expect(text('Unavailable')).toExist()),
+      inside(
+        first(all.role('article')),
+        expect(text('Not available')).toExist(),
+      ),
       inside(
         first(all.selector('#domain-results .domain-row')),
-        expect(text('Unavailable')).toExist(),
+        expect(text('Not available')).toExist(),
       ),
     )
   })
 })
+
+describe('registrar quotes', () => {
+  test('shows the full multi-year registration amount and keeps unconfirmed domains out of price sorting', () => {
+    const quotedModel = modifyFields(readyModel('acme'), {
+      search: () =>
+        SearchState.Ready({
+          domains: mergeDomainQuotes(
+            Array.map(domainNames('acme'), Domain.Unconfirmed),
+            [
+              Domain.Unconfirmed({ name: 'acme.com', tld: 'com' }),
+              Domain.Available({
+                name: 'acme.ai',
+                tld: 'ai',
+                price: 160,
+                renewalPrice: 170,
+                years: 2,
+                isPremium: true,
+              }),
+              Domain.Available({
+                name: 'acme.dev',
+                tld: 'dev',
+                price: 13,
+                renewalPrice: 14,
+                years: 1,
+                isPremium: false,
+              }),
+            ],
+          ),
+        }),
+    })
+
+    scene(
+      { update, view },
+      given(quotedModel),
+      measureResultsList,
+      expect(text('$160.00 / 2 years')).toExist(),
+      inside(
+        first(all.role('article')),
+        expect(text('Not available')).toExist(),
+        expect(selector('.price')).toBeAbsent(),
+        expect(role('button')).toBeAbsent(),
+      ),
+      change(label('Sort results'), 'PriceAscending'),
+      resolveResultsListScrolls,
+      inside(
+        first(all.selector('#domain-results .domain-row')),
+        expect(text('acme.dev')).toExist(),
+      ),
+      change(label('Sort results'), 'PriceDescending'),
+      resolveResultsListScrolls,
+      inside(
+        first(all.selector('#domain-results .domain-row')),
+        expect(text('acme.ai')).toExist(),
+        expect(text('$160.00 / 2 years')).toExist(),
+      ),
+      change(label('Filter availability'), 'Available'),
+      resolveResultsListScrolls,
+      inside(
+        selector('#domain-results'),
+        expect(text('acme.com')).toBeAbsent(),
+      ),
+    )
+  })
+})
+
+describe('accessibility semantics', () => {
+  test('loading status is atomic and outside the busy results content', () => {
+    scene(
+      { update, view },
+      given(readyModel('acme')),
+      measureResultsList,
+      submit(role('search')),
+      Command.resolve(
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
+      resolveResultsListScrolls,
+      expect(selector('.result-count')).toHaveAttr('role', 'status'),
+      expect(selector('.result-count')).toHaveAttr('aria-atomic', 'true'),
+      expect(selector('.results-content')).toHaveAttr('aria-busy', 'true'),
+      expect(selector('.results-content [role="status"]')).toBeAbsent(),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 2,
+          domains: makeDomainFixtures('acme'),
+        }),
+      ),
+      Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
+      resolveResultsListScrolls,
+      expect(selector('.result-count')).toHaveAttr('aria-atomic', 'true'),
+      expect(selector('.results-content')).toHaveAttr('aria-busy', 'false'),
+    )
+  })
+
+  test('an invalid search identifies the field and associates its error', () => {
+    const error = 'Enter a valid domain name.'
+    scene(
+      { update, view },
+      given(
+        modifyFields(readyModel('bad!'), {
+          search: () => SearchState.Failed({ error }),
+        }),
+      ),
+      expect(label('Search domains')).toHaveAttr('aria-invalid', 'true'),
+      expect(label('Search domains')).toHaveAttr(
+        'aria-describedby',
+        'search-error',
+      ),
+      expect(selector('#search-error')).toHaveText(error),
+      expect(role('alert')).toContainText(error),
+    )
+  })
+})
+
+test.each(['Home', 'End', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'])(
+  'the results viewport consumes %s through its scroll Command',
+  key => {
+    const scroll = ScrollResultsList({
+      key: Schema.decodeUnknownSync(ResultsListScrollKey)(key),
+    })
+    scene(
+      { update, view },
+      given(readyModel('acme')),
+      measureResultsList,
+      keydown(selector('#domain-results'), key),
+      expectHandled(),
+      Command.expectExact(scroll),
+      Command.resolve(scroll, Message.CompletedScrollResultsList()),
+    )
+  },
+)

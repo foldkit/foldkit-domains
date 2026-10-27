@@ -16,7 +16,6 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
       availabilityFilter: 'All',
       sortOrder: 'Relevance',
       cart: [],
-      cartVisibility: 'Closed',
     },
     commands: [ReleaseEarlySearchListeners()],
     steps: [searchCurrentQueryStep],

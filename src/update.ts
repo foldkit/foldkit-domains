@@ -4,26 +4,39 @@ import { UrlRequest } from 'foldkit/navigation'
 import { modifyFields } from 'foldkit/struct'
 
 import {
+  DismissSearchKeyboard,
   FetchDomains,
+  FocusCartCloseButton,
   FocusSearchInput,
   LoadExternal,
   NavigateInternal,
   ReplaceSearchUrl,
+  ScrollResultsList,
   cancelSearch,
 } from './command'
-import { ApplicationComposition, ResultsListBinding } from './composition'
+import {
+  ApplicationComposition,
+  CartDialogBinding,
+  ResultsListBinding,
+} from './composition'
 import {
   makeCommandsStep,
   makeFieldsStep,
   makeNoopStep,
   makeStep,
 } from './definition'
-import { queryToMaybeDomainLabel } from './domain'
+import {
+  Domain,
+  QUOTE_PAGE_SIZE,
+  mergeDomainQuotes,
+  queryToMaybeDomainLabel,
+} from './domain'
 import { Message } from './message'
-import { SearchState } from './model'
-import { visibleResultListings } from './results'
+import { QuoteRequest, SearchState } from './model'
+import { loadVisibleQuotesStep, makeRequestQuotesStep } from './quoteLoading'
 import { groupResults } from './resultsList'
 import { routeToQuery, urlToApplicationRoute } from './route'
+import { visibleResultListings } from './visibleResultListings'
 
 const updateCurrentSearchStep = makeStep(model => {
   const query = routeToQuery(model.route)
@@ -53,6 +66,8 @@ const updateCurrentSearchStep = makeStep(model => {
           FetchDomains({
             label: maybeDomainLabel.value,
             searchGeneration: nextSearchGeneration,
+            offset: 0,
+            limit: QUOTE_PAGE_SIZE,
           }),
         ),
       }
@@ -103,9 +118,27 @@ const clearSearchStep = makeChangeSearchQueryStep('')
 
 export const update = ApplicationComposition.makeUpdate({
   UpdatedSearch: (model, { value }) => makeChangeSearchQueryStep(value)(model),
-  SubmittedSearch: searchCurrentQueryStep,
-  ClickedRetrySearch: searchCurrentQueryStep,
+  SubmittedSearch: Update.combineSteps([
+    searchCurrentQueryStep,
+    makeCommandsStep(() => [DismissSearchKeyboard()]),
+  ]),
+  ClickedRetrySearch: Update.combineSteps([
+    makeStep(model => {
+      if (
+        model.search._tag === 'Ready' &&
+        model.search.quoteRequest._tag === 'Failed'
+      ) {
+        return makeRequestQuotesStep(model.search.quoteRequest)
+      } else {
+        return searchCurrentQueryStep
+      }
+    }),
+    makeCommandsStep(() => [FocusSearchInput()]),
+  ]),
   PressedEscape: clearSearchStep,
+  PressedResultsListScrollKey: makeCommandsStep.fromMessage(({ key }) => [
+    ScrollResultsList({ key }),
+  ]),
   ClickedClearSearch: Update.combineSteps([
     clearSearchStep,
     makeCommandsStep(() => [FocusSearchInput()]),
@@ -132,11 +165,14 @@ export const update = ApplicationComposition.makeUpdate({
       External: ({ href }) => [LoadExternal({ href })],
     }),
   ),
+  ClickedDomainsHome: makeNoopStep(),
+  ClickedSkipToMain: makeNoopStep(),
   UpdatedTldFilter: makeStep(
     (_model, { value }: typeof Message.UpdatedTldFilter.Type) =>
       Update.combineSteps([
         makeFieldsStep(() => ({ tldFilter: () => value })),
         informResultsListStep,
+        loadVisibleQuotesStep,
       ]),
   ),
   UpdatedAvailabilityFilter: makeStep(
@@ -144,6 +180,7 @@ export const update = ApplicationComposition.makeUpdate({
       Update.combineSteps([
         makeFieldsStep(() => ({ availabilityFilter: () => value })),
         informResultsListStep,
+        loadVisibleQuotesStep,
       ]),
   ),
   UpdatedSortOrder: makeStep(
@@ -151,10 +188,11 @@ export const update = ApplicationComposition.makeUpdate({
       Update.combineSteps([
         makeFieldsStep(() => ({ sortOrder: () => value })),
         informResultsListStep,
+        loadVisibleQuotesStep,
       ]),
   ),
   ClickedAddDomain: makeFieldsStep((model, { domain }) =>
-    domain.isAvailable &&
+    Domain.isAnyOf(['Available'])(domain) &&
     !Array.some(model.cart, item => item.name === domain.name)
       ? { cart: Array.append(domain) }
       : {},
@@ -162,38 +200,71 @@ export const update = ApplicationComposition.makeUpdate({
   ClickedRemoveDomain: makeFieldsStep.fromMessage(({ name }) => ({
     cart: Array.filter(domain => domain.name !== name),
   })),
-  ClickedCart: makeFieldsStep(() => ({
-    cartVisibility: () => 'Open',
-  })),
-  ClickedCloseCart: makeFieldsStep(() => ({
-    cartVisibility: () => 'Closed',
-  })),
+  ClickedRemoveCartDomain: makeStep(
+    (_model, { name }: typeof Message.ClickedRemoveCartDomain.Type) =>
+      Update.combineSteps([
+        makeFieldsStep(() => ({
+          cart: Array.filter(domain => domain.name !== name),
+        })),
+        makeCommandsStep(() => [FocusCartCloseButton()]),
+      ]),
+  ),
+  ClickedCart: CartDialogBinding.requestOpen(),
   SucceededFetchDomains: makeStep(
     (
       model,
       { searchGeneration, domains }: typeof Message.SucceededFetchDomains.Type,
     ) => {
       if (searchGeneration === model.searchGeneration) {
+        const previousDomains =
+          model.search._tag === 'Ready' ? model.search.domains : []
+        const nextDomains = mergeDomainQuotes(previousDomains, domains)
+
         return Update.combineSteps([
           makeFieldsStep(() => ({
-            search: () => SearchState.Ready({ domains }),
+            search: () => SearchState.Ready({ domains: nextDomains }),
           })),
           informResultsListStep,
+          loadVisibleQuotesStep,
         ])
       } else {
         return { model }
       }
     },
   ),
-  FailedFetchDomains: makeFieldsStep((model, { searchGeneration, error }) =>
-    searchGeneration === model.searchGeneration
-      ? { search: () => SearchState.Failed({ error }) }
-      : {},
-  ),
+  FailedFetchDomains: makeFieldsStep((model, { searchGeneration, error }) => {
+    if (searchGeneration !== model.searchGeneration) {
+      return {}
+    }
+
+    if (
+      model.search._tag === 'Ready' &&
+      model.search.quoteRequest._tag === 'Loading'
+    ) {
+      const { domains, quoteRequest } = model.search
+      return {
+        search: () =>
+          SearchState.Ready({
+            domains,
+            quoteRequest: QuoteRequest.Failed({
+              offset: quoteRequest.offset,
+              limit: quoteRequest.limit,
+              error,
+            }),
+          }),
+      }
+    } else {
+      return { search: () => SearchState.Failed({ error }) }
+    }
+  }),
   CompletedReplaceSearchUrl: makeNoopStep(),
   CompletedNavigateInternal: makeNoopStep(),
   CompletedLoadExternal: makeNoopStep(),
   CompletedFocusSearchInput: makeNoopStep(),
+  CompletedFocusCartButton: makeNoopStep(),
+  CompletedFocusCartCloseButton: makeNoopStep(),
+  CompletedScrollResultsList: makeNoopStep(),
+  CompletedDismissSearchKeyboard: makeNoopStep(),
   CompletedCancelSearch: makeNoopStep(),
   CompletedReleaseEarlySearchListeners: makeNoopStep(),
 })

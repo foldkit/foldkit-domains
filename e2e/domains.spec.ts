@@ -1,3 +1,5 @@
+import { Array, Effect } from 'effect'
+
 import {
   type Page as PlaywrightPage,
   devices,
@@ -5,7 +7,15 @@ import {
   test,
 } from '@playwright/test'
 
+import { Domain } from '../src/domain'
+import { makeDomainFixtures } from '../src/domain.fixture'
+import { SearchError } from '../src/domainsRpc'
+import { mockDomainSearch } from './api'
 import * as Page from './page'
+
+test.beforeEach(async ({ page }) => {
+  await mockDomainSearch(page)
+})
 
 const holdEarlyScript = async (page: PlaywrightPage) => {
   let earlyScript = ''
@@ -36,6 +46,7 @@ const holdEarlyScript = async (page: PlaywrightPage) => {
 test('serves an editable search field in static HTML', async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false })
   const page = await context.newPage()
+  await mockDomainSearch(page)
   await page.goto('/')
   await expect(
     page.getByRole('searchbox', { name: 'Search domains' }),
@@ -45,6 +56,36 @@ test('serves an editable search field in static HTML', async ({ browser }) => {
   )
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(1)
   await context.close()
+})
+
+test('activating Domains with the keyboard focuses the same search input and preserves navigation history', async ({
+  page,
+}) => {
+  await page.goto('/?q=acme')
+  await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+  const input = page.getByRole('searchbox', { name: 'Search domains' })
+  const originalInput = await input.elementHandle()
+  const domainsHome = page.getByRole('link', { name: 'Domains home' })
+  await domainsHome.focus()
+  await domainsHome.press('Enter')
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue('')
+  await expect(page).toHaveURL('/')
+  expect(
+    await originalInput?.evaluate(
+      element => element === document.getElementById('domain-search'),
+    ),
+  ).toBe(true)
+
+  await page.goBack()
+  await expect(input).toHaveValue('acme')
+  await expect(page).toHaveURL(/q=acme/)
+  await domainsHome.click()
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue('')
+  await domainsHome.click()
+  await expect(input).toBeFocused()
+  await expect(input).toHaveValue('')
 })
 
 test('preserves early typing, focus, selection, and the input node through hydration', async ({
@@ -168,6 +209,7 @@ test('first mobile tap moves the same input into the header before hydration', a
 
   const context = await browser.newContext({ ...devices['iPhone 13'], baseURL })
   const page = await context.newPage()
+  await mockDomainSearch(page)
   let releaseBundle = () => {}
   const bundleGate = new Promise<void>(resolve => {
     releaseBundle = resolve
@@ -221,6 +263,7 @@ test('mobile search scrolls with the hero and stays pinned during a search', asy
     baseURL,
   })
   const page = await context.newPage()
+  await mockDomainSearch(page)
   let releaseBundle = () => {}
   const bundleGate = new Promise<void>(resolve => {
     releaseBundle = resolve
@@ -305,12 +348,12 @@ test('searches, filters, sorts, and manages the cart', async ({
     'foldkit.com',
   )
   await expect(page.locator('.domain-card').first()).toContainText(
-    'Unavailable',
+    'Not available',
   )
   await page.screenshot({ path: testInfo.outputPath('domains-desktop.png') })
   await page.getByLabel('Filter availability').selectOption('Available')
   await expect(page.locator('.result-count')).toHaveText(
-    '554 domains · Prices per year in USD',
+    '554 domains · Registration prices in USD',
   )
   expect(
     await page.locator('#domain-results .domain-row').count(),
@@ -340,6 +383,8 @@ test('searches, filters, sorts, and manages the cart', async ({
     'Your next idea starts with a name.',
   )
   await page.getByRole('button', { name: 'Close cart panel' }).click()
+  await expect(page.getByRole('region', { name: 'Your cart' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Cart,/ })).toBeFocused()
   await input.press('Escape')
   await expect(input).toHaveValue('')
   await expect(page).toHaveURL('/')
@@ -348,21 +393,25 @@ test('searches, filters, sorts, and manages the cart', async ({
 test('updates domain names while prices and availability wait for the current lookup', async ({
   page,
 }, testInfo) => {
-  await page.clock.install({ time: '2030-01-01T08:00:00Z' })
   await Page.assertLoadedCleanly(page)
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
-  await page.clock.pauseAt('2030-01-01T10:00:00Z')
 
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   await input.fill('foldkit')
-  await page.clock.runFor(1_000)
   await expect(page.locator('.domain-card').first()).toContainText(
-    'Unavailable',
+    'Not available',
   )
   await expect(page.locator('.results .price').first()).toBeVisible()
 
+  let releasePrices = () => {}
+  const pricesGate = new Promise<void>(resolve => {
+    releasePrices = resolve
+  })
+  await mockDomainSearch(page, label =>
+    Effect.promise(() => pricesGate).pipe(Effect.as(makeDomainFixtures(label))),
+  )
+
   await input.fill('new-idea')
-  await page.clock.runFor(50)
   await expect(page.locator('.domain-card h3')).toHaveText([
     'new-idea.com',
     'new-idea.dev',
@@ -384,17 +433,153 @@ test('updates domain names while prices and availability wait for the current lo
   await page.screenshot({ path: testInfo.outputPath('domains-pending.png') })
 
   await input.pressSequentially('s')
-  await page.clock.runFor(50)
   await expect(page.locator('.domain-card').first()).toContainText(
     'new-ideas.com',
   )
   await expect(page.locator('.results .price')).toHaveCount(0)
-  await page.clock.runFor(1_000)
+  releasePrices()
   await expect(page.locator('.domain-card').first()).toContainText('$12.00')
   await expect(
     page.locator('.domain-card').first().getByRole('button'),
   ).toHaveAccessibleName('Add new-ideas.com to cart')
 })
+
+for (const width of [1440, 900, 390, 320]) {
+  test(`quote skeletons preserve card, row, and control geometry at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 })
+
+    for (const label of ['acme', 'foldkit', 'a-long-domain-name-for-layout']) {
+      let releaseQuotes = () => {}
+      const quotesGate = new Promise<void>(resolve => {
+        releaseQuotes = resolve
+      })
+      await mockDomainSearch(page, query =>
+        Effect.promise(() => quotesGate).pipe(
+          Effect.as(
+            Array.map(makeDomainFixtures(query), domain =>
+              domain._tag === 'Available' && domain.tld === 'io'
+                ? Domain.Available({ ...domain, price: 160, years: 2 })
+                : domain,
+            ),
+          ),
+        ),
+      )
+
+      try {
+        await page.goto(`/?q=${label}`)
+        await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+        await expect(page.locator('.domain-card .skeleton-action')).toHaveCount(
+          4,
+        )
+        await expect(
+          page.locator('#domain-results .domain-row').first(),
+        ).toBeVisible()
+        const skeletonControls = await page
+          .locator(
+            '.domain-card .skeleton-action, #domain-results .skeleton-action',
+          )
+          .evaluateAll(elements =>
+            elements.slice(0, 10).map(element => {
+              const rect = element.getBoundingClientRect()
+              return { width: rect.width, height: rect.height }
+            }),
+          )
+        const geometry = () =>
+          page
+            .locator('.domain-card, #domain-results .domain-row')
+            .evaluateAll(elements =>
+              elements.slice(0, 10).map(element => {
+                const bounds = (target: Element | null) => {
+                  if (target === null) {
+                    throw new Error(
+                      'Each result must reserve its name and action areas',
+                    )
+                  }
+
+                  const rect = target.getBoundingClientRect()
+                  return {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                  }
+                }
+
+                return {
+                  name: element.querySelector('h3, .domain-name')?.textContent,
+                  result: bounds(element),
+                  nameArea: bounds(element.querySelector('h3, .domain-name')),
+                  action: bounds(element.querySelector('.domain-action')),
+                }
+              }),
+            )
+        const surroundingGeometry = () =>
+          page
+            .locator('.results-heading, .all-results, .result-count, .footer')
+            .evaluateAll(elements =>
+              elements.map(element => {
+                const rect = element.getBoundingClientRect()
+                return {
+                  x: rect.x,
+                  y: rect.y,
+                  width: rect.width,
+                  height: rect.height,
+                }
+              }),
+            )
+        const pendingGeometry = await geometry()
+        const pendingSurroundings = await surroundingGeometry()
+        await page.screenshot({
+          path: testInfo.outputPath(`${label}-pending.png`),
+        })
+        releaseQuotes()
+        await expect(page.locator('.domain-card .skeleton-action')).toHaveCount(
+          0,
+        )
+        await expect(page.locator('.domain-card').last()).toContainText(
+          '$160.00 / 2 years',
+        )
+        await expect.poll(geometry).toEqual(pendingGeometry)
+        await expect.poll(surroundingGeometry).toEqual(pendingSurroundings)
+        const loadedControls = await page
+          .locator('.domain-card .icon-button, #domain-results .icon-button')
+          .evaluateAll(elements =>
+            elements.slice(0, 10).map(element => {
+              const rect = element.getBoundingClientRect()
+              return { width: rect.width, height: rect.height }
+            }),
+          )
+        const cardControlSize = width <= 700 ? 44 : 32
+        const rowControlSize = width <= 700 ? 44 : 30
+        expect(skeletonControls.slice(0, 4)).toEqual(
+          Array.makeBy(4, () => ({
+            width: cardControlSize,
+            height: cardControlSize,
+          })),
+        )
+        expect(skeletonControls.slice(4)).toEqual(
+          skeletonControls
+            .slice(4)
+            .map(() => ({ width: rowControlSize, height: rowControlSize })),
+        )
+        for (const control of loadedControls) {
+          expect([cardControlSize, rowControlSize]).toContain(control.width)
+          expect(control.height).toBe(control.width)
+        }
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth),
+        ).toBeLessThanOrEqual(width)
+        await page.screenshot({
+          path: testInfo.outputPath(`${label}-loaded.png`),
+        })
+      } finally {
+        releaseQuotes()
+      }
+    }
+  })
+}
 
 test('restores queries on reload and browser navigation and ignores superseded searches', async ({
   page,
@@ -432,7 +617,7 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
   const viewport = page.locator('#domain-results')
   const rows = viewport.locator('.domain-row')
   await expect(page.locator('.result-count')).toHaveText(
-    '556 domains · Prices per year in USD',
+    '60 of 556 domains checked · Registration prices in USD',
   )
   await expect(rows.first()).toContainText('acme.com')
   expect(await rows.count()).toBeLessThan(60)
@@ -473,8 +658,8 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
   await expect
     .poll(() => viewport.evaluate(element => element.scrollTop))
     .toBeGreaterThan(0)
-  await expect(page.locator('.result-count')).toHaveText(
-    '556 domains · Prices per year in USD',
+  await expect(page.locator('.result-count')).toContainText(
+    'of 556 domains checked',
   )
   await expect
     .poll(async () => {
@@ -550,3 +735,216 @@ test('hands URL synchronization to the Runtime without leaving duplicate early l
     'after-handoff.com',
   )
 })
+
+test('recovers from a registrar rate limit through retry without showing stale quotes', async ({
+  page,
+}) => {
+  await page.clock.install()
+  let calls = 0
+  await mockDomainSearch(page, label =>
+    Effect.suspend(() => {
+      calls += 1
+      if (calls === 1) {
+        return Effect.fail(
+          SearchError.RateLimited({
+            source: 'Registrar',
+            retryAfterSeconds: 60,
+          }),
+        )
+      } else {
+        return Effect.succeed(makeDomainFixtures(label))
+      }
+    }),
+  )
+  await page.goto('/?q=retry-idea')
+  await expect(page.getByRole('alert')).toContainText(
+    'The domain provider is busy. Please try again in 60 seconds.',
+  )
+  await expect(page.locator('.results .price')).toHaveCount(0)
+  await page
+    .getByRole('searchbox', { name: 'Search domains' })
+    .fill('retry-other')
+  await expect(page.getByRole('alert')).toContainText(
+    'The domain provider is busy.',
+  )
+  expect(calls).toBe(1)
+  await page.clock.fastForward('01:00')
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.locator('.domain-card').first()).toContainText('$12.00')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(
+    page.getByRole('searchbox', { name: 'Search domains' }),
+  ).toHaveValue('retry-other')
+})
+
+test('shows multi-year registration and renewal quotes without treating an unconfirmed name as purchasable', async ({
+  page,
+}) => {
+  await mockDomainSearch(page, () =>
+    Effect.succeed([
+      Domain.Unconfirmed({ name: 'quoted.com', tld: 'com' }),
+      Domain.Available({
+        name: 'quoted.ai',
+        tld: 'ai',
+        years: 2,
+        price: 160,
+        renewalPrice: 170,
+        isPremium: true,
+      }),
+    ]),
+  )
+  await page.goto('/?q=quoted')
+  const unconfirmed = page.locator('.domain-card').first()
+  await expect(unconfirmed).toContainText('Not available')
+  await expect(unconfirmed.locator('.unavailable')).toHaveAttribute(
+    'title',
+    /could not confirm/,
+  )
+  await expect(unconfirmed.getByRole('button')).toHaveCount(0)
+  await page.getByLabel('Filter by TLD').selectOption('Ai')
+  const quoted = page.locator('#domain-results .domain-row').first()
+  await expect(quoted.locator('.price')).toHaveText('$160.00 / 2 years')
+  await expect(quoted.locator('.price')).toHaveAttribute(
+    'title',
+    'Premium domain. Renews at $170.00 for 2 years',
+  )
+  await quoted.getByRole('button', { name: 'Add quoted.ai to cart' }).click()
+  await page.getByRole('button', { name: 'Cart, 1 domains' }).click()
+  const cart = page.getByRole('region', { name: 'Your cart' })
+  await expect(cart).toContainText('Renews at $170.00 for 2 years')
+  await expect(cart.locator('.cart-total')).toHaveText(
+    'Registration total$160.00',
+  )
+  await expect(cart).toContainText('does not reserve it')
+})
+
+test('loads quotes for the visible catalog pages and preserves prices when a later page needs retry', async ({
+  page,
+}) => {
+  const windows: Array<{ offset: number; limit: number }> = []
+  let isLaterPageFailing = true
+  await mockDomainSearch(page, (label, window) =>
+    Effect.suspend(() => {
+      windows.push(window)
+      return window.offset === 60 && isLaterPageFailing
+        ? Effect.fail(SearchError.Unavailable())
+        : Effect.succeed(makeDomainFixtures(label))
+    }),
+  )
+  await page.goto('/?q=progressive')
+  await expect(page.locator('.domain-card').first()).toContainText('$12.00')
+  await page.waitForLoadState('networkidle')
+  expect(windows).toEqual([{ offset: 0, limit: 60 }])
+  const viewport = page.locator('#domain-results')
+  await viewport.evaluate(element => {
+    element.scrollTop = 1140
+  })
+  await expect(page.getByRole('alert')).toContainText(
+    'Could not check availability and prices.',
+  )
+  await expect(page.locator('.domain-card').first()).toContainText('$12.00')
+  expect(windows).toEqual([
+    { offset: 0, limit: 60 },
+    { offset: 60, limit: 60 },
+  ])
+  isLaterPageFailing = false
+  await page.getByRole('button', { name: 'Try again' }).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(viewport.locator('.skeleton-price')).toHaveCount(0)
+  expect(windows).toEqual([
+    { offset: 0, limit: 60 },
+    { offset: 60, limit: 60 },
+    { offset: 60, limit: 60 },
+  ])
+  await page.getByLabel('Sort results').selectOption('PriceAscending')
+  await expect
+    .poll(() =>
+      windows.some(window => window.offset === 0 && window.limit === 556),
+    )
+    .toBe(true)
+  await expect(page.locator('.result-count')).toHaveText(
+    '556 domains · Registration prices in USD',
+  )
+  await viewport.evaluate(element => {
+    element.scrollTop = 0
+  })
+  await expect(viewport.locator('.domain-row').first()).toContainText('$1.99')
+})
+
+for (const width of [1440, 390]) {
+  test(`ships DevTools with TimeTravel and resumes the latest search at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 })
+    let releaseQuotes = () => {}
+    let isSearchStarted = false
+    const quotesGate = new Promise<void>(resolve => {
+      releaseQuotes = resolve
+    })
+    await mockDomainSearch(page, label =>
+      Effect.gen(function* () {
+        if (label === 'devtools-search') {
+          isSearchStarted = true
+          yield* Effect.promise(() => quotesGate)
+        }
+
+        return makeDomainFixtures(label)
+      }),
+    )
+
+    try {
+      await page.goto('/?q=acme')
+      const input = page.getByRole('searchbox', { name: 'Search domains' })
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      const badge = page.locator('.dt-badge')
+      const panel = page.locator('.dt-panel')
+      await expect(badge).toBeInViewport()
+      await expect(panel).toHaveCount(0)
+      await input.fill('devtools-search')
+      await expect.poll(() => isSearchStarted).toBe(true)
+      await expect(page.locator('.domain-card .price')).toHaveCount(0)
+      await badge.click()
+      await expect(panel).toBeVisible()
+      await expect(panel).toContainText(
+        'Live requests continue in the background.',
+      )
+      await expect(panel.locator('header')).toContainText('Live')
+      const successes = panel
+        .locator('.message-list')
+        .getByText('SucceededFetchDomains', { exact: true })
+      const completedSearches = await successes.count()
+      await successes.first().click()
+      await expect(panel.locator('header')).toContainText(/Paused \(\d+\)/)
+      await expect(page.locator('.dt-interaction-blocker')).toBeVisible()
+      await expect(input).toHaveValue('acme')
+      await expect(page.locator('.domain-card').first()).toContainText(
+        'acme.com',
+      )
+      releaseQuotes()
+      await expect(successes).toHaveCount(completedSearches + 1)
+      await expect(panel.locator('header')).toContainText(/Paused \(\d+\)/)
+      await expect(input).toHaveValue('acme')
+      await expect(page).toHaveURL(/q=devtools-search/)
+      await page.screenshot({
+        path: testInfo.outputPath('devtools-timetravel.png'),
+      })
+      await panel.getByRole('button', { name: 'Resume →' }).click()
+      await expect(panel.locator('header')).toContainText('Live')
+      await expect(page.locator('.dt-interaction-blocker')).toHaveCount(0)
+      await expect(input).toHaveValue('devtools-search')
+      await expect(page.locator('.domain-card').first()).toContainText(
+        'devtools-search.com',
+      )
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await badge.click()
+      await expect(panel).toHaveCount(0)
+      await input.fill('devtools-resumed')
+      await expect(page.locator('.domain-card').first()).toContainText(
+        'devtools-resumed.com',
+      )
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+    } finally {
+      releaseQuotes()
+    }
+  })
+}

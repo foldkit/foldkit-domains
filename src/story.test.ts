@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array, Option, pipe } from 'effect'
 import { UrlRequest } from 'foldkit/navigation'
 import {
   Command,
@@ -8,12 +8,16 @@ import {
   model,
   story,
 } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
 import { VirtualList } from '@foldkit/ui'
 
 import {
+  DismissSearchKeyboard,
   FetchDomains,
+  FocusCartCloseButton,
   FocusSearchInput,
   LoadExternal,
   NavigateInternal,
@@ -21,10 +25,12 @@ import {
   ReplaceSearchUrl,
   cancelSearch,
 } from './command'
-import { Domain, searchDomains } from './domain'
+import { ResultsListBinding } from './composition'
+import { Domain } from './domain'
+import { makeDomainFixtures } from './domain.fixture'
 import { init } from './init'
 import { Message } from './message'
-import { SearchState } from './model'
+import { QuoteRequest, SearchState } from './model'
 import { emptyModel, readyModel, urlOrThrow } from './model.fixture'
 import { ResultsListBlock } from './resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from './route'
@@ -76,19 +82,44 @@ test('only the current search can supply results when a query is repeated', () =
       Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
     ),
     Command.expectHas(
-      FetchDomains({ label: 'acme', searchGeneration: 2 }),
-      FetchDomains({ label: 'other', searchGeneration: 4 }),
-      FetchDomains({ label: 'acme', searchGeneration: 6 }),
-    ),
-    Command.resolve(
-      FetchDomains({ label: 'acme', searchGeneration: 2 }),
-      Message.SucceededFetchDomains({
+      FetchDomains({
+        label: 'acme',
         searchGeneration: 2,
-        domains: searchDomains('acme'),
+        offset: 0,
+        limit: 60,
+      }),
+      FetchDomains({
+        label: 'other',
+        searchGeneration: 4,
+        offset: 0,
+        limit: 60,
+      }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 6,
+        offset: 0,
+        limit: 60,
       }),
     ),
     Command.resolve(
-      FetchDomains({ label: 'other', searchGeneration: 4 }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 2,
+        offset: 0,
+        limit: 60,
+      }),
+      Message.SucceededFetchDomains({
+        searchGeneration: 2,
+        domains: makeDomainFixtures('acme'),
+      }),
+    ),
+    Command.resolve(
+      FetchDomains({
+        label: 'other',
+        searchGeneration: 4,
+        offset: 0,
+        limit: 60,
+      }),
       Message.FailedFetchDomains({
         searchGeneration: 4,
         error: 'Search unavailable',
@@ -99,15 +130,20 @@ test('only the current search can supply results when a query is repeated', () =
       expect(model.search._tag).toBe('Loading')
     }),
     Command.resolve(
-      FetchDomains({ label: 'acme', searchGeneration: 6 }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 6,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 6,
-        domains: searchDomains('acme'),
+        domains: makeDomainFixtures('acme'),
       }),
     ),
     model(model => {
       expect(model.search).toEqual(
-        SearchState.Ready({ domains: searchDomains('acme') }),
+        SearchState.Ready({ domains: makeDomainFixtures('acme') }),
       )
     }),
     resolveResultsListScrolls,
@@ -146,10 +182,15 @@ test('clearing the input prevents an in-flight search from reopening results', (
       expect(model.search._tag).toBe('Idle')
     }),
     Command.resolve(
-      FetchDomains({ label: 'acme', searchGeneration: 2 }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 2,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 2,
-        domains: searchDomains('acme'),
+        domains: makeDomainFixtures('acme'),
       }),
     ),
     model(model => {
@@ -189,10 +230,15 @@ test('typing requests URL synchronization before the new route starts a lookup',
       expect(model.search._tag).toBe('Loading')
     }),
     Command.resolve(
-      FetchDomains({ label: 'fresh', searchGeneration: 2 }),
+      FetchDomains({
+        label: 'fresh',
+        searchGeneration: 2,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 2,
-        domains: searchDomains('fresh'),
+        domains: makeDomainFixtures('fresh'),
       }),
     ),
     resolveResultsListScrolls,
@@ -253,12 +299,21 @@ test('typing invalidates an in-flight result before the URL changes', () => {
     update,
     given(readyModel('acme')),
     message(Message.SubmittedSearch()),
+    Command.resolve(
+      DismissSearchKeyboard,
+      Message.CompletedDismissSearchKeyboard(),
+    ),
     message(Message.UpdatedSearch({ value: 'fresh' })),
     Command.resolve(
-      FetchDomains({ label: 'acme', searchGeneration: 2 }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 2,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 2,
-        domains: searchDomains('acme'),
+        domains: makeDomainFixtures('acme'),
       }),
     ),
     model(model => {
@@ -275,10 +330,15 @@ test('typing invalidates an in-flight result before the URL changes', () => {
       Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=fresh') }),
     ),
     Command.resolve(
-      FetchDomains({ label: 'fresh', searchGeneration: 4 }),
+      FetchDomains({
+        label: 'fresh',
+        searchGeneration: 4,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 4,
-        domains: searchDomains('fresh'),
+        domains: makeDomainFixtures('fresh'),
       }),
     ),
     resolveResultsListScrolls,
@@ -295,12 +355,21 @@ test('clearing invalidates an in-flight result before the URL changes', () => {
     update,
     given(readyModel('acme')),
     message(Message.SubmittedSearch()),
+    Command.resolve(
+      DismissSearchKeyboard,
+      Message.CompletedDismissSearchKeyboard(),
+    ),
     message(Message.ClickedClearSearch()),
     Command.resolve(
-      FetchDomains({ label: 'acme', searchGeneration: 2 }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 2,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 2,
-        domains: searchDomains('acme'),
+        domains: makeDomainFixtures('acme'),
       }),
     ),
     model(model => {
@@ -330,6 +399,10 @@ test('an unchanged search value keeps its pending lookup', () => {
     update,
     given(readyModel('acme')),
     message(Message.SubmittedSearch()),
+    Command.resolve(
+      DismissSearchKeyboard,
+      Message.CompletedDismissSearchKeyboard(),
+    ),
     message(Message.UpdatedSearch({ value: 'acme' })),
     Command.resolve(
       ReplaceSearchUrl({ q: Option.some('acme') }),
@@ -339,15 +412,20 @@ test('an unchanged search value keeps its pending lookup', () => {
       Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
     ),
     Command.resolve(
-      FetchDomains({ label: 'acme', searchGeneration: 2 }),
+      FetchDomains({
+        label: 'acme',
+        searchGeneration: 2,
+        offset: 0,
+        limit: 60,
+      }),
       Message.SucceededFetchDomains({
         searchGeneration: 2,
-        domains: searchDomains('acme'),
+        domains: makeDomainFixtures('acme'),
       }),
     ),
     model(model => {
       expect(model.search).toEqual(
-        SearchState.Ready({ domains: searchDomains('acme') }),
+        SearchState.Ready({ domains: makeDomainFixtures('acme') }),
       )
     }),
     Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
@@ -385,7 +463,9 @@ describe('startup', () => {
             Command.argsOf(FetchDomains),
           ),
         ),
-      ).toEqual(fetches)
+      ).toEqual(
+        Array.map(fetches, fetch => ({ ...fetch, offset: 0, limit: 60 })),
+      )
       expect(
         Array.getSomes(
           Array.map(
@@ -417,10 +497,10 @@ describe('domain validation', () => {
         expect(model.search._tag).toBe('Loading')
       }),
       Command.resolve(
-        FetchDomains({ label, searchGeneration: 1 }),
+        FetchDomains({ label, searchGeneration: 1, offset: 0, limit: 60 }),
         Message.SucceededFetchDomains({
           searchGeneration: 1,
-          domains: searchDomains(label),
+          domains: makeDomainFixtures(label),
         }),
       ),
       resolveResultsListScrolls,
@@ -477,15 +557,20 @@ describe('domain validation', () => {
         expect(model.search._tag).toBe('Loading')
       }),
       Command.resolve(
-        FetchDomains({ label: 'valid-domain', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'valid-domain',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 2,
-          domains: searchDomains('valid-domain'),
+          domains: makeDomainFixtures('valid-domain'),
         }),
       ),
       model(model => {
         expect(model.search).toEqual(
-          SearchState.Ready({ domains: searchDomains('valid-domain') }),
+          SearchState.Ready({ domains: makeDomainFixtures('valid-domain') }),
         )
       }),
       resolveResultsListScrolls,
@@ -501,7 +586,7 @@ describe('lookup completion order', () => {
   test.each([
     Message.SucceededFetchDomains({
       searchGeneration: 2,
-      domains: searchDomains('outdated'),
+      domains: makeDomainFixtures('outdated'),
     }),
     Message.FailedFetchDomains({
       searchGeneration: 2,
@@ -514,23 +599,41 @@ describe('lookup completion order', () => {
         update,
         given(readyModel('acme')),
         message(Message.SubmittedSearch()),
+        Command.resolve(
+          DismissSearchKeyboard,
+          Message.CompletedDismissSearchKeyboard(),
+        ),
         message(Message.SubmittedSearch()),
         Command.resolve(
-          FetchDomains({ label: 'acme', searchGeneration: 3 }),
+          DismissSearchKeyboard,
+          Message.CompletedDismissSearchKeyboard(),
+        ),
+        Command.resolve(
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 3,
+            offset: 0,
+            limit: 60,
+          }),
           Message.SucceededFetchDomains({
             searchGeneration: 3,
-            domains: searchDomains('acme'),
+            domains: makeDomainFixtures('acme'),
           }),
         ),
         resolveResultsListScrolls,
         Command.resolve(
-          FetchDomains({ label: 'acme', searchGeneration: 2 }),
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 2,
+            offset: 0,
+            limit: 60,
+          }),
           completion,
         ),
         model(model => {
           expect(model.searchGeneration).toBe(3)
           expect(model.search).toEqual(
-            SearchState.Ready({ domains: searchDomains('acme') }),
+            SearchState.Ready({ domains: makeDomainFixtures('acme') }),
           )
         }),
         Command.resolveAllExact(
@@ -547,7 +650,16 @@ describe('lookup completion order', () => {
       given(readyModel('acme')),
       message(Message.SubmittedSearch()),
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 2 }),
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.FailedFetchDomains({
           searchGeneration: 2,
           error: 'Temporarily unavailable',
@@ -559,21 +671,27 @@ describe('lookup completion order', () => {
         )
       }),
       message(Message.ClickedRetrySearch()),
+      Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
       model(model => {
         expect(routeToQuery(model.route)).toBe('acme')
         expect(model.search._tag).toBe('Loading')
         expect(model.searchGeneration).toBe(3)
       }),
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 3 }),
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 3,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 3,
-          domains: searchDomains('acme'),
+          domains: makeDomainFixtures('acme'),
         }),
       ),
       model(model => {
         expect(model.search).toEqual(
-          SearchState.Ready({ domains: searchDomains('acme') }),
+          SearchState.Ready({ domains: makeDomainFixtures('acme') }),
         )
       }),
       resolveResultsListScrolls,
@@ -589,19 +707,37 @@ describe('lookup completion order', () => {
       update,
       given(readyModel('acme')),
       message(Message.SubmittedSearch()),
+      Command.resolve(
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
       message(Message.SubmittedSearch()),
+      Command.resolve(
+        DismissSearchKeyboard,
+        Message.CompletedDismissSearchKeyboard(),
+      ),
       message(
         Message.ChangedUrl({ url: urlOrThrow('http://localhost/missing') }),
       ),
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 2,
-          domains: searchDomains('acme'),
+          domains: makeDomainFixtures('acme'),
         }),
       ),
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 3 }),
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 3,
+          offset: 0,
+          limit: 60,
+        }),
         Message.FailedFetchDomains({
           searchGeneration: 3,
           error: 'Outdated failure',
@@ -633,10 +769,15 @@ describe('lookup completion order', () => {
         Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
       ),
       Command.resolve(
-        FetchDomains({ label: 'other', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'other',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 2,
-          domains: searchDomains('other'),
+          domains: makeDomainFixtures('other'),
         }),
       ),
       model(model => {
@@ -644,15 +785,20 @@ describe('lookup completion order', () => {
         expect(model.search._tag).toBe('Loading')
       }),
       Command.resolve(
-        FetchDomains({ label: 'acme', searchGeneration: 3 }),
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 3,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 3,
-          domains: searchDomains('acme'),
+          domains: makeDomainFixtures('acme'),
         }),
       ),
       model(model => {
         expect(model.search).toEqual(
-          SearchState.Ready({ domains: searchDomains('acme') }),
+          SearchState.Ready({ domains: makeDomainFixtures('acme') }),
         )
       }),
       resolveResultsListScrolls,
@@ -687,17 +833,17 @@ describe('lookup completion order', () => {
 
 describe('cart invariants', () => {
   test('adding a domain is idempotent and unavailable domains cannot enter the cart', () => {
-    const domain = Domain.make({
+    const domain = Domain.Available({
       name: 'acme.com',
       tld: 'com',
       price: 12,
-      isAvailable: true,
+      renewalPrice: 12,
+      years: 1,
+      isPremium: false,
     })
-    const unavailableDomain = Domain.make({
+    const unavailableDomain = Domain.Unconfirmed({
       name: 'foldkit.com',
       tld: 'com',
-      price: 12,
-      isAvailable: false,
     })
 
     story(
@@ -720,11 +866,13 @@ describe('cart invariants', () => {
   })
 
   test('filtering, sorting, searching, and clearing preserve cart selections', () => {
-    const domain = Domain.make({
+    const domain = Domain.Available({
       name: 'acme.com',
       tld: 'com',
       price: 12,
-      isAvailable: true,
+      renewalPrice: 12,
+      years: 1,
+      isPremium: false,
     })
 
     story(
@@ -738,10 +886,15 @@ describe('cart invariants', () => {
         Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=fresh') }),
       ),
       Command.resolve(
-        FetchDomains({ label: 'fresh', searchGeneration: 2 }),
+        FetchDomains({
+          label: 'fresh',
+          searchGeneration: 2,
+          offset: 0,
+          limit: 60,
+        }),
         Message.SucceededFetchDomains({
           searchGeneration: 2,
-          domains: searchDomains('fresh'),
+          domains: makeDomainFixtures('fresh'),
         }),
       ),
       message(Message.PressedEscape()),
@@ -765,4 +918,314 @@ describe('cart invariants', () => {
       ),
     )
   })
+})
+
+describe('progressive quotes', () => {
+  const firstQuotes = Array.take(makeDomainFixtures('acme'), 60)
+  const partialModel = modifyFields(readyModel('acme'), {
+    search: () => SearchState.Ready({ domains: firstQuotes }),
+  })
+  const scrollToNextPage = toParentMessage(
+    ResultsListBinding,
+    ResultsListBlock.Message.ObservedContainerScroll({
+      scrollTop: 1140,
+      scrollHeight: 10600,
+      containerHeight: 400,
+      anchor: VirtualList.ObservedAnchor.None(),
+    }),
+  )
+
+  test('scrolling requests a missing page once and merges quotes without losing previous prices', () => {
+    story(
+      update,
+      given(partialModel),
+      message(scrollToNextPage),
+      message(scrollToNextPage),
+      Command.expectHas(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 60,
+          limit: 60,
+        }),
+      ),
+      model(model => {
+        expect(model.search).toEqual(
+          SearchState.Ready({
+            domains: firstQuotes,
+            quoteRequest: QuoteRequest.Loading({ offset: 60, limit: 60 }),
+          }),
+        )
+      }),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 60,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 1,
+          domains: Array.take(Array.drop(makeDomainFixtures('acme'), 60), 60),
+        }),
+      ),
+      model(model => {
+        expect(model.search).toEqual(
+          SearchState.Ready({
+            domains: Array.take(makeDomainFixtures('acme'), 120),
+          }),
+        )
+      }),
+      resolveResultsListScrolls,
+    )
+  })
+
+  test('scrolling ahead while quotes are pending loads the latest viewport after completion', () => {
+    story(
+      update,
+      given(partialModel),
+      message(scrollToNextPage),
+      message(
+        toParentMessage(
+          ResultsListBinding,
+          ResultsListBlock.Message.ObservedContainerScroll({
+            scrollTop: 3762,
+            scrollHeight: 10600,
+            containerHeight: 400,
+            anchor: VirtualList.ObservedAnchor.None(),
+          }),
+        ),
+      ),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 60,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 1,
+          domains: Array.take(Array.drop(makeDomainFixtures('acme'), 60), 60),
+        }),
+      ),
+      Command.expectHas(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 180,
+          limit: 60,
+        }),
+      ),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 180,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 1,
+          domains: Array.take(Array.drop(makeDomainFixtures('acme'), 180), 60),
+        }),
+      ),
+      model(model => {
+        expect(model.search._tag).toBe('Ready')
+
+        if (model.search._tag === 'Ready') {
+          expect(model.search.domains).toHaveLength(180)
+          expect(model.search.quoteRequest._tag).toBe('Idle')
+          expect(
+            Array.some(
+              model.search.domains,
+              domain => domain.name === 'acme.eus',
+            ),
+          ).toBe(true)
+        }
+      }),
+      resolveResultsListScrolls,
+    )
+  })
+
+  test('a later-page failure preserves checked quotes and retries only that page', () => {
+    story(
+      update,
+      given(partialModel),
+      message(scrollToNextPage),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 60,
+          limit: 60,
+        }),
+        Message.FailedFetchDomains({
+          searchGeneration: 1,
+          error: 'Provider busy',
+        }),
+      ),
+      message(scrollToNextPage),
+      model(model =>
+        expect(model.search).toEqual(
+          SearchState.Ready({
+            domains: firstQuotes,
+            quoteRequest: QuoteRequest.Failed({
+              offset: 60,
+              limit: 60,
+              error: 'Provider busy',
+            }),
+          }),
+        ),
+      ),
+      message(Message.ClickedRetrySearch()),
+      Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 60,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 1,
+          domains: Array.take(Array.drop(makeDomainFixtures('acme'), 60), 60),
+        }),
+      ),
+      model(model =>
+        expect(
+          model.search._tag === 'Ready' && model.search.domains.length,
+        ).toBe(120),
+      ),
+      resolveResultsListScrolls,
+    )
+  })
+
+  test.each([
+    Message.UpdatedSortOrder({ value: 'PriceAscending' }),
+    Message.UpdatedAvailabilityFilter({ value: 'Available' }),
+  ])(
+    'fetches the complete catalog for global sorting and availability filtering',
+    filterMessage => {
+      story(
+        update,
+        given(partialModel),
+        message(filterMessage),
+        Command.resolve(
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 1,
+            offset: 0,
+            limit: 556,
+          }),
+          Message.SucceededFetchDomains({
+            searchGeneration: 1,
+            domains: makeDomainFixtures('acme'),
+          }),
+        ),
+        model(model =>
+          expect(model.search).toEqual(
+            SearchState.Ready({ domains: makeDomainFixtures('acme') }),
+          ),
+        ),
+        resolveResultsListScrolls,
+      )
+    },
+  )
+
+  test('a new query rejects a late page from the previous query', () => {
+    story(
+      update,
+      given(partialModel),
+      message(scrollToNextPage),
+      message(Message.UpdatedSearch({ value: 'other' })),
+      Command.resolve(
+        ReplaceSearchUrl({ q: Option.some('other') }),
+        Message.CompletedReplaceSearchUrl(),
+      ),
+      message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=other') }),
+      ),
+      Command.resolve(
+        FetchDomains({
+          label: 'acme',
+          searchGeneration: 1,
+          offset: 60,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 1,
+          domains: Array.take(Array.drop(makeDomainFixtures('acme'), 60), 60),
+        }),
+      ),
+      model(model => expect(model.search._tag).toBe('Loading')),
+      Command.resolve(
+        FetchDomains({
+          label: 'other',
+          searchGeneration: 3,
+          offset: 0,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 3,
+          domains: Array.take(makeDomainFixtures('other'), 60),
+        }),
+      ),
+      model(model =>
+        expect(model.search).toEqual(
+          SearchState.Ready({
+            domains: Array.take(makeDomainFixtures('other'), 60),
+            quoteRequest: QuoteRequest.Loading({ offset: 60, limit: 60 }),
+          }),
+        ),
+      ),
+      Command.resolve(
+        FetchDomains({
+          label: 'other',
+          searchGeneration: 3,
+          offset: 60,
+          limit: 60,
+        }),
+        Message.SucceededFetchDomains({
+          searchGeneration: 3,
+          domains: Array.take(Array.drop(makeDomainFixtures('other'), 60), 60),
+        }),
+      ),
+      model(model =>
+        expect(model.search).toEqual(
+          SearchState.Ready({
+            domains: Array.take(makeDomainFixtures('other'), 120),
+          }),
+        ),
+      ),
+      resolveResultsListScrolls,
+      Command.resolveAllExact(
+        [cancelSearch(), Message.CompletedCancelSearch()],
+        [cancelSearch(), Message.CompletedCancelSearch()],
+      ),
+    )
+  })
+})
+
+test('removing a cart item preserves the other selections and requests focus on the close button', () => {
+  story(
+    update,
+    given(
+      modifyFields(readyModel('acme'), {
+        cart: () =>
+          pipe(
+            makeDomainFixtures('acme'),
+            Array.filter(Domain.isAnyOf(['Available'])),
+            Array.take(2),
+          ),
+      }),
+    ),
+    message(Message.ClickedRemoveCartDomain({ name: 'acme.com' })),
+    model(model => {
+      expect(Array.map(model.cart, domain => domain.name)).toEqual(['acme.dev'])
+      expect(routeToQuery(model.route)).toBe('acme')
+    }),
+    Command.resolve(
+      FocusCartCloseButton,
+      Message.CompletedFocusCartCloseButton(),
+    ),
+  )
 })

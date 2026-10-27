@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --outDir dist/client",
+    "preview": "wrangler dev --local",
     "typecheck": "tsc --noEmit && pnpm --dir infra exec tsc --noEmit",
     "format": "oxfmt --disable-nested-config",
     "test": "vitest run",
@@ -17,17 +17,21 @@
     "deploy": "pnpm --dir infra exec alchemy deploy",
     "dev:cloudflare": "pnpm --dir infra exec alchemy dev",
     "test:e2e:worker": "playwright test --config playwright.worker.config.ts",
-    "test:e2e:preview": "playwright test --config playwright.preview.config.ts"
+    "test:e2e:preview": "playwright test --config playwright.preview.config.ts",
+    "test:capacity": "playwright test --config playwright.capacity.config.ts",
+    "test:live": "playwright test --config playwright.live.config.ts"
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",
+    "@foldkit/devtools": "0.169.0-canary.f3be22cfeefe",
     "@foldkit/ui": "0.169.0-canary.f3be22cfeefe",
     "effect": "4.0.0",
     "foldkit": "0.169.0-canary.f3be22cfeefe"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@cloudflare/workers-types": "5.20261026.1",
     "@effect/tsgo": "0.50.0",
-    "@foldkit/devtools": "0.169.0-canary.f3be22cfeefe",
     "@foldkit/devtools-mcp": "0.25.0-canary.f3be22cfeefe",
     "@foldkit/oxlint-plugin": "0.15.3-canary.f3be22cfeefe",
     "@foldkit/vite-plugin": "0.28.0-canary.f3be22cfeefe",

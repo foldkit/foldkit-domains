@@ -5,7 +5,11 @@ const BASE_URL = `http://127.0.0.1:${PORT}`
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: '**/domains.spec.ts',
+  testMatch: [
+    '**/domains.spec.ts',
+    '**/domains.a11y.spec.ts',
+    '**/domains.mobile.spec.ts',
+  ],
   fullyParallel: true,
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 2 : 0,
@@ -16,7 +20,7 @@ export default defineConfig({
     { name: 'webkit', use: devices['Desktop Safari'] },
   ],
   webServer: {
-    command: `pnpm build && pnpm preview --host 127.0.0.1 --port ${PORT} --strictPort`,
+    command: `pnpm build && pnpm preview --ip 127.0.0.1 --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 120_000,

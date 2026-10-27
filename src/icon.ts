@@ -1,6 +1,6 @@
 import { type Html, inertHtml as ih } from 'foldkit/html'
 
-const icon = (children: ReadonlyArray<Html>): Html =>
+const icon = (children: ReadonlyArray<Html>) =>
   ih.svg(
     [
       ih.AriaHidden(true),
@@ -18,7 +18,7 @@ const icon = (children: ReadonlyArray<Html>): Html =>
     children,
   )
 
-export const cart = (): Html =>
+export const cart = () =>
   icon([
     ih.path([
       ih.D(
@@ -34,16 +34,16 @@ export const cart = (): Html =>
     ih.circle([ih.Cx('8'), ih.Cy('20'), ih.R('2')]),
   ])
 
-export const search = (): Html =>
+export const search = () =>
   icon([
     ih.path([ih.D('m21 21-4.34-4.34')]),
     ih.circle([ih.Cx('11'), ih.Cy('11'), ih.R('8')]),
   ])
 
-export const close = (): Html =>
+export const close = () =>
   icon([ih.path([ih.D('M18 6 6 18')]), ih.path([ih.D('m6 6 12 12')])])
 
-export const check = (): Html => icon([ih.path([ih.D('M20 6 9 17l-5-5')])])
+export const check = () => icon([ih.path([ih.D('M20 6 9 17l-5-5')])])
 
-export const arrowUpRight = (): Html =>
+export const arrowUpRight = () =>
   icon([ih.path([ih.D('M7 7h10v10')]), ih.path([ih.D('M7 17 17 7')])])

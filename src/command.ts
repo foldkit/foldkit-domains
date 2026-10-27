@@ -1,37 +1,141 @@
-import { Duration, Effect, Layer, Schema } from 'effect'
+import {
+  Clock,
+  Duration,
+  Effect,
+  Layer,
+  Match,
+  Option,
+  Ref,
+  Schema,
+} from 'effect'
 import { Dom } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
 import { ApplicationDefinition } from './definition'
-import { searchDomains } from './domain'
+import { QueryWindow } from './domain'
+import { RateLimitSource, SearchError } from './domainsRpc'
 import { Message } from './message'
+import { RESULTS_LIST_ID, ResultsListScrollKey } from './resultsList'
 import { searchRouter } from './route'
+import { DomainsClient } from './rpc'
 
-const SEARCH_DELAY_MILLISECONDS = 450
+const SEARCH_DEBOUNCE_MILLISECONDS = 350
+const SEARCH_TIMEOUT = '20 seconds'
+const SearchCooldown = Schema.Struct({
+  source: RateLimitSource,
+  deadlineMillis: Schema.Number,
+})
 
 export const FetchDomains = ApplicationDefinition.makeCommand('FetchDomains', {
-  args: { label: Schema.String, searchGeneration: Schema.Number },
+  args: {
+    label: Schema.String,
+    searchGeneration: Schema.Number,
+    offset: QueryWindow.fields.offset,
+    limit: QueryWindow.fields.limit,
+  },
   messages: [Message.SucceededFetchDomains, Message.FailedFetchDomains],
   interrupt: true,
   handler: function* () {
-    return ({ label, searchGeneration }) =>
-      Effect.gen(function* () {
-        yield* Effect.sleep(Duration.millis(SEARCH_DELAY_MILLISECONDS))
-        const domains = yield* Effect.try(() => searchDomains(label))
+    const client = yield* DomainsClient
+    const cooldown = yield* Ref.make<Option.Option<typeof SearchCooldown.Type>>(
+      Option.none(),
+    )
+
+    return ({ label, searchGeneration, offset, limit }) => {
+      const failSearch = () =>
+        Effect.succeed(
+          Message.FailedFetchDomains({
+            searchGeneration,
+            error: 'Could not search domains. Please try again.',
+          }),
+        )
+
+      return Effect.gen(function* () {
+        yield* Effect.sleep(Duration.millis(SEARCH_DEBOUNCE_MILLISECONDS))
+        const nowMillis = yield* Clock.currentTimeMillis
+        const maybeCooldown = yield* Ref.get(cooldown)
+
+        if (
+          Option.isSome(maybeCooldown) &&
+          maybeCooldown.value.deadlineMillis > nowMillis
+        ) {
+          return yield* Effect.fail(
+            SearchError.RateLimited({
+              source: maybeCooldown.value.source,
+              retryAfterSeconds: Math.ceil(
+                Duration.toSeconds(
+                  Duration.millis(
+                    maybeCooldown.value.deadlineMillis - nowMillis,
+                  ),
+                ),
+              ),
+            }),
+          )
+        }
+
+        const domains = yield* client
+          .SearchDomains({ label, offset, limit })
+          .pipe(
+            Effect.tapError(error => {
+              if (error._tag === 'RateLimited') {
+                return Effect.gen(function* () {
+                  const nowMillis = yield* Clock.currentTimeMillis
+                  yield* Ref.set(
+                    cooldown,
+                    Option.some(
+                      SearchCooldown.make({
+                        source: error.source,
+                        deadlineMillis:
+                          nowMillis +
+                          Duration.toMillis(
+                            Duration.seconds(error.retryAfterSeconds),
+                          ),
+                      }),
+                    ),
+                  )
+                })
+              } else {
+                return Effect.void
+              }
+            }),
+          )
+
         return Message.SucceededFetchDomains({
           searchGeneration,
           domains,
         })
       }).pipe(
-        Effect.catch(() =>
-          Effect.succeed(
-            Message.FailedFetchDomains({
-              searchGeneration,
-              error: 'Could not search domains. Please try again.',
-            }),
-          ),
-        ),
+        Effect.timeout(SEARCH_TIMEOUT),
+        Effect.catchTags({
+          RateLimited: ({ source, retryAfterSeconds }) => {
+            const unit = retryAfterSeconds === 1 ? 'second' : 'seconds'
+            const description = Match.value(source).pipe(
+              Match.when('Client', () => 'Too many searches.'),
+              Match.when('Application', () => 'Search is busy.'),
+              Match.when('Registrar', () => 'The domain provider is busy.'),
+              Match.exhaustive,
+            )
+
+            return Effect.succeed(
+              Message.FailedFetchDomains({
+                searchGeneration,
+                error: `${description} Please try again in ${retryAfterSeconds} ${unit}.`,
+              }),
+            )
+          },
+          Unavailable: () =>
+            Effect.succeed(
+              Message.FailedFetchDomains({
+                searchGeneration,
+                error:
+                  'Could not check availability and prices. Please try again.',
+              }),
+            ),
+        }),
+        Effect.catch(failSearch),
+        Effect.catchDefect(failSearch),
       )
+    }
   },
 })
 
@@ -89,6 +193,99 @@ export const FocusSearchInput = ApplicationDefinition.makeCommand(
   },
 )
 
+export const FocusCartButton = ApplicationDefinition.makeCommand(
+  'FocusCartButton',
+  {
+    messages: [Message.CompletedFocusCartButton],
+    handler: function* () {
+      return () =>
+        Dom.focus('#cart-button', { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusCartButton()),
+        )
+    },
+  },
+)
+
+export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
+  'FocusCartCloseButton',
+  {
+    messages: [Message.CompletedFocusCartCloseButton],
+    handler: function* () {
+      return () =>
+        Dom.focus('.cart-heading button', { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusCartCloseButton()),
+        )
+    },
+  },
+)
+
+const KEYBOARD_SCROLL_DISTANCE_PX = 40
+const PAGE_SCROLL_FRACTION = 0.9
+
+export const ScrollResultsList = ApplicationDefinition.makeCommand(
+  'ScrollResultsList',
+  {
+    args: { key: ResultsListScrollKey },
+    messages: [Message.CompletedScrollResultsList],
+    handler: function* () {
+      return ({ key }) =>
+        Effect.sync(() => {
+          const container = document.getElementById(RESULTS_LIST_ID)
+
+          if (!(container instanceof HTMLElement)) {
+            return
+          }
+
+          const pageDistance = container.clientHeight * PAGE_SCROLL_FRACTION
+          const nextScrollTop = Match.value(key).pipe(
+            Match.when(
+              'ArrowUp',
+              () => container.scrollTop - KEYBOARD_SCROLL_DISTANCE_PX,
+            ),
+            Match.when(
+              'ArrowDown',
+              () => container.scrollTop + KEYBOARD_SCROLL_DISTANCE_PX,
+            ),
+            Match.when('PageUp', () => container.scrollTop - pageDistance),
+            Match.when('PageDown', () => container.scrollTop + pageDistance),
+            Match.when('Home', () => 0),
+            Match.when(
+              'End',
+              () => container.scrollHeight - container.clientHeight,
+            ),
+            Match.exhaustive,
+          )
+
+          // NOTE: queued VirtualList observations can cancel newer programmatic requests. Instant native scrolling follows its pointer-scroll observation path.
+          container.scrollTo({ top: nextScrollTop, behavior: 'instant' })
+        }).pipe(Effect.as(Message.CompletedScrollResultsList()))
+    },
+  },
+)
+
+export const DismissSearchKeyboard = ApplicationDefinition.makeCommand(
+  'DismissSearchKeyboard',
+  {
+    messages: [Message.CompletedDismissSearchKeyboard],
+    handler: function* () {
+      return () =>
+        Effect.sync(() => {
+          // should this be a const shared and used wherever it is currently?
+          const input = document.getElementById('domain-search')
+
+          if (
+            window.matchMedia('(hover: none) and (pointer: coarse)').matches &&
+            input instanceof HTMLInputElement
+          ) {
+            input.blur()
+          }
+        }).pipe(Effect.as(Message.CompletedDismissSearchKeyboard()))
+    },
+  },
+)
+
 export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
   'ReleaseEarlySearchListeners',
   {
@@ -108,5 +305,9 @@ export const EffectsLayer = Layer.mergeAll(
   NavigateInternal.layer,
   LoadExternal.layer,
   FocusSearchInput.layer,
+  FocusCartButton.layer,
+  FocusCartCloseButton.layer,
+  ScrollResultsList.layer,
+  DismissSearchKeyboard.layer,
   ReleaseEarlySearchListeners.layer,
 )

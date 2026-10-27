@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
 
+import { mockDomainSearch } from './api'
+
+test.beforeEach(async ({ page }) => {
+  await mockDomainSearch(page)
+})
+
 test('serves unknown paths with HTTP 404 and recovers through the Worker', async ({
   page,
   request,
@@ -22,4 +28,14 @@ test('serves unknown paths with HTTP 404 and recovers through the Worker', async
   await expect(page.locator('.domain-card').first()).toContainText(
     'worker-search.com',
   )
+})
+
+test('serves the RPC endpoint and bounds request bodies', async ({
+  request,
+}) => {
+  const response = await request.post('/rpc', {
+    data: { padding: 'x'.repeat(2000) },
+  })
+  expect(response.status()).toBe(413)
+  expect(response.headers()['cache-control']).toBe('no-store')
 })

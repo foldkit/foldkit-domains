@@ -1,36 +1,53 @@
 import { Block } from 'foldkit'
 
-import { ApplicationDefinition, makeNoopStep } from './definition'
+import { DialogBlock } from '@foldkit/ui'
+
+import { FocusCartButton } from './command'
+import {
+  makeBinding,
+  makeCommandsStep,
+  makeComposition,
+  makeNoopStep,
+  makeOutMessageFold,
+} from './definition'
+import { loadVisibleQuotesStep } from './quoteLoading'
 import {
   RESULTS_GROUP_HEIGHT_PX,
   RESULTS_LIST_ID,
   ResultsListBlock,
 } from './resultsList'
 
-const foldResultsListOutMessage = ApplicationDefinition.makeOutMessageFold(
-  ResultsListBlock,
-  {
-    ObservedContainerScroll: makeNoopStep,
+export const ResultsListBinding = makeBinding(ResultsListBlock, {
+  field: 'resultsList',
+  init: {
+    contextToArgs: () => [
+      {
+        id: RESULTS_LIST_ID,
+        rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
+      },
+    ],
   },
-)
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ResultsListBlock, {
+    ObservedContainerScroll: () => loadVisibleQuotesStep,
+  }),
+})
 
-export const ResultsListBinding = ApplicationDefinition.makeBinding(
-  ResultsListBlock,
-  {
-    field: 'resultsList',
-    init: {
-      contextToArgs: () => [
-        {
-          id: RESULTS_LIST_ID,
-          rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
-        },
-      ],
-    },
-  },
-).withOutMessagePolicy({ fold: foldResultsListOutMessage })
+export const CART_DIALOG_ID = 'domains-cart'
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
-  bindings: [ResultsListBinding],
+export const CartDialogBinding = makeBinding(DialogBlock, {
+  field: 'cartDialog',
+  init: { contextToArgs: () => [{ id: CART_DIALOG_ID }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(DialogBlock, {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+    CompletedClose: () => makeCommandsStep(() => [FocusCartButton()]),
+  }),
+})
+
+export const ApplicationComposition = makeComposition({
+  bindings: [ResultsListBinding, CartDialogBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition

@@ -1,0 +1,42 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "domains-coordination-test",
+  "main": "./coordinatedWorker.ts",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": [
+    "new_module_registry",
+    "nodejs_compat",
+    "enable_request_signal",
+    "request_signal_passthrough",
+  ],
+  "vars": {
+    "REGISTRAR_REQUESTS_PER_SECOND": "1000",
+    "REGISTRAR_REQUESTS_PER_MINUTE": "60000",
+    "REGISTRAR_MAX_CONCURRENT": "24",
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DOMAIN_QUOTES",
+        "class_name": "FixtureDomainSearchCoordinator",
+      },
+      {
+        "name": "REGISTRAR_BUDGET",
+        "class_name": "FixtureRegistrarCoordinator",
+      },
+      { "name": "LOW_QUOTES", "class_name": "LowDomainSearchCoordinator" },
+      { "name": "LOW_BUDGET", "class_name": "LowRegistrarCoordinator" },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "FixtureDomainSearchCoordinator",
+        "FixtureRegistrarCoordinator",
+        "LowDomainSearchCoordinator",
+        "LowRegistrarCoordinator",
+      ],
+    },
+  ],
+}

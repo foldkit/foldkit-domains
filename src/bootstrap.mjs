@@ -8,6 +8,7 @@
 
   const controller = new AbortController()
   const options = { signal: controller.signal }
+  const mobileMediaQuery = '(hover: none) and (pointer: coarse)'
   const updatePendingResults = () => {
     const label =
       input.value
@@ -65,7 +66,13 @@
   )
   input.form?.addEventListener(
     'submit',
-    event => event.preventDefault(),
+    event => {
+      event.preventDefault()
+
+      if (window.matchMedia(mobileMediaQuery).matches) {
+        input.blur()
+      }
+    },
     options,
   )
   app.querySelector('.clear-search')?.addEventListener(
@@ -77,12 +84,39 @@
     },
     options,
   )
+  const domainsHome = app.querySelector('a.brand')
+
+  if (domainsHome instanceof HTMLAnchorElement) {
+    domainsHome.addEventListener(
+      'click',
+      event => {
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey ||
+          event.defaultPrevented
+        ) {
+          return
+        }
+
+        event.preventDefault()
+        history.pushState(history.state, '', domainsHome.href)
+        restoreQueryFromUrl()
+        input.focus({ preventScroll: true })
+      },
+      options,
+    )
+  }
+
   window.addEventListener('popstate', restoreQueryFromUrl, options)
   document.addEventListener('domains:ready', () => controller.abort(), {
     once: true,
   })
 
-  const desktopMediaQuery = '(min-width: 701px)'
+  const desktopMediaQuery =
+    '(min-width: 701px) and (hover: hover) and (pointer: fine)'
 
   if (
     window.matchMedia(desktopMediaQuery).matches &&
