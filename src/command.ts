@@ -15,7 +15,7 @@ import { ApplicationDefinition } from './definition'
 import { QueryWindow } from './domain'
 import { RateLimitSource, SearchError } from './domainsRpc'
 import { Message } from './message'
-import { RESULTS_LIST_ID, ResultsListScrollKey } from './resultsList'
+import { PageScrollKey } from './resultsList'
 import { searchRouter } from './route'
 import { DomainsClient } from './rpc'
 
@@ -224,46 +224,31 @@ export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
 const KEYBOARD_SCROLL_DISTANCE_PX = 40
 const PAGE_SCROLL_FRACTION = 0.9
 
-export const ScrollResultsList = ApplicationDefinition.makeCommand(
-  'ScrollResultsList',
-  {
-    args: { key: ResultsListScrollKey },
-    messages: [Message.CompletedScrollResultsList],
-    handler: function* () {
-      return ({ key }) =>
-        Effect.sync(() => {
-          const container = document.getElementById(RESULTS_LIST_ID)
-
-          if (!(container instanceof HTMLElement)) {
-            return
-          }
-
-          const pageDistance = container.clientHeight * PAGE_SCROLL_FRACTION
-          const nextScrollTop = Match.value(key).pipe(
-            Match.when(
-              'ArrowUp',
-              () => container.scrollTop - KEYBOARD_SCROLL_DISTANCE_PX,
-            ),
-            Match.when(
-              'ArrowDown',
-              () => container.scrollTop + KEYBOARD_SCROLL_DISTANCE_PX,
-            ),
-            Match.when('PageUp', () => container.scrollTop - pageDistance),
-            Match.when('PageDown', () => container.scrollTop + pageDistance),
-            Match.when('Home', () => 0),
-            Match.when(
-              'End',
-              () => container.scrollHeight - container.clientHeight,
-            ),
-            Match.exhaustive,
-          )
-
-          // NOTE: queued VirtualList observations can cancel newer programmatic requests. Instant native scrolling follows its pointer-scroll observation path.
-          container.scrollTo({ top: nextScrollTop, behavior: 'instant' })
-        }).pipe(Effect.as(Message.CompletedScrollResultsList()))
-    },
+export const ScrollPage = ApplicationDefinition.makeCommand('ScrollPage', {
+  args: { key: PageScrollKey },
+  messages: [Message.CompletedScrollPage],
+  handler: function* () {
+    return ({ key }) =>
+      Effect.sync(() => {
+        const pageDistance = window.innerHeight * PAGE_SCROLL_FRACTION
+        const top = Match.value(key).pipe(
+          Match.when(
+            'ArrowUp',
+            () => window.scrollY - KEYBOARD_SCROLL_DISTANCE_PX,
+          ),
+          Match.when(
+            'ArrowDown',
+            () => window.scrollY + KEYBOARD_SCROLL_DISTANCE_PX,
+          ),
+          Match.when('PageUp', () => window.scrollY - pageDistance),
+          Match.when('PageDown', () => window.scrollY + pageDistance),
+          Match.when('Home', () => 0),
+          Match.exhaustive,
+        )
+        window.scrollTo({ top, behavior: 'instant' })
+      }).pipe(Effect.as(Message.CompletedScrollPage()))
   },
-)
+})
 
 export const DismissSearchKeyboard = ApplicationDefinition.makeCommand(
   'DismissSearchKeyboard',
@@ -307,7 +292,7 @@ export const EffectsLayer = Layer.mergeAll(
   FocusSearchInput.layer,
   FocusCartButton.layer,
   FocusCartCloseButton.layer,
-  ScrollResultsList.layer,
+  ScrollPage.layer,
   DismissSearchKeyboard.layer,
   ReleaseEarlySearchListeners.layer,
 )

@@ -36,7 +36,7 @@ export const Message = defineMessageUnion({
   CompletedFocusSearchInput: {},
   CompletedFocusCartButton: {},
   CompletedFocusCartCloseButton: {},
-  CompletedScrollResultsList: {},
+  CompletedScrollPage: {},
   CompletedDismissSearchKeyboard: {},
   CompletedCancelSearch: {},
   CompletedReleaseEarlySearchListeners: {},

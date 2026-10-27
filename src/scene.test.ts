@@ -1,4 +1,4 @@
-import { Array, Option, Schema } from 'effect'
+import { Array, Option } from 'effect'
 import {
   Command,
   Mount,
@@ -32,7 +32,7 @@ import {
   FocusCartCloseButton,
   FocusSearchInput,
   ReplaceSearchUrl,
-  ScrollResultsList,
+  ScrollPage,
   cancelSearch,
 } from './command'
 import { CART_DIALOG_ID } from './composition'
@@ -41,11 +41,7 @@ import { makeDomainFixtures } from './domain.fixture'
 import { Message } from './message'
 import { SearchState } from './model'
 import { emptyModel, readyModel } from './model.fixture'
-import {
-  RESULTS_LIST_ID,
-  ResultsListBlock,
-  ResultsListScrollKey,
-} from './resultsList'
+import { PageScrollKey, RESULTS_LIST_ID, ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
 import { update } from './update'
 import { view } from './view'
@@ -68,7 +64,10 @@ const resolveResultsListScrolls = <Model, Message, OutMessage>(
   )
 
 const measureResultsList = Mount.resolve(
-  VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
+  VirtualList.test.ObserveVirtualList({
+    id: RESULTS_LIST_ID,
+    scrollContainer: VirtualList.ScrollContainer.Window(),
+  }),
   ResultsListBlock.Message.ResizedContainer({
     containerWidth: 1000,
     containerHeight: 400,
@@ -260,7 +259,10 @@ describe('search recovery', () => {
       expect(role('alert')).toContainText('Temporarily unavailable'),
       expect(selector('#domain-results')).toBeAbsent(),
       Mount.expectEnded(
-        VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
+        VirtualList.test.ObserveVirtualList({
+          id: RESULTS_LIST_ID,
+          scrollContainer: VirtualList.ScrollContainer.Window(),
+        }),
       ),
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
       click(role('button', { name: 'Try again' })),
@@ -356,7 +358,10 @@ describe('result controls', () => {
       expect(text('0 domains · Registration prices in USD')).toExist(),
       expect(selector('#domain-results')).toBeAbsent(),
       Mount.expectEnded(
-        VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
+        VirtualList.test.ObserveVirtualList({
+          id: RESULTS_LIST_ID,
+          scrollContainer: VirtualList.ScrollContainer.Window(),
+        }),
       ),
       expectAll(all.role('article')).toHaveCount(4),
       inside(first(all.role('article')), expect(text('foldkit.com')).toExist()),
@@ -412,7 +417,10 @@ describe('result controls', () => {
       resolveResultsListScrolls,
       expect(selector('#domain-results')).toBeAbsent(),
       Mount.expectEnded(
-        VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
+        VirtualList.test.ObserveVirtualList({
+          id: RESULTS_LIST_ID,
+          scrollContainer: VirtualList.ScrollContainer.Window(),
+        }),
       ),
       submit(role('search')),
       Command.resolve(
@@ -457,7 +465,10 @@ describe('result controls', () => {
       resolveResultsListScrolls,
       expect(selector('#domain-results')).toBeAbsent(),
       Mount.expectEnded(
-        VirtualList.test.ObserveVirtualList({ id: RESULTS_LIST_ID }),
+        VirtualList.test.ObserveVirtualList({
+          id: RESULTS_LIST_ID,
+          scrollContainer: VirtualList.ScrollContainer.Window(),
+        }),
       ),
       expect(text('0 domains · Registration prices in USD')).toExist(),
       Command.resolve(cancelSearch(), Message.CompletedCancelSearch()),
@@ -685,20 +696,29 @@ describe('accessibility semantics', () => {
   })
 })
 
-test.each(['Home', 'End', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'])(
-  'the results viewport consumes %s through its scroll Command',
+test('End requests the final virtual result through the bound list operation', () => {
+  scene(
+    { update, view },
+    given(readyModel('acme')),
+    measureResultsList,
+    keydown(selector('#domain-results'), 'End'),
+    expectHandled(),
+    Command.expectExact(VirtualList.test.ApplyScroll),
+    resolveResultsListScrolls,
+  )
+})
+
+test.each(PageScrollKey.literals)(
+  'the focused results list scrolls the page instantly on %s',
   key => {
-    const scroll = ScrollResultsList({
-      key: Schema.decodeUnknownSync(ResultsListScrollKey)(key),
-    })
     scene(
       { update, view },
       given(readyModel('acme')),
       measureResultsList,
       keydown(selector('#domain-results'), key),
       expectHandled(),
-      Command.expectExact(scroll),
-      Command.resolve(scroll, Message.CompletedScrollResultsList()),
+      Command.expectExact(ScrollPage({ key })),
+      Command.resolve(ScrollPage({ key }), Message.CompletedScrollPage()),
     )
   },
 )

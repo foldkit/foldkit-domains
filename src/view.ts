@@ -421,12 +421,13 @@ const resultsListView = (
                 ),
               ),
             dynamicRowHeights: true,
+            rowLayout: 'Absolute',
             overscan: RESULTS_OVERSCAN,
             containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
             containerAttributes: childAttributes([
               h.AriaLabel('All domain results'),
               h.AriaDescription(
-                `${results.length} domains. Use arrow keys, Page Up, Page Down, Home, and End to scroll the results.`,
+                `${results.length} domains. Use arrow keys, Page Up, Page Down, Home, and End to scroll the page.`,
               ),
               h.Tabindex(0),
               h.OnKeyDownSelfPreventDefault(key =>
@@ -536,7 +537,7 @@ const searchResultsView = (
         ? h.div(
             [
               h.Class(
-                'mt-4 flex items-center justify-between gap-4 text-sm text-gray-400',
+                'sticky bottom-4 z-10 mt-4 flex items-center justify-between gap-4 rounded-md border border-gray-800 bg-gray-950 p-4 text-sm text-gray-300',
               ),
               h.Role('alert'),
             ],

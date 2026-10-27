@@ -331,3 +331,39 @@ for (const { name, width, height } of PHONE_VIEWPORTS.filter(
     }
   })
 }
+
+test('mobile results use page scrolling beneath the pinned navigation', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?q=acme')
+  await expect(page.locator('.domain-card .price').first()).toBeVisible()
+  const results = page.getByRole('list', { name: 'All domain results' })
+  await expect(results).toHaveCSS('overflow-y', 'visible')
+  await expect
+    .poll(() => results.evaluate(element => element.clientHeight))
+    .toBeGreaterThan(844)
+  await page.mouse.move(195, 500)
+  await page.mouse.wheel(0, 500)
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(0)
+  const firstScroll = await page.evaluate(() => window.scrollY)
+  await page.mouse.wheel(0, 400)
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(firstScroll)
+  await expect
+    .poll(() => results.evaluate(element => element.scrollTop))
+    .toBe(0)
+  await expect
+    .poll(() =>
+      page
+        .locator('.header')
+        .evaluate(element => element.getBoundingClientRect().top),
+    )
+    .toBe(0)
+  await expect(
+    page.getByRole('searchbox', { name: 'Search domains' }),
+  ).toBeInViewport()
+})

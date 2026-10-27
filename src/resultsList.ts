@@ -20,13 +20,17 @@ export const groupResults = (
     ResultGroup.make({ id: Array.headNonEmpty(domains).name, domains }),
   )
 
-export const ResultsListScrollKey = Schema.Literals([
+export const PageScrollKey = Schema.Literals([
   'ArrowUp',
   'ArrowDown',
   'PageUp',
   'PageDown',
   'Home',
-  'End',
+])
+
+export const ResultsListScrollKey = Schema.Union([
+  PageScrollKey,
+  Schema.Literals(['End']),
 ])
 
 export const RESULTS_LIST_ID = 'domain-results'

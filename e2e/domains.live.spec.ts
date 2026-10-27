@@ -128,8 +128,8 @@ test.describe('live mobile scrolling', () => {
     await viewport.scrollIntoViewIfNeeded()
 
     for (let swipe = 0; swipe < 100; swipe += 1) {
-      await viewport.evaluate(element => {
-        element.scrollTop += element.clientHeight * 0.8
+      await page.evaluate(() => {
+        window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'instant' })
         return new Promise<void>(resolve =>
           requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
         )
@@ -144,14 +144,16 @@ test.describe('live mobile scrolling', () => {
             }
 
             return viewport.evaluate(element => {
-              const viewportBounds = element.getBoundingClientRect()
+              const headerBottom =
+                document.querySelector('.header')?.getBoundingClientRect()
+                  .bottom ?? 0
               const visibleRows = Array.from(
                 element.querySelectorAll('.domain-row'),
               ).filter(row => {
                 const bounds = row.getBoundingClientRect()
                 return (
-                  bounds.bottom > viewportBounds.top &&
-                  bounds.top < viewportBounds.bottom
+                  bounds.bottom > headerBottom &&
+                  bounds.top < window.innerHeight
                 )
               })
               return (
@@ -165,9 +167,10 @@ test.describe('live mobile scrolling', () => {
           { timeout: 25_000 },
         )
         .toBe(true)
-      const isAtBottom = await viewport.evaluate(
-        element =>
-          element.scrollTop + element.clientHeight >= element.scrollHeight - 1,
+      const isAtBottom = await page.evaluate(
+        () =>
+          window.scrollY + window.innerHeight >=
+          document.documentElement.scrollHeight - 1,
       )
 
       if (isAtBottom) {

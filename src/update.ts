@@ -11,7 +11,7 @@ import {
   LoadExternal,
   NavigateInternal,
   ReplaceSearchUrl,
-  ScrollResultsList,
+  ScrollPage,
   cancelSearch,
 } from './command'
 import {
@@ -136,9 +136,13 @@ export const update = ApplicationComposition.makeUpdate({
     makeCommandsStep(() => [FocusSearchInput()]),
   ]),
   PressedEscape: clearSearchStep,
-  PressedResultsListScrollKey: makeCommandsStep.fromMessage(({ key }) => [
-    ScrollResultsList({ key }),
-  ]),
+  PressedResultsListScrollKey: makeStep.fromMessage(
+    ({ key }: typeof Message.PressedResultsListScrollKey.Type) =>
+      Match.value(key).pipe(
+        Match.when('End', () => ResultsListBinding.requestScrollToEnd()),
+        Match.orElse(key => makeCommandsStep(() => [ScrollPage({ key })])),
+      ),
+  ),
   ClickedClearSearch: Update.combineSteps([
     clearSearchStep,
     makeCommandsStep(() => [FocusSearchInput()]),
@@ -167,24 +171,24 @@ export const update = ApplicationComposition.makeUpdate({
   ),
   ClickedDomainsHome: makeNoopStep(),
   ClickedSkipToMain: makeNoopStep(),
-  UpdatedTldFilter: makeStep(
-    (_model, { value }: typeof Message.UpdatedTldFilter.Type) =>
+  UpdatedTldFilter: makeStep.fromMessage(
+    ({ value }: typeof Message.UpdatedTldFilter.Type) =>
       Update.combineSteps([
         makeFieldsStep(() => ({ tldFilter: () => value })),
         informResultsListStep,
         loadVisibleQuotesStep,
       ]),
   ),
-  UpdatedAvailabilityFilter: makeStep(
-    (_model, { value }: typeof Message.UpdatedAvailabilityFilter.Type) =>
+  UpdatedAvailabilityFilter: makeStep.fromMessage(
+    ({ value }: typeof Message.UpdatedAvailabilityFilter.Type) =>
       Update.combineSteps([
         makeFieldsStep(() => ({ availabilityFilter: () => value })),
         informResultsListStep,
         loadVisibleQuotesStep,
       ]),
   ),
-  UpdatedSortOrder: makeStep(
-    (_model, { value }: typeof Message.UpdatedSortOrder.Type) =>
+  UpdatedSortOrder: makeStep.fromMessage(
+    ({ value }: typeof Message.UpdatedSortOrder.Type) =>
       Update.combineSteps([
         makeFieldsStep(() => ({ sortOrder: () => value })),
         informResultsListStep,
@@ -200,8 +204,8 @@ export const update = ApplicationComposition.makeUpdate({
   ClickedRemoveDomain: makeFieldsStep.fromMessage(({ name }) => ({
     cart: Array.filter(domain => domain.name !== name),
   })),
-  ClickedRemoveCartDomain: makeStep(
-    (_model, { name }: typeof Message.ClickedRemoveCartDomain.Type) =>
+  ClickedRemoveCartDomain: makeStep.fromMessage(
+    ({ name }: typeof Message.ClickedRemoveCartDomain.Type) =>
       Update.combineSteps([
         makeFieldsStep(() => ({
           cart: Array.filter(domain => domain.name !== name),
@@ -263,7 +267,7 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedFocusSearchInput: makeNoopStep(),
   CompletedFocusCartButton: makeNoopStep(),
   CompletedFocusCartCloseButton: makeNoopStep(),
-  CompletedScrollResultsList: makeNoopStep(),
+  CompletedScrollPage: makeNoopStep(),
   CompletedDismissSearchKeyboard: makeNoopStep(),
   CompletedCancelSearch: makeNoopStep(),
   CompletedReleaseEarlySearchListeners: makeNoopStep(),

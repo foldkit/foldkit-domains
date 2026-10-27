@@ -278,11 +278,11 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
   const results = page.getByRole('list', { name: 'All domain results' })
   await page.keyboard.press('ArrowDown')
   await expect
-    .poll(() => results.evaluate(element => element.scrollTop))
+    .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(0)
   await page.keyboard.press('PageDown')
   await expect
-    .poll(() => results.evaluate(element => element.scrollTop))
+    .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(0)
   await expect(results).toBeFocused()
   await page.keyboard.press('End')

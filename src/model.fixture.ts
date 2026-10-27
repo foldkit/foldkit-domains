@@ -2,7 +2,7 @@ import { Option } from 'effect'
 import { Url } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock } from '@foldkit/ui'
+import { DialogBlock, VirtualList } from '@foldkit/ui'
 
 import { CART_DIALOG_ID } from './composition'
 import { makeDomainFixtures } from './domain.fixture'
@@ -21,6 +21,7 @@ export const emptyModel = Model.make({
   resultsList: ResultsListBlock.init({
     id: RESULTS_LIST_ID,
     rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
+    scrollContainer: VirtualList.ScrollContainer.Window(),
   }).model,
   tldFilter: 'All',
   availabilityFilter: 'All',

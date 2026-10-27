@@ -225,7 +225,9 @@ test('first mobile tap moves the same input into the header before hydration', a
     await expect(input).toBeVisible()
     const originalInput = await input.elementHandle()
     await expect(input).not.toBeFocused()
-    expect((await input.boundingBox())?.y).toBeGreaterThan(200)
+    await expect
+      .poll(async () => (await input.boundingBox())?.y)
+      .toBeGreaterThan(200)
     await input.tap()
     await expect(input).toBeFocused()
     await expect
@@ -625,9 +627,7 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
 
   await expect
     .poll(async () => {
-      await viewport.evaluate(element => {
-        element.scrollTop = element.scrollHeight
-      })
+      await Page.scrollResultsToEnd(page)
       return rows.last().textContent()
     })
     .toContain('acme.zone')
@@ -635,10 +635,29 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
   expect(await rows.count()).toBeLessThan(60)
   await viewport.getByRole('button', { name: 'Add acme.zone to cart' }).click()
 
+  const anchorKey = await viewport
+    .locator('[data-virtual-list-item-key]')
+    .evaluateAll(elements => {
+      const row = elements.find(
+        element => element.getBoundingClientRect().bottom > 0,
+      )
+      if (row === undefined) {
+        throw new Error('A visible virtual row is required before resizing')
+      }
+      return row.getAttribute('data-virtual-list-item-key')
+    })
   await page.setViewportSize({ width: 390, height: 844 })
   await expect(
-    viewport.getByRole('button', { name: 'Remove acme.zone from cart' }),
-  ).toBeVisible()
+    viewport.locator(`[data-virtual-list-item-key="${anchorKey}"]`),
+  ).toBeInViewport()
+  await expect
+    .poll(async () => {
+      await Page.scrollResultsToEnd(page)
+      return viewport
+        .getByRole('button', { name: 'Remove acme.zone from cart' })
+        .count()
+    })
+    .toBe(1)
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
     .toBeLessThanOrEqual(390)
@@ -656,34 +675,28 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
     )
     .toBe(true)
   await expect
-    .poll(() => viewport.evaluate(element => element.scrollTop))
+    .poll(() => page.evaluate(() => window.scrollY))
     .toBeGreaterThan(0)
   await expect(page.locator('.result-count')).toContainText(
     'of 556 domains checked',
   )
   await expect
     .poll(async () => {
-      await viewport.evaluate(element => {
-        element.scrollTop = element.scrollHeight
-      })
+      await Page.scrollResultsToEnd(page)
       return rows.last().textContent()
     })
     .toContain('fresh.zone')
   await page.getByLabel('Sort results').selectOption('PriceAscending')
   await expect
     .poll(async () => {
-      await viewport.evaluate(element => {
-        element.scrollTop = 0
-      })
+      await Page.scrollResultsToOffset(page, 0)
       return rows.first().textContent()
     })
     .toContain('fresh.space')
   await page.getByLabel('Filter by TLD').selectOption('App')
   await expect(rows).toHaveCount(1)
   await expect(rows.first()).toContainText('fresh.app')
-  await expect
-    .poll(() => viewport.evaluate(element => element.scrollTop))
-    .toBe(0)
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
 
   await page.getByRole('button', { name: 'Cart, 1 domains' }).click()
   await expect(page.getByRole('region', { name: 'Your cart' })).toContainText(
@@ -836,9 +849,7 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
   await page.waitForLoadState('networkidle')
   expect(windows).toEqual([{ offset: 0, limit: 60 }])
   const viewport = page.locator('#domain-results')
-  await viewport.evaluate(element => {
-    element.scrollTop = 1140
-  })
+  await Page.scrollResultsToOffset(page, 1140)
   await expect(page.getByRole('alert')).toContainText(
     'Could not check availability and prices.',
   )
@@ -848,7 +859,13 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
     { offset: 60, limit: 60 },
   ])
   isLaterPageFailing = false
-  await page.getByRole('button', { name: 'Try again' }).click()
+  const retry = page.getByRole('button', { name: 'Try again' })
+  await expect(retry).toBeInViewport()
+  const retryScrollTop = await page.evaluate(() => window.scrollY)
+  await retry.click()
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBe(retryScrollTop)
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(viewport.locator('.skeleton-price')).toHaveCount(0)
   expect(windows).toEqual([
@@ -865,9 +882,7 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
   await expect(page.locator('.result-count')).toHaveText(
     '556 domains · Registration prices in USD',
   )
-  await viewport.evaluate(element => {
-    element.scrollTop = 0
-  })
+  await Page.scrollResultsToOffset(page, 0)
   await expect(viewport.locator('.domain-row').first()).toContainText('$1.99')
 })
 
@@ -932,9 +947,7 @@ for (const width of [1440, 390]) {
       const rows = viewport.locator('.domain-row')
       await expect
         .poll(async () => {
-          await viewport.evaluate(element => {
-            element.scrollTop = element.scrollHeight
-          })
+          await Page.scrollResultsToEnd(page)
           return rows.last().textContent()
         })
         .toContain('devtools-search.zone')

@@ -1,6 +1,6 @@
 import { Block } from 'foldkit'
 
-import { DialogBlock } from '@foldkit/ui'
+import { DialogBlock, VirtualList } from '@foldkit/ui'
 
 import { FocusCartButton } from './command'
 import {
@@ -24,12 +24,15 @@ export const ResultsListBinding = makeBinding(ResultsListBlock, {
       {
         id: RESULTS_LIST_ID,
         rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
+        scrollContainer: VirtualList.ScrollContainer.Window(),
       },
     ],
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(ResultsListBlock, {
     ObservedContainerScroll: () => loadVisibleQuotesStep,
+    ApproachedLoadedStart: makeNoopStep,
+    EndedContainerScroll: () => loadVisibleQuotesStep,
   }),
 })
 
