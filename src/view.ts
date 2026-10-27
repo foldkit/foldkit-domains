@@ -91,7 +91,6 @@ const headerView = (
           h.span([], ['Domains']),
         ],
       ),
-      searchFormView(model, h),
       h.div(
         [h.Class('ml-auto flex items-center gap-2 max-[700px]:gap-1.5')],
         [
@@ -569,7 +568,7 @@ const footerView = (h: ApplicationViewBuilder): Html =>
       h.span([], ['Demo availability & pricing']),
       h.a(
         [h.Href('https://github.com/foldkit/foldkit-domains')],
-        ['View source ↗'],
+        ['View source', Icon.arrowUpRight()],
       ),
     ],
   )
@@ -589,6 +588,7 @@ const searchPageView = (
     ],
     [
       headerView(model, h),
+      searchFormView(model, h),
       h.main(
         [h.Id('main'), h.Class('flex-1')],
         [heroView(h), resultsView(model, h)],
