@@ -6,13 +6,18 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --outDir dist/client",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm --dir infra exec tsc --noEmit",
     "format": "oxfmt --disable-nested-config",
     "test": "vitest run",
     "lint": "oxlint src && effect-tsgo patch --no-typescript --oxlint && oxlint --config .oxlintrc.effect.json --deny-warnings src",
     "format:check": "oxfmt --check --disable-nested-config",
     "test:e2e": "playwright test",
-    "test:e2e:dev": "playwright test --config playwright.dev.config.ts"
+    "test:e2e:dev": "playwright test --config playwright.dev.config.ts",
+    "plan": "pnpm --dir infra exec alchemy plan",
+    "deploy": "pnpm --dir infra exec alchemy deploy",
+    "dev:cloudflare": "pnpm --dir infra exec alchemy dev",
+    "test:e2e:worker": "playwright test --config playwright.worker.config.ts",
+    "test:e2e:preview": "playwright test --config playwright.preview.config.ts"
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",
@@ -36,13 +41,14 @@
     "tailwindcss": "4.3.3",
     "typescript": "7.1.0-beta",
     "vite": "^8.3.3",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "wrangler": "4.152.0"
   },
   "private": true,
   "description": "A statically rendered domain search example built with Foldkit",
   "license": "MIT",
   "packageManager": "pnpm@12.4.2",
   "engines": {
-    "node": ">=22.22.2"
+    "node": ">=24.11.1"
   }
 }

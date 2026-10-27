@@ -30,6 +30,7 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e
       - run: pnpm test:e2e:dev
+      - run: pnpm test:e2e:worker
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

@@ -417,3 +417,48 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
     'acme.zone',
   )
 })
+
+test('hands URL synchronization to the Runtime without leaving duplicate early listeners', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const replaceState = history.replaceState.bind(history)
+
+    history.replaceState = (data, unused, url) => {
+      const count = Number(
+        document.documentElement.dataset['historyReplacements'] ?? '0',
+      )
+      document.documentElement.dataset['historyReplacements'] = String(
+        count + 1,
+      )
+      replaceState(data, unused, url)
+    }
+    document.addEventListener('domains:ready', () => {
+      const count = Number(
+        document.documentElement.dataset['domainsReadyEvents'] ?? '0',
+      )
+      document.documentElement.dataset['domainsReadyEvents'] = String(count + 1)
+    })
+  })
+
+  await Page.assertLoadedCleanly(page)
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-domains-ready-events',
+    '1',
+  )
+  const before = Number(
+    await page.locator('html').getAttribute('data-history-replacements'),
+  )
+
+  await page
+    .getByRole('searchbox', { name: 'Search domains' })
+    .fill('after-handoff')
+  await expect(page).toHaveURL(/q=after-handoff/)
+  await expect(page.locator('html')).toHaveAttribute(
+    'data-history-replacements',
+    String(before + 1),
+  )
+  await expect(page.locator('.domain-card').first()).toContainText(
+    'after-handoff.com',
+  )
+})

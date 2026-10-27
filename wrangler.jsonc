@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "foldkit-domains",
+  "main": "./dist/server/fetch.js",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["new_module_registry"],
+  "assets": {
+    "directory": "./dist/client",
+  },
+}

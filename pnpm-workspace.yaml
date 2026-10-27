@@ -1,5 +1,9 @@
+packages:
+  - infra
 allowBuilds:
+  esbuild: true
   msgpackr-extract: false
+  workerd: true
 minimumReleaseAgeExclude:
   - '@foldkit/devtools-mcp@0.25.0-canary.f3be22cfeefe'
   - '@foldkit/devtools@0.169.0-canary.f3be22cfeefe'

@@ -2,14 +2,14 @@ import { Duration, Effect, Layer, Schema } from 'effect'
 import { Dom } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
-import { makeCommand } from './definition'
+import { ApplicationDefinition } from './definition'
 import { searchDomains } from './domain'
 import { Message } from './message'
 import { searchRouter } from './route'
 
 const SEARCH_DELAY_MILLISECONDS = 450
 
-export const FetchDomains = makeCommand('FetchDomains', {
+export const FetchDomains = ApplicationDefinition.makeCommand('FetchDomains', {
   args: { label: Schema.String, searchGeneration: Schema.Number },
   messages: [Message.SucceededFetchDomains, Message.FailedFetchDomains],
   interrupt: true,
@@ -35,32 +35,38 @@ export const FetchDomains = makeCommand('FetchDomains', {
   },
 })
 
-export const ReplaceSearchUrl = makeCommand('ReplaceSearchUrl', {
-  args: { q: Schema.Option(Schema.String) },
-  messages: [Message.CompletedReplaceSearchUrl],
-  handler: function* () {
-    return fields =>
-      Effect.gen(function* () {
-        yield* replaceUrl(searchRouter(fields))
+export const ReplaceSearchUrl = ApplicationDefinition.makeCommand(
+  'ReplaceSearchUrl',
+  {
+    args: { q: Schema.Option(Schema.String) },
+    messages: [Message.CompletedReplaceSearchUrl],
+    handler: function* () {
+      return fields =>
+        Effect.gen(function* () {
+          yield* replaceUrl(searchRouter(fields))
 
-        return Message.CompletedReplaceSearchUrl()
-      })
+          return Message.CompletedReplaceSearchUrl()
+        })
+    },
   },
-})
+)
 
 export const cancelSearch = () =>
   FetchDomains.Interrupt(() => Message.CompletedCancelSearch())
 
-export const NavigateInternal = makeCommand('NavigateInternal', {
-  args: { url: Schema.String },
-  messages: [Message.CompletedNavigateInternal],
-  handler: function* () {
-    return ({ url }) =>
-      pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal()))
+export const NavigateInternal = ApplicationDefinition.makeCommand(
+  'NavigateInternal',
+  {
+    args: { url: Schema.String },
+    messages: [Message.CompletedNavigateInternal],
+    handler: function* () {
+      return ({ url }) =>
+        pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal()))
+    },
   },
-})
+)
 
-export const LoadExternal = makeCommand('LoadExternal', {
+export const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
   args: { href: Schema.String },
   messages: [Message.CompletedLoadExternal],
   handler: function* () {
@@ -69,18 +75,21 @@ export const LoadExternal = makeCommand('LoadExternal', {
   },
 })
 
-export const FocusSearchInput = makeCommand('FocusSearchInput', {
-  messages: [Message.CompletedFocusSearchInput],
-  handler: function* () {
-    return () =>
-      Dom.focus('#domain-search', { preventScroll: true }).pipe(
-        Effect.ignore,
-        Effect.as(Message.CompletedFocusSearchInput()),
-      )
+export const FocusSearchInput = ApplicationDefinition.makeCommand(
+  'FocusSearchInput',
+  {
+    messages: [Message.CompletedFocusSearchInput],
+    handler: function* () {
+      return () =>
+        Dom.focus('#domain-search', { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusSearchInput()),
+        )
+    },
   },
-})
+)
 
-export const ReleaseEarlySearchListeners = makeCommand(
+export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
   'ReleaseEarlySearchListeners',
   {
     messages: [Message.CompletedReleaseEarlySearchListeners],

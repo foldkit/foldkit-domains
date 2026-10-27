@@ -30,3 +30,7 @@ Thumbs.db
 # Browser test output
 playwright-report/
 test-results/
+
+# Infrastructure output
+.alchemy/
+.wrangler/

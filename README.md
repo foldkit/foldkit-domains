@@ -6,7 +6,7 @@ The catalog contains 556 extensions from Vercel’s [supported domains](https://
 
 ## Run locally
 
-Requires Node.js 22.22.2 or newer and pnpm 12.4.2.
+Requires Node.js 24.11.1 or newer and pnpm 12.4.2.
 
 ```sh
 pnpm install
@@ -29,6 +29,31 @@ Development HTML links the stylesheet directly so the page is styled before clie
 Development reloads refresh the SSR module graph so Block Definitions and their Commands are recreated together. This avoids duplicate-declaration errors after editing Command modules in the pinned preview.
 
 Build and deploy the HTML and assets together. Foldkit assigns a coordinated build id so an old document cannot hydrate with an unrelated client bundle. Let the plugin generate the id when one `pnpm build` produces both artifacts.
+
+### Cloudflare through Alchemy
+
+[`infra/alchemy.run.ts`](infra/alchemy.run.ts) declares the site with [Alchemy’s Foldkit integration](https://alchemy.run/cloudflare/frontend/foldkit/) and Cloudflare-backed state. Alchemy builds the app with its existing Vite configuration and deploys the generated Fetch handler and static assets together. Prerendered `/` is served as an asset; unknown paths reach the handler and return HTTP 404.
+
+The `infra` workspace pins Alchemy and its Cloudflare integration to `2.0.0-beta.84`, with Effect `4.0.6`. The application uses Effect `4.0.0`, matching the Foldkit preview’s exact peers. Each workspace typechecks with its own compiler; the application retains the scaffolded TypeScript preview.
+
+Connect a Cloudflare account through Alchemy’s profile command, then preview and deploy the `preview` stage:
+
+```sh
+pnpm --dir infra exec alchemy profile edit --add Cloudflare
+pnpm run plan --stage preview
+pnpm run deploy --stage preview
+```
+
+The deploy command reports the public URL. Credentials live in the local Alchemy profile or deployment environment, and generated infrastructure output is gitignored. `pnpm dev:cloudflare` runs Alchemy’s native Foldkit development host on port 5195.
+
+The local Workers check builds the application and runs the production browser regressions against workerd, including HTTP 404 recovery. `wrangler.jsonc` configures this local check; the Alchemy Stack owns deployment. Test a deployed preview with its URL:
+
+```sh
+pnpm test:e2e:worker
+DOMAINS_BASE_URL=https://your-preview.workers.dev pnpm test:e2e:preview
+```
+
+Page-load-to-interaction measurements use the deployed preview with browser caching, device, and network conditions recorded. The demo’s 450 ms lookup delay represents pending pricing; input readiness is a separate measurement.
 
 ## Code map
 
@@ -66,11 +91,33 @@ pnpm test
 pnpm exec playwright install chromium webkit
 pnpm test:e2e
 pnpm test:e2e:dev
+pnpm test:e2e:worker
 ```
 
-Stories in `src/story.test.ts` exercise search transitions and stale responses. Scenes in `src/scene.test.ts` drive the view through search, filtering, sorting, and cart interactions.
+The regression suite protects these contracts:
 
-The browser suite builds production output and starts its own preview server on port 5180. Chromium and WebKit cover early typing, focus, selection, input identity, mobile placement, names while prices load, reloads, history, filters, sorting, and the cart. The development check uses port 5181 and holds client scripts back to verify the initial page has its styles. Both suites refuse to reuse an existing server on their port.
+| Invariant                                                                                                       | Coverage          |
+| --------------------------------------------------------------------------------------------------------------- | ----------------- |
+| Startup reads the URL, validates the label, and schedules the bootstrap handoff                                 | Story             |
+| URL changes start lookups; unrelated URL changes retain the current search                                      | Story             |
+| Superseded successes and failures cannot replace current state, including repeated queries and retries          | Story             |
+| Typing and clearing invalidate pending work before URL synchronization completes                                | Story             |
+| Empty queries return to Idle; invalid labels schedule no lookup; valid input recovers                           | Story             |
+| Current failures offer retry and successful retries restore results                                             | Story and Scene   |
+| Pending names render without prices, availability claims, or cart actions in cards and rows                     | Scene and browser |
+| TLD and availability filters compose, empty results recover, and every sort order works                         | Scene             |
+| Filter selections apply after pending availability resolves                                                     | Scene             |
+| Cart additions are idempotent, unavailable domains are rejected, and searches preserve selections               | Story             |
+| Card and row actions agree with the cart, removals update totals, and clear controls emit the required Commands | Scene             |
+| Virtualization bounds mounted rows and preserves scrolling through query and viewport changes                   | Scene and browser |
+| Bootstrap listeners release at handoff; early edits, focus, selection, and the input node survive hydration     | Browser           |
+| Reloads and history restore queries; initial development HTML is styled; unknown routes return HTTP 404         | Browser           |
+
+Stories and Scenes resolve Commands with explicit Messages. They test state transitions, view wiring, and declared lifecycle behavior without running the handlers. Browser tests exercise the bootstrap, Runtime, real DOM, navigation, and layout. The Workers suite runs the same browser regressions against workerd and verifies HTTP 404s and recovery.
+
+[CI](.github/workflows/ci.yml) runs formatting, types, lint, Stories, Scenes, and all three local browser suites on pull requests and pushes to `main`. The `check` job is the required branch check.
+
+The browser suite builds production output and starts its own preview server on port 5180. Chromium and WebKit cover early typing, focus, selection, input identity, mobile placement, names while prices load, reloads, history, filters, sorting, and the cart. The development check uses port 5181 and holds client scripts back to verify the initial page has its styles. The Workers suite uses port 5182. All local suites refuse to reuse an existing server on their port.
 
 The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support agent-assisted development. The MCP server uses the installed preview package.
 

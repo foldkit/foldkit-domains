@@ -26,7 +26,7 @@ export const emptyModel = Model.make({
   cartVisibility: 'Closed',
 })
 
-export const readyModel = (query: string) =>
+export const readyModel = (query: string): typeof Model.Type =>
   modifyFields(emptyModel, {
     route: () => ApplicationRoute.Search({ q: Option.some(query) }),
     searchGeneration: () => 1,

@@ -1,0 +1,16 @@
+import { defineConfig } from '@playwright/test'
+
+import productionConfig from './playwright.config'
+
+const baseURL = process.env['DOMAINS_BASE_URL']
+
+if (!baseURL) {
+  throw new Error('Set DOMAINS_BASE_URL to the deployed preview URL')
+}
+
+export default defineConfig({
+  ...productionConfig,
+  testMatch: ['**/domains.spec.ts', '**/domains.worker.spec.ts'],
+  use: { ...productionConfig.use, baseURL },
+  webServer: [],
+})
