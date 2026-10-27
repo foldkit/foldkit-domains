@@ -88,7 +88,7 @@
     --hero-search-gap: 24px;
     --search-height: 42px;
     --hero-suggestions-gap: 24px;
-    @apply flex min-h-svh flex-col;
+    @apply relative flex min-h-svh flex-col;
   }
 
   .header {
@@ -175,7 +175,7 @@
   }
 
   [data-search='active'] .search {
-    @apply top-[13px] h-[38px];
+    @apply fixed top-[13px] z-20 h-[38px];
     width: min(700px, calc(100vw - 580px));
   }
 
@@ -360,11 +360,15 @@
   }
 
   .footer {
-    @apply flex flex-wrap justify-center gap-6 px-6 py-[26px] text-[12px] text-gray-600;
+    @apply flex flex-wrap items-center justify-center gap-6 px-6 py-[26px] text-[12px] text-gray-600;
   }
 
   .footer a {
-    @apply hover:text-gray-50;
+    @apply inline-flex items-center gap-1 whitespace-nowrap hover:text-gray-50;
+  }
+
+  .footer .icon {
+    @apply size-3;
   }
 
   .cart-overlay {
@@ -543,7 +547,7 @@
     }
 
     .app:has(.search input:focus) .search {
-      @apply top-3 h-10;
+      @apply fixed top-3 z-20 h-10;
       width: calc(100vw - 120px);
     }
 

@@ -44,3 +44,6 @@ export const close = (): Html =>
   icon([ih.path([ih.D('M18 6 6 18')]), ih.path([ih.D('m6 6 12 12')])])
 
 export const check = (): Html => icon([ih.path([ih.D('M20 6 9 17l-5-5')])])
+
+export const arrowUpRight = (): Html =>
+  icon([ih.path([ih.D('M7 7h10v10')]), ih.path([ih.D('M7 17 17 7')])])

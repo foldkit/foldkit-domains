@@ -207,6 +207,94 @@ test('first mobile tap moves the same input into the header before hydration', a
   }
 })
 
+test('mobile search scrolls with the hero and stays pinned during a search', async ({
+  browser,
+  baseURL,
+}) => {
+  if (baseURL === undefined) {
+    throw new Error('The domain example requires a base URL')
+  }
+
+  const context = await browser.newContext({
+    ...devices['iPhone 13'],
+    viewport: { width: 390, height: 500 },
+    baseURL,
+  })
+  const page = await context.newPage()
+  let releaseBundle = () => {}
+  const bundleGate = new Promise<void>(resolve => {
+    releaseBundle = resolve
+  })
+  await page.route('**/assets/*.js', async route => {
+    await bundleGate
+    await route.continue()
+  })
+  const input = page.getByRole('searchbox', { name: 'Search domains' })
+  const header = page.locator('.header')
+  const assertHeroScroll = async () => {
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    const documentTop = await input.evaluate(
+      element => element.getBoundingClientRect().top,
+    )
+
+    await page.evaluate(() => window.scrollTo(0, 100))
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(0)
+    await expect
+      .poll(() =>
+        input.evaluate(
+          element => element.getBoundingClientRect().top + window.scrollY,
+        ),
+      )
+      .toBeCloseTo(documentTop, 0)
+    await expect
+      .poll(() =>
+        header.evaluate(element => element.getBoundingClientRect().top),
+      )
+      .toBe(0)
+  }
+
+  try {
+    await page.goto('/', { waitUntil: 'commit' })
+    await expect(input).toBeVisible()
+    await expect(input).not.toBeFocused()
+    const originalInput = await input.elementHandle()
+    await assertHeroScroll()
+
+    releaseBundle()
+    await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+    await assertHeroScroll()
+
+    await input.tap()
+    await expect(input).toBeFocused()
+    await input.fill('scrolling-search')
+    await expect(page.locator('.domain-card').first()).toContainText(
+      'scrolling-search.com',
+    )
+    await page.evaluate(() => window.scrollTo(0, 100))
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(0)
+    await expect
+      .poll(() =>
+        input.evaluate(element => element.getBoundingClientRect().top),
+      )
+      .toBeLessThan(30)
+    await expect(input).toBeFocused()
+    await expect(input).toHaveValue('scrolling-search')
+    expect(
+      await originalInput?.evaluate(
+        element => element === document.getElementById('domain-search'),
+      ),
+    ).toBe(true)
+  } finally {
+    releaseBundle()
+    await context.close()
+  }
+})
+
 test('searches, filters, sorts, and manages the cart', async ({
   page,
 }, testInfo) => {
