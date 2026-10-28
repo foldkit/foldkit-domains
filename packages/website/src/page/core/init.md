@@ -48,7 +48,7 @@ The following Profile contains a ThemePicker whose initializer requires a Theme.
 
 Here, the Binding owns the rule that ThemePicker receives `savedTheme`. Profile init supplies `childInitContext` and its parent-owned `username`. It does not call `themePickerInit`, place `themePicker`, or merge child Commands by hand.
 
-`Composition.makeInit` calls the selected child initializers once, in `bindings` order. Foldkit adds the child-owned fields before constructing the complete Model. Use `commands` for parent Commands and `steps` for parent Steps applied after that Model exists.
+`Composition.makeInit` calls the selected child initializers once, in `bindings` order. Foldkit adds the child-owned fields before constructing the complete Model. Use `commands` for parent Commands and `steps` for parent Steps applied after that Model exists. A Step reused by init and update belongs in the owning Block's `steps.ts`; see [Shared Steps](/core/update#shared-steps) for the organization convention.
 
 Parent Commands appear first in the returned collection, followed by retained child init Commands and Step Commands. The Runtime executes Commands independently, so collection order does not sequence their completion.
 

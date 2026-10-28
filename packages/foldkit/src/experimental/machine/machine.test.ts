@@ -1448,7 +1448,7 @@ describe('shared transitions', () => {
         states: {},
       }),
     ).toThrow(
-      'Machine.define: shared transitions overlap for state "Idle" and Message "ClickedFetch"',
+      'Machine.makeMachine: shared transitions overlap for state "Idle" and Message "ClickedFetch"',
     )
   })
 
@@ -2143,7 +2143,7 @@ describe('state tag extraction', () => {
         states: {},
       }),
     ).toThrow(
-      'Machine.define: every member of the state union Schema must be a Struct with a literal _tag field',
+      'Machine.makeMachine: every member of the state union Schema must be a Struct with a literal _tag field',
     )
   })
 })

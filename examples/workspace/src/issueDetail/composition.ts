@@ -3,7 +3,7 @@ import type { Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { CommentComposerBlock } from '../commentComposer'
-import { IssueDraft, IssuePriority, IssueStatus } from '../domain'
+import { IssuePriority, IssueStatus } from '../domain'
 import {
   PriorityListboxBlock,
   StatusListboxBlock,
@@ -15,11 +15,10 @@ import {
   makeNoopStep,
   makeOutMessageFold,
   makeOutMessageStep,
-  makeStep,
 } from './definition'
 import { decodeAssigneeSelection } from './field'
-import { SaveState } from './model'
 import { OutMessage } from './outMessage'
+import { editDraftStep } from './steps'
 
 export const CommentComposerBinding = makeBinding(CommentComposerBlock, {
   field: 'commentComposer',
@@ -37,15 +36,6 @@ export const CommentComposerBinding = makeBinding(CommentComposerBlock, {
       ),
   }),
 })
-
-export const editDraftStep = (
-  transformDraft: (draft: typeof IssueDraft.Type) => typeof IssueDraft.Type,
-) =>
-  makeStep(model => ({
-    model: SaveState.guards.Saving(model.saveState)
-      ? model
-      : modifyFields(model, { draft: transformDraft }),
-  }))
 
 export const StatusListboxBinding = makeBinding(StatusListboxBlock, {
   field: 'statusListbox',

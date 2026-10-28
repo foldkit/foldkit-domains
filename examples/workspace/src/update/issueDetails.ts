@@ -1,13 +1,10 @@
 import { Array, Option } from 'effect'
 import { AsyncData, Update } from 'foldkit'
 
-import {
-  IssueDetailBinding,
-  applyIssueSnapshotStep,
-  applySavedIssueStep,
-} from '../composition'
+import { IssueDetailBinding } from '../composition'
 import { makeStep } from '../definition'
 import type { Issue, SavedIssue } from '../domain'
+import { applyIssueSnapshotStep, applySavedIssueStep } from '../steps'
 
 export const informIssueChangedStep = (issueId: string) =>
   makeStep(model =>

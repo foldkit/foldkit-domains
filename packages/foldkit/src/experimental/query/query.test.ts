@@ -29,6 +29,7 @@ type CompletedFetch<Data, Error> = Readonly<{
   _tag: 'CompletedFetch'
   generation: number
   result: Result.Result<Data, Error>
+  completedAtMillis?: number
 }>
 
 type QueryFetchHandler<Name extends string, Data, Error> = Command.Handler<
@@ -43,6 +44,7 @@ type KeyedCompletedFetch<Args, Data, Error> = Readonly<{
   generation: number
   requestKey: string
   result: Result.Result<Data, Error>
+  completedAtMillis?: number
 }>
 
 type KeyedQueryFetchHandler<
@@ -1444,6 +1446,7 @@ describe('Layer-backed Query handlers', () => {
       expect(completion).toEqual(
         layeredNotes.Message.CompletedFetch({
           generation: 4,
+          completedAtMillis: 0,
           result: Result.succeed(hello),
         }),
       )
@@ -1483,6 +1486,7 @@ describe('Layer-backed Query handlers', () => {
       expect(completion).toEqual(
         layeredNoteById.Message.CompletedFetch({
           args: { noteId: '1' },
+          completedAtMillis: 0,
           generation: 5,
           requestKey: noteRequestKey('1'),
           result: Result.succeed({ id: '1', body: 'hello' }),

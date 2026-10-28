@@ -1,5 +1,28 @@
 # Next preview release handoff
 
+## Current release documentation scope, October 28
+
+Include Machine, Query/KeyedQuery and VirtualList in the next preview update,
+PR release notes and announcement handoff. The user has superseded the earlier
+instruction to omit VirtualList from the PR description and next X post.
+
+Machine's Schema-bound Definition and checked completion test authoring
+consistency with Blocks. Query/KeyedQuery lifecycle capabilities and VirtualList
+history, external scroll ownership and layouts are additional features carried
+on this branch for `foldkit-domains`; they are not prerequisites for adopting
+Blocks + Effect Layers. The domains application migration remains separate.
+
+The [preview upgrade guide](../packages/website/src/page/previewUpgrade.md#upgrade-from-f3be22cfeefe)
+covers the new APIs and affected migrations. Detailed implementation and
+verification are recorded in the [Machine report](machine-authoring-20261027.md),
+[VirtualList report](virtual-list-preview-integration-20261027.md) and
+[Query report](keyed-query-capabilities-20261028.md).
+
+Publication stays held for approval. Preserve the PR's three starting paths,
+user-authored content and verified Ready snapshot. Link the updated guide to
+the matching verified deployment when publishing the next preview; local
+documentation changes do not advance the published snapshot.
+
 ## Current stabilization preparation, October 27
 
 The subsequent [Message-only Step adapter](message-step-adapter-20261027.md)

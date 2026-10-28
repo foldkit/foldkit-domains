@@ -221,7 +221,7 @@ Alongside the greps, eyeball each file's imports. Every symbol you imported shou
 - [ ] Every route variant has a corresponding view branch
 - [ ] Every `Succeeded*` has a paired `Failed*`
 - [ ] Every discriminated union variant is handled in both update and view
-- [ ] Routine application annotations query Schema types directly: `typeof Model.Type` inside the owning feature and `typeof ChildBlock.Model.Type` across a child boundary, with the analogous Message and OutMessage forms. Owned callbacks infer their parameters. Colocated Schema-derived aliases remain only for deliberate public library contracts or useful generic, mapped, and conditional types.
+- [ ] Each Schema has its same-named decoded type immediately below it with no blank line, such as `type Model = typeof Model.Type`. Explicit value annotations use the alias; Schema-taking APIs retain `typeof Model`. Child types are named from completed Block contracts without importing child implementations. Owned callbacks infer their parameters.
 
 ## Application wiring
 
@@ -471,6 +471,8 @@ Each confirmed miss is a concrete a11y bug a screen reader user would hit.
 
 ## File organization
 
+- [ ] Reusable Steps shared by update, composition, or init live in owner-local `steps.ts`, or responsibility files under `steps/` with an explicit barrel. Message routing, Binding registration and child OutMessage policy remain in their owning modules; initialization does not eagerly read a cyclic Binding.
+
 - [ ] Message layout follows four-group convention (values, union + type)
 - [ ] Single-file apps use names and blank lines for structure. Section headers appear only for substantial groups that need wayfinding.
 - [ ] Complex update handlers extracted to separate functions
@@ -576,7 +578,7 @@ Items without a tier marker apply universally (even to a 50-line counter). When 
       policies remain together in the parent assembly and defer sibling Binding
       calls through callbacks.
 - [ ] Imports ordered: npm packages first (alphabetized), then `foldkit/*`, then relative imports. No mixed groups.
-- [ ] Message unions are exported as Schema values when used across application modules. Explicit local annotations use `typeof Message.Type`; consumers of a completed child use `typeof ChildBlock.Message.Type`. A routine decoded Message alias is not exported. Variants stay on the owning namespace: `Message.ClickedSave()`, never a separate `ClickedSave` export. Internal-only Message unions stay unexported.
+- [ ] Message unions have `type Message = typeof Message.Type` immediately below the Schema, with no blank line. Export both from their owning module when used by other implementation modules; retain the local Message contract within the feature implementation. Consumers derive complete child Message aliases from the completed Block. Variants stay on the owning namespace: `Message.ClickedSave()`, never a separate `ClickedSave` export. Internal-only unions and aliases stay unexported.
 
 ## Block and Command extraction [T5+]
 

@@ -2,7 +2,7 @@ import { Array, Number, Option } from 'effect'
 import { AsyncData, type Block, Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { MoveIssue, NavigateInternal, ReplaceInternalUrl } from './command'
+import { NavigateInternal, ReplaceInternalUrl } from './command'
 import { CommandPaletteBlock } from './commandPalette'
 import { CreateIssueBlock } from './createIssue'
 import {
@@ -15,18 +15,7 @@ import {
   makeOutMessageFold,
   makeStep,
 } from './definition'
-import {
-  type Comment,
-  type Issue,
-  type IssueFilters,
-  type IssueStatus,
-  NotificationActivity,
-  type SavedIssue,
-  SavedView,
-  applyComment,
-  applySavedIssue,
-  mergeIssue,
-} from './domain'
+import { type IssueFilters, SavedView } from './domain'
 import { IssueBoardBlock } from './issueBoard'
 import { IssueDetailBlock } from './issueDetail'
 import { issueFiltersHref, issueHref } from './issueLinks'
@@ -34,7 +23,6 @@ import { IssueListBlock } from './issueList'
 import { WorkspaceListboxBlock } from './listbox'
 import { MemberDirectoryBlock } from './memberDirectory'
 import { NotificationCenterBlock } from './notificationCenter'
-import { IssueMoveState } from './optimistic'
 import { ProjectSettingsBlock } from './projectSettings'
 import {
   ApplicationRoute,
@@ -46,6 +34,12 @@ import {
   withoutIssueId,
 } from './route'
 import { appliedIssueFilters } from './selection'
+import {
+  applyIssueCommentStep,
+  applyIssueSnapshotStep,
+  applySavedIssueStep,
+  requestIssueMoveStep,
+} from './steps'
 
 export const ActiveMemberBinding = makeBinding(WorkspaceListboxBlock, {
   field: 'activeMemberListbox',
@@ -92,97 +86,6 @@ export const NotificationCenterBinding = makeBinding(NotificationCenterBlock, {
     SelectedIssue: ({ issueId }) => openIssueStep(issueId),
   }),
 })
-
-const notifyNewCommentsStep = (issue: typeof Issue.Type) =>
-  makeStep(model => {
-    const maybePreviousIssue = Option.flatMap(
-      AsyncData.getData(model.workspaceAsyncData),
-      workspace =>
-        Array.findFirst(
-          workspace.issues,
-          previousIssue => previousIssue.id === issue.id,
-        ),
-    )
-
-    if (Option.isNone(maybePreviousIssue)) {
-      return makeNoopStep()
-    }
-
-    const newComments = Array.filter(
-      issue.comments,
-      comment =>
-        !Array.some(
-          maybePreviousIssue.value.comments,
-          previousComment => previousComment.id === comment.id,
-        ),
-    )
-
-    return Update.combineSteps(
-      Array.map(newComments, comment =>
-        NotificationCenterBinding.informActivity({
-          activity: NotificationActivity.Commented({ issue, comment }),
-        }),
-      ),
-    )
-  })
-
-export const applyIssueSnapshotStep = (issue: typeof Issue.Type) =>
-  Update.combineSteps([
-    notifyNewCommentsStep(issue),
-    makeFieldsStep(() => ({
-      workspaceAsyncData: AsyncData.map(workspace =>
-        modifyFields(workspace, {
-          issues: Array.map(currentIssue =>
-            currentIssue.id === issue.id
-              ? mergeIssue(currentIssue, issue)
-              : currentIssue,
-          ),
-        }),
-      ),
-    })),
-  ])
-
-export const applySavedIssueStep = (savedIssue: typeof SavedIssue.Type) =>
-  makeFieldsStep(() => ({
-    workspaceAsyncData: AsyncData.map(workspace =>
-      applySavedIssue(workspace, savedIssue),
-    ),
-  }))
-
-export const applyIssueCommentStep = (
-  issueId: string,
-  comment: typeof Comment.Type,
-) =>
-  makeStep(model => {
-    const maybeIssue = Option.flatMap(
-      AsyncData.getData(model.workspaceAsyncData),
-      workspace =>
-        Array.findFirst(workspace.issues, issue => issue.id === issueId),
-    )
-
-    if (Option.isNone(maybeIssue)) {
-      return { model }
-    }
-
-    const issue = maybeIssue.value
-    const isNewComment = !Array.some(
-      issue.comments,
-      previousComment => previousComment.id === comment.id,
-    )
-
-    return Update.combineSteps([
-      makeFieldsStep(() => ({
-        workspaceAsyncData: AsyncData.map(workspace =>
-          applyComment(workspace, issueId, comment),
-        ),
-      })),
-      isNewComment
-        ? NotificationCenterBinding.informActivity({
-            activity: NotificationActivity.Commented({ issue, comment }),
-          })
-        : makeNoopStep(),
-    ])
-  })
 
 const foldIssueDetailOutMessage = makeOutMessageFold(IssueDetailBlock, {
   Saved: ({ savedIssue }) =>
@@ -290,61 +193,6 @@ export const IssueListBinding = makeBinding(IssueListBlock, {
       }),
   }),
 })
-
-const beginIssueMoveStep = (
-  issue: typeof Issue.Type,
-  status: typeof IssueStatus.Type,
-  insertionIndex: number,
-) =>
-  makeStep(model => ({
-    model: modifyFields(model, {
-      issueMoveState: () =>
-        IssueMoveState.MovingIssue({
-          issueId: issue.id,
-          status,
-          insertionIndex,
-          expectedVersion: issue.version,
-        }),
-    }),
-    commands: [
-      MoveIssue({
-        issueId: issue.id,
-        status,
-        insertionIndex,
-        expectedVersion: issue.version,
-      }),
-    ],
-  }))
-
-export const requestIssueMoveStep = (
-  issueId: string,
-  status: typeof IssueStatus.Type,
-  insertionIndex: number,
-) =>
-  makeStep(model => {
-    if (IssueMoveState.guards.MovingIssue(model.issueMoveState)) {
-      return { model }
-    }
-
-    return Option.match(AsyncData.getData(model.workspaceAsyncData), {
-      onNone: () => ({ model }),
-      onSome: workspace =>
-        Option.match(
-          Array.findFirst(workspace.issues, issue => issue.id === issueId),
-          {
-            onNone: () => ({ model }),
-            onSome: issue =>
-              Update.combineSteps([
-                beginIssueMoveStep(issue, status, insertionIndex),
-                IssueBoardBinding.informIssueMoved(issue.projectId, {
-                  status,
-                  insertionIndex,
-                }),
-              ]),
-          },
-        ),
-    })
-  })
 
 export const IssueBoardBinding = makeMapBinding(IssueBoardBlock, {
   field: 'issueBoards',

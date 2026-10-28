@@ -167,7 +167,7 @@ Let `makeView` infer the primary view's builder. For an extracted helper on the 
 
 A shared helper that forwards Mount-bearing child Attributes accepts a typed caller-owned render callback. The callback uses the caller's inferred builder, preserving its registered Binding capability. See [Builder ownership](/core/view#builder-ownership) for the shared Dialog pattern.
 
-The local `Message` union remains the right type for authored update logic. Derive `typeof FeatureComposition.Message.Type` only at a boundary that consumes the complete dispatch contract, such as a root `Runtime.CrashContext`. Do not add a parallel complete Message alias to every feature.
+The local `Message` alias describes the facts handled by authored update logic. When a boundary consumes the complete dispatch contract, such as a root `Runtime.CrashContext`, derive a separate named type from `FeatureComposition.Message`. That complete type includes generated child envelopes.
 
 ::Snippet{name="blockCompositionTypes" label="Composition-specific builder and dispatch types"}
 
@@ -220,7 +220,7 @@ supplement those guarantees for erased JavaScript. Definition, Binding, policy,
 and Composition construction remain passive: they do not build Layers, call
 handlers, or start lifecycle work.
 
-The parent configures integration policy in its child Binding. That policy executes during the pure child fold or operation. The flow is parent update → child fold or operation → parent OutMessage handling → parent result. Keep a substantial policy in a named parent fold beside that child's Binding, extracting both to `composition/<child>.ts` when the policy becomes substantial. A handler takes the exact `FoldContext` as its second argument only when it needs to lift a child Command or compare the transition with parent state from before the child update. A fold whose handlers omit that argument remains unary. `modelBeforeUpdate` is the previous parent Model. The Step returned by the handler still receives the parent Model after the next child Model has been written.
+The parent configures integration policy in its child Binding. That policy executes during the pure child fold or operation. The flow is parent update → child fold or operation → parent OutMessage handling → parent result. Keep a substantial policy in a named parent fold beside that child's Binding, extracting both to `composition/<child>.ts` when the policy becomes substantial. A handler takes the exact `FoldContext` as its second argument only when it needs to lift a child Command or compare the transition with parent state from before the child update. A fold whose handlers omit that argument remains unary. `modelBeforeUpdate` is the previous parent Model. The Step returned by the handler still receives the parent Model after the next child Model has been written. When update or init also uses that parent Step, put it in the owning Block's `steps.ts` and keep the OutMessage mapping here. See [Shared Steps](/core/update#shared-steps).
 
 ## Complete the Application
 

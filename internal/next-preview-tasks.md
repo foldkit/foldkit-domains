@@ -14,6 +14,43 @@ original status, source pins and publication holds as historical evidence.
 
 ## Current Blocks + Effect Layers release scope
 
+- [x] #1821: Add explicit Scene URL-change delivery through optional Program-style
+      routing configuration. Preserve pending-work and lifecycle bookkeeping;
+      verify search through navigation, exact routing types and relocated
+      declarations. Source, strict relocated/packed TS6/TS7 declarations, 936
+      focused tests, unchanged compiler ceilings and mutation controls pass.
+      Active guidance is updated; publication stays held.
+      [API, contracts and verification](scene-navigation-1821-20261027.md).
+
+- [x] Redesign Machine around one Schema-bound Definition, extracted guard/
+      handler/table helpers, and checked completion. Prove the domains search
+      and nested quote-request lifecycle, exact narrowing, Context and Command
+      requirements in source and relocated declarations; migrate active
+      consumers/guidance and retain pure execution and graph behavior.
+      Source, strict relocated/packed declarations on TS6/TS7, 182 focused
+      tests, unchanged six compiler fixtures, new Machine fixture, and
+      independent source review pass. Publication stays held.
+      [Design, consumer code and verification](machine-authoring-20261027.md).
+
+- [x] Include Machine, Query/KeyedQuery and VirtualList in preview update
+      documentation. Machine tests API consistency with Block authoring;
+      Query and VirtualList are additional capabilities requested for
+      `foldkit-domains`. The earlier VirtualList announcement exclusion is
+      superseded. Preserve the published Ready snapshot and approval hold.
+      [Release documentation scope](next-preview-release-handoff.md#current-release-documentation-scope-october-28).
+
+- [x] Assess inline Model-aware `makeStep` Message inference against the optimized
+      candidate. A safe context-hint prototype passes source checks but fails the
+      unchanged eight-group type-count ceiling. Restore the existing API and
+      document the exact encodings, counters and verification limits.
+      [Assessment](step-message-context-assessment-20261027.md).
+- [x] Standardize reusable owner-local Steps shared by update, composition or
+      init under `steps.ts` or `steps/<responsibility>.ts` with an explicit barrel.
+      Preserve policy/registration ownership, deferred Binding access, contracts,
+      historical content and existing compiler ceilings; update active guidance
+      and verify the migrated applications before completion.
+      [Adoption, exceptions and verification](shared-step-organization-20261027.md).
+
 The next preview is a stabilization release. Expect one or two further previews
 depending on feedback before considering the merge to main. Keep this cycle
 focused on existing Block and Layer contracts, adoption, diagnostics and
@@ -26,7 +63,8 @@ regressions. General feature proposals do not automatically join its scope.
 - [x] Close out feedback specifically about Blocks + Effect Layers using the
       existing implementation and assessment evidence. An open issue or PR is
       not evidence that its fix is missing. General UI, Query and broader plugin
-      proposals are outside this release scope. The [October 27 reconciliation](stabilization-feedback-20261027.md)
+      proposals are outside this release scope unless explicitly adopted below.
+      The [October 27 reconciliation](stabilization-feedback-20261027.md)
       covers all preview reports, related contribution discussions and the latest
       plugin question. Diagnostic/performance limitations and unimplemented
       proposals remain explicit; this is not a claim that every request shipped.
@@ -59,6 +97,13 @@ regressions. General feature proposals do not automatically join its scope.
       JavaScript-disabled navigation and the generated link. Plugin350 tests,
       strengthened3-case browser suite, packed delta and independent/Daybreak
       reviews pass atf15. [Affected evidence](preview-stabilization-1811-20261027.md).
+
+- [x] Reconcile contributor PR #1814 with #1811's preview fix. Adopt prerender-only
+      activation and the stronger proxy/path/file protections, retain custom-host
+      ownership and replace the overlapping SSR hook. All 366 plugin tests,
+      33 preview cases, CLI checks, three SSG browser cases and packed-plugin
+      generated-app checks pass. Mutation controls prove decoder and realpath
+      regressions are caught. [Contribution and bounded evidence](ssg-preview-1814-reconciliation-20261027.md).
 
 - [x] Add the optional general Step adapter `makeStep.fromMessage`, preserving
       inline Message inference and the existing interpreter. Both general Step
@@ -142,6 +187,25 @@ regressions. General feature proposals do not automatically join its scope.
       snapshot and its immutable deployment are unchanged. The representation using
       nested return Routes introduced here is superseded by the page/panel factoring
       above.
+
+## Additional preview features for foldkit-domains
+
+- [x] Include the [VirtualList integration](#virtuallist-preview-integration)
+      in preview update documentation: continuous history loading, external
+      scroll ownership, semantic tables and positioned ordinary rows. Keep
+      its purpose separate from Block and Layer migration requirements.
+
+- [x] Document and verify experimental Query freshness, bounded KeyedQuery
+      retention, per-key cancellation, pending-args inspection and opt-in
+      accepted-completion OutMessages. The [quote-window migration sketch](keyed-query-capabilities-migration-20261028.md)
+      replaces the app-owned quote cache and fetch state with one Query Model,
+      while retaining parent-owned search planning, display and cooldown policy.
+      Its one-minute deadline intentionally uses stale-while-revalidate. The
+      [Query guide](../packages/website/src/page/core/query.md), public
+      declaration fixtures and website typecheck/build cover the new surface.
+      [Contracts, review checklist and verification](keyed-query-capabilities-20261028.md)
+      include source/relocated/packed TS6/TS7 consumers, 76 Query tests and all
+      seven unchanged compiler ceilings. The domains app remains a separate migration.
 
 ## General backlog outside the Blocks + Effect Layers release
 
@@ -473,6 +537,17 @@ Prototype proposed APIs and verify source/emitted acceptance/rejection, runtime 
 
 ## Release review checklist
 
+- [x] Verify shared-Step ownership across eligible examples and Typing Game,
+      active Website/scaffold/skill guidance, passive cyclic Binding access,
+      source/Story/build checks and strict relocated Workspace declarations.
+      Keep the rejected general Step inference prototype separate from the
+      adopted organization change. [Evidence and limits](shared-step-organization-20261027.md).
+
+- [x] Reconcile #1814's exact contribution with the existing SSG repair, retain
+      original commit/author references and verify custom-host, output, proxy
+      and path behavior. [Evidence and review gate](ssg-preview-1814-reconciliation-20261027.md).
+      No fresh full-cohort or performance result is inferred from this patch.
+
 - [x] Verify Definition-owned map Binding adoption with exact detached/imported
       helper contracts, generic consumers, full source/emitted/runtime/lint checks,
       TSDoc hovers and paired actual/larger editor workflows. Explicitly review the
@@ -543,4 +618,4 @@ Breaking beta changes may require a complete application migration. Provide accu
 
 Review the exact final commit independently before pushing or integrating it.
 
-- [x] Keep this work out of the preview PR description and next X post. Document the APIs normally. Publication remains held for approval.
+- [x] Include this work in the preview PR update and announcement handoff, following the user's October 28 clarification. It supports `foldkit-domains` and is separate from the Block/Layer migration requirements. Publication remains held for approval.

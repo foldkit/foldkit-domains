@@ -24,6 +24,7 @@ const postsQuery = Query.define({
   name: 'Posts',
   data: PostList,
   error: Schema.String,
+  staleTime: '1 minute',
   handler: function* () {
     return () => fetchPosts
   },

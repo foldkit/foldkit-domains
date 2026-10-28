@@ -476,6 +476,8 @@ Use `FeatureDefinition.makeFieldsStep(producer)` for owning field transformation
 
 In a split feature, export the Step helpers used by the implementation from `definition.ts` and named-import them in implementation modules. In a colocated feature, destructure those helpers beside the Definition in the scope that uses them. Keep Definition-qualified calls when several Definitions in one module need visible ownership. Feature barrels keep authoring helpers private and export the completed Block.
 
+Put reusable parent Steps shared by update, composition, or init in the owning Block's `steps.ts`, or in responsibility modules such as `steps/search.ts` with an explicit `steps/index.ts` barrel. Ownership follows the Model being transformed. Keep Message routing in update and Binding registration and child OutMessage policy in composition; colocate Steps used by only one responsibility. Preserve the `Step` suffix and defer cyclic Binding access until the producer is applied.
+
 All three take callbacks, evaluated when the Step or handler is applied. An ordinary producer receives the current Model and, when authored as a Message-dependent handler, its exact Message. Use `.fromMessage(message => value)` for payload-only producers and `() => value` for fixed producers. Commands-only and OutMessage-only helpers preserve the incoming Model identity. `makeNoopStep()` stays unchanged; in an OutMessage fold, pass its factory point-free when appropriate.
 
 Pass compatible Steps directly as handler-record values. Extracted Message-dependent producers need a precise Message variant contract when no surrounding handler record supplies it. Map payloads explicitly when constructing a different Message or OutMessage; do not pass a constructor that could forward the incoming `_tag`. Keep cohesive mixed transitions as direct results, and use the owning `makeStep` helper for reusable mixed, connected, initialization, delegated, or composed operations. Local branches mixed with connected recipes still need canonical Definition-owned results.
@@ -510,16 +512,15 @@ Step directly to `Update.combineSteps` or a compatible handler; use the owning
 
 ## Schema Constructors
 
-Use direct Schema type queries for routine application annotations. Inside the
-owning feature, write `typeof Model.Type`, `typeof Message.Type`, or
-`typeof OutMessage.Type`. A consumer of a completed child writes
-`typeof ChildBlock.Model.Type`, `typeof ChildBlock.Message.Type`, or
-`typeof ChildBlock.OutMessage.Type`. Parent Schema construction uses the checked completed
-`ChildBlock.Model`; ordinary type annotations keep these completed Block queries. This preserves ownership and avoids an implementation
-import back from the completed Block. Let owned callbacks infer
-their parameters. Keep aliases that intentionally publish library contracts or
-name useful generic, mapped, or conditional types, such as an owner-specific
-`Block.ViewBuilderFor` type.
+Declare each Schema's decoded type immediately below it, using the same name
+and no blank line: `const Foo = Schema.Struct(...)` followed by
+`type Foo = typeof Foo.Type`. Export both when they belong to the module's
+public surface. Prefer `Foo` in decoded-value annotations; use `typeof Foo`
+when an API needs the Schema type. Keep local Model, Message, and OutMessage
+aliases in the owning feature. A consumer can name a type from the completed
+child, such as `type ChildModel = typeof ChildBlock.Model.Type`, without
+importing its implementation. Parent Schema construction uses the checked
+completed `ChildBlock.Model`. Let owned callbacks infer their parameters.
 
 Construct Schema values through their actual constructors, never casts.
 Foldkit union variants are callable. When explicitly constructing a complete

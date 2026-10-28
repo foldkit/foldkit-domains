@@ -742,6 +742,22 @@ const checks: ReadonlyArray<
     consumers: ['commands-steps.consume.ts'],
   },
   {
+    name: 'scene-routing',
+    accepted: ['scene-routing.accepted.ts'],
+    rejected: ['scene-routing.rejected.ts'],
+    consumers: ['scene-routing.consume.ts'],
+  },
+  {
+    name: 'machine',
+    accepted: [
+      'machine.contracts.ts',
+      'machine.quote-request.ts',
+      'machine.accepted.ts',
+    ],
+    rejected: ['machine.rejected.ts'],
+    consumers: ['machine.consume.ts'],
+  },
+  {
     name: 'message-steps',
     accepted: ['message-steps.accepted.ts', 'message-steps.definition.ts'],
     rejected: ['message-steps.rejected.ts'],
@@ -890,9 +906,21 @@ const checks: ReadonlyArray<
   },
   {
     name: 'focused',
-    accepted: ['parent-owned-binding.accepted.ts', 'query-block.accepted.ts'],
-    rejected: ['parent-owned-binding.rejected.ts', 'query-block.rejected.ts'],
-    consumers: ['parent-owned-binding.consume.ts', 'query-block.consume.ts'],
+    accepted: [
+      'parent-owned-binding.accepted.ts',
+      'query-block.accepted.ts',
+      'query-policy.accepted.ts',
+    ],
+    rejected: [
+      'parent-owned-binding.rejected.ts',
+      'query-block.rejected.ts',
+      'query-policy.rejected.ts',
+    ],
+    consumers: [
+      'parent-owned-binding.consume.ts',
+      'query-block.consume.ts',
+      'query-policy.consume.ts',
+    ],
   },
   {
     name: 'view-helper',
@@ -1005,6 +1033,8 @@ const main = async (): Promise<void> => {
     'test-parent-message',
     'extracted-connected-step',
     'message-steps',
+    'machine',
+    'scene-routing',
     'append-initialization',
     'set-initialization',
     'set-optional-initialization',

@@ -95,6 +95,8 @@ Workspace now retains per-ID editors and Boards, admits hidden save completions,
 
 Use only the preview integration branch, never main. Verify the published package set and immutable deployment, then generate the PR’s three starting paths: stable migration, previous-preview upgrade and new project. Preserve the prior Ready snapshot until those gates pass. Update actual Coverchart against that exact verified snapshot, then provide announcement links. [Release handoff](next-preview-release-handoff.md).
 
-## Pending VirtualList integration
+## Additional preview documentation scope
 
-PR #1633 and issue #1722 are authorized for the preview branch. Their source integration and targeted verification are complete; final committed review and candidate build remain part of preparation. [Scope, browser/editor evidence and limitations](virtual-list-preview-integration-20261027.md). Verify the history port before extending scroll ownership and layout. Keep the work out of the preview PR description and next X post; keep normal API documentation and changesets. The published Ready snapshot and publication hold remain unchanged.
+Include Machine, Query/KeyedQuery and VirtualList in the next preview update, PR release notes and announcement handoff. Machine tests consistent Definition-based authoring alongside Blocks. Query and VirtualList support `foldkit-domains` and are separate from Block/Layer migration requirements. The user's October 28 clarification supersedes the earlier VirtualList announcement exclusion.
+
+PR #1633 and issue #1722 are integrated on the follow-up branch with targeted verification. [VirtualList scope, browser/editor evidence and limitations](virtual-list-preview-integration-20261027.md). The [Machine report](machine-authoring-20261027.md) and [Query report](keyed-query-capabilities-20261028.md) retain their own verification scope. Preserve the published Ready snapshot, the PR's three starting paths and the publication hold. Final integrated release checks must cover the committed candidate.
