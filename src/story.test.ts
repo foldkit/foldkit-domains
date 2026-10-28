@@ -1131,6 +1131,100 @@ describe('progressive quotes', () => {
     },
   )
 
+  test.each([
+    {
+      criteria: 'price sorting',
+      message: Message.UpdatedSortOrder({ value: 'PriceAscending' }),
+      sortOrder: 'PriceAscending',
+      availabilityFilter: 'All',
+    },
+    {
+      criteria: 'availability filtering',
+      message: Message.UpdatedAvailabilityFilter({ value: 'Available' }),
+      sortOrder: 'Relevance',
+      availabilityFilter: 'Available',
+    },
+  ])(
+    'defers complete-catalog loading for $criteria until the pending page completes',
+    ({ message: criteriaMessage, sortOrder, availabilityFilter }) => {
+      story(
+        update,
+        given(partialModel),
+        message(scrollToNextPage),
+        message(criteriaMessage),
+        resolveResultsListScrolls,
+        Command.expectExact(
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 1,
+            offset: 60,
+            limit: 60,
+          }),
+        ),
+        model(model => {
+          expect(model.sortOrder).toBe(sortOrder)
+          expect(model.availabilityFilter).toBe(availabilityFilter)
+          expect(model.search).toEqual(
+            SearchState.Ready({
+              domains: firstQuotes,
+              quoteRequest: QuoteRequest.Loading({ offset: 60, limit: 60 }),
+            }),
+          )
+        }),
+        Command.resolve(
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 1,
+            offset: 60,
+            limit: 60,
+          }),
+          Message.SucceededFetchDomains({
+            searchGeneration: 1,
+            domains: Array.take(Array.drop(makeDomainFixtures('acme'), 60), 60),
+          }),
+        ),
+        resolveResultsListScrolls,
+        Command.expectExact(
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 1,
+            offset: 0,
+            limit: 556,
+          }),
+        ),
+        model(model =>
+          expect(model.search).toEqual(
+            SearchState.Ready({
+              domains: Array.take(makeDomainFixtures('acme'), 120),
+              quoteRequest: QuoteRequest.Loading({ offset: 0, limit: 556 }),
+            }),
+          ),
+        ),
+        Command.resolve(
+          FetchDomains({
+            label: 'acme',
+            searchGeneration: 1,
+            offset: 0,
+            limit: 556,
+          }),
+          Message.SucceededFetchDomains({
+            searchGeneration: 1,
+            domains: makeDomainFixtures('acme'),
+          }),
+        ),
+        resolveResultsListScrolls,
+        model(model => {
+          expect(model.sortOrder).toBe(sortOrder)
+          expect(model.availabilityFilter).toBe(availabilityFilter)
+          expect(model.search).toEqual(
+            SearchState.Ready({ domains: makeDomainFixtures('acme') }),
+          )
+        }),
+        Command.expectNone(),
+      )
+    },
+  )
+
   test('a new query rejects a late page from the previous query', () => {
     story(
       update,

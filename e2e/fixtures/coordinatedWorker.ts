@@ -50,6 +50,14 @@ export class FixtureDomainSearchCoordinator extends DomainSearchCoordinator {
 }
 
 export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
+  private readonly fixtureState: DurableObjectState
+  private readonly instanceId = crypto.randomUUID()
+
+  constructor(state: DurableObjectState, environment: SearchEnvironment) {
+    super(state, environment)
+    this.fixtureState = state
+  }
+
   private calls = 0
   private inFlight = 0
   private maximumInFlight = 0
@@ -102,7 +110,16 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
         this.throttled.add(firstName)
         return Response.json(
           {},
-          { status: 429, headers: { 'retry-after': '1' } },
+          {
+            status: 429,
+            headers: {
+              'retry-after': Array.some(domains, domain =>
+                domain.startsWith('throttle-persist-'),
+              )
+                ? '60'
+                : '1',
+            },
+          },
         )
       }
 
@@ -133,9 +150,15 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
   }
 
   override fetch(request: Request): Promise<Response> {
+    if (request.url.endsWith('/restart')) {
+      this.fixtureState.abort('Restarting registrar test instance')
+      return Promise.resolve(new Response(null, { status: 204 }))
+    }
+
     if (request.url.endsWith('/stats')) {
       return Promise.resolve(
         Response.json({
+          instanceId: this.instanceId,
           calls: this.calls,
           inFlight: this.inFlight,
           maximumInFlight: this.maximumInFlight,
@@ -152,6 +175,7 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
 interface FixtureEnvironment extends SearchEnvironment {
   readonly LOW_QUOTES: SearchEnvironment['DOMAIN_QUOTES']
   readonly LOW_BUDGET: SearchEnvironment['REGISTRAR_BUDGET']
+  readonly PERSISTENCE_BUDGET: SearchEnvironment['REGISTRAR_BUDGET']
 }
 
 export class LowDomainSearchCoordinator extends DomainSearchCoordinator {
@@ -171,6 +195,16 @@ export class LowRegistrarCoordinator extends FixtureRegistrarCoordinator {
   }
 }
 
+export class PersistenceRegistrarCoordinator extends FixtureRegistrarCoordinator {
+  constructor(state: DurableObjectState, environment: FixtureEnvironment) {
+    super(state, {
+      ...environment,
+      REGISTRAR_REQUESTS_PER_SECOND: '1000',
+      REGISTRAR_REQUESTS_PER_MINUTE: '1',
+    })
+  }
+}
+
 const handlers = new WeakMap<
   FixtureEnvironment,
   {
@@ -181,6 +215,24 @@ const handlers = new WeakMap<
 
 export default {
   fetch(request: Request, environment: FixtureEnvironment) {
+    if (request.url.includes('/persistence/')) {
+      const [, , name, operation] = new URL(request.url).pathname.split('/')
+
+      if (name === undefined || operation === undefined) {
+        return new Response('Invalid persistence request', { status: 400 })
+      }
+
+      const response = environment.PERSISTENCE_BUDGET.getByName(name).fetch(
+        new Request(`https://domains.internal/${operation}`, request),
+      )
+
+      if (operation === 'restart') {
+        return response.catch(() => new Response(null, { status: 204 }))
+      } else {
+        return response
+      }
+    }
+
     const isLowBudget = request.url.includes('/low/')
     const namespace = isLowBudget
       ? environment.LOW_BUDGET

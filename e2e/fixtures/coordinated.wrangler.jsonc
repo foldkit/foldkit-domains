@@ -26,6 +26,10 @@
       },
       { "name": "LOW_QUOTES", "class_name": "LowDomainSearchCoordinator" },
       { "name": "LOW_BUDGET", "class_name": "LowRegistrarCoordinator" },
+      {
+        "name": "PERSISTENCE_BUDGET",
+        "class_name": "PersistenceRegistrarCoordinator",
+      },
     ],
   },
   "migrations": [
@@ -36,6 +40,7 @@
         "FixtureRegistrarCoordinator",
         "LowDomainSearchCoordinator",
         "LowRegistrarCoordinator",
+        "PersistenceRegistrarCoordinator",
       ],
     },
   ],

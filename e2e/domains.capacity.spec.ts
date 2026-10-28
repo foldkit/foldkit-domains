@@ -15,9 +15,11 @@ import { expect, test } from '@playwright/test'
 import { QueryWindow } from '../src/domain'
 import { SearchError } from '../src/domainsRpc'
 import { DomainsClient, makeDomainsClientLayer } from '../src/rpc'
+import { CoordinatedSearch, SearchOutcome } from '../src/server/coordination'
 
 const CLIENT_COUNT = 300
 const Stats = Schema.Struct({
+  instanceId: Schema.String,
   calls: Schema.Int,
   inFlight: Schema.Int,
   maximumInFlight: Schema.Int,
@@ -392,3 +394,56 @@ test('loads a slow later quote page and can request the following page', async (
   ).toHaveLength(60)
   expect((await readStats(baseURL)).calls - before.calls).toBe(3)
 })
+
+for (const { name, label, initialTag, rateLimitSource } of [
+  {
+    name: 'quota',
+    label: 'persist-quota',
+    initialTag: 'Success',
+    rateLimitSource: 'Application',
+  },
+  {
+    name: 'cooldown',
+    label: 'throttle-persist-cooldown',
+    initialTag: 'Failure',
+    rateLimitSource: 'Registrar',
+  },
+]) {
+  test(`registrar ${name} survives a Durable Object restart`, async ({
+    baseURL,
+    request,
+  }) => {
+    const path = `/persistence/${name}`
+    const query = CoordinatedSearch.make({
+      label,
+      offset: 0,
+      limit: 60,
+      client: '192.0.2.50',
+    })
+    const first = Schema.decodeUnknownSync(SearchOutcome)(
+      await (await request.post(`${path}/search`, { data: query })).json(),
+    )
+    expect(first._tag).toBe(initialTag)
+    const before = await readStats(baseURL, `${path}/stats`)
+    expect(before.calls).toBe(1)
+    expect(before.inFlight).toBe(0)
+
+    expect((await request.post(`${path}/restart`)).status()).toBe(204)
+    const restarted = await readStats(baseURL, `${path}/stats`)
+    expect(restarted.instanceId).not.toBe(before.instanceId)
+    expect(restarted.calls).toBe(0)
+
+    const blocked = Schema.decodeUnknownSync(SearchOutcome)(
+      await (
+        await request.post(`${path}/search`, {
+          data: { ...query, label: `after-restart-${name}` },
+        })
+      ).json(),
+    )
+    expect(blocked).toMatchObject({
+      _tag: 'Failure',
+      error: { _tag: 'RateLimited', source: rateLimitSource },
+    })
+    expect((await readStats(baseURL, `${path}/stats`)).calls).toBe(0)
+  })
+}
