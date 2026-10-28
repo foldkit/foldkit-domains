@@ -1,6 +1,6 @@
 # Foldkit preview packages
 
-These six package archives contain the unreleased Foldkit preview at commit `2899c6cbfe8d9a4ec9924d7219567697d33b4d55`. The matching framework source is pinned in `repos/foldkit`.
+These six package archives contain the unreleased Foldkit preview at commit `8213671aafe6a0543079d44e5eae8377586ea542`. The matching framework source is pinned in `repos/foldkit`.
 
 The app installs these archives through `file:` dependencies. Builds and CI use the committed archives and lockfile, without requiring another local checkout or unpublished npm versions. `manifest.json` records each package version and SHA-512 integrity.
 

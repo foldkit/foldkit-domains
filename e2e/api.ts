@@ -3,20 +3,27 @@ import { HttpRouter } from 'effect/http'
 
 import type { Page } from '@playwright/test'
 
-import { Domain, QueryWindow, domainNames, domainTlds } from '../src/domain'
-import { makeDomainFixtures } from '../src/domain.fixture'
-import { DOMAINS_RPC_PATH, DomainsRpcs, SearchError } from '../src/domainsRpc'
 import { DomainsRpcRoutes } from '../src/server/rpc'
+import {
+  Domain,
+  QuoteWindow,
+  domainNames,
+  domainTlds,
+} from '../src/shared/domain'
+import { makeDomainFixtures } from '../src/shared/domain.fixture'
+import {
+  DOMAINS_RPC_PATH,
+  DomainsRpcs,
+  SearchError,
+} from '../src/shared/domainsRpc'
 
 export const mockDomainSearch = async (
   page: Page,
   search: (
     label: string,
-    window: typeof QueryWindow.Type,
-  ) => Effect.Effect<
-    ReadonlyArray<typeof Domain.Type>,
-    typeof SearchError.Type
-  > = label => Effect.succeed(makeDomainFixtures(label)),
+    window: QuoteWindow,
+  ) => Effect.Effect<ReadonlyArray<Domain>, SearchError> = label =>
+    Effect.succeed(makeDomainFixtures(label)),
 ): Promise<void> => {
   const rpc = HttpRouter.toWebHandler(
     DomainsRpcRoutes.pipe(

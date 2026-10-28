@@ -11,15 +11,16 @@ import {
 import { HttpServerRequest } from 'effect/http'
 import { RateLimiter } from 'effect/persistence'
 
-import { QueryWindow, domainTlds } from '../domain'
-import { DomainsRpcs, RateLimitSource, SearchError } from '../domainsRpc'
+import { QuoteWindow, domainTlds } from '../shared/domain'
+import { DomainsRpcs, RateLimitSource, SearchError } from '../shared/domainsRpc'
 import { Registrar, RegistrarError } from './registrar'
 
 const SearchQuery = Schema.Struct({
   label: Schema.String,
-  ...QueryWindow.fields,
+  ...QuoteWindow.fields,
 })
-class SearchCacheKey extends Data.Class<typeof SearchQuery.Type> {}
+type SearchQuery = typeof SearchQuery.Type
+class SearchCacheKey extends Data.Class<SearchQuery> {}
 
 const SEARCH_CACHE_CAPACITY = 100
 const SEARCH_CACHE_TTL = '1 minute'
@@ -33,12 +34,12 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
     const cache = yield* Cache.make({
       capacity: SEARCH_CACHE_CAPACITY,
       timeToLive: SEARCH_CACHE_TTL,
-      lookup: (query: Readonly<{ label: string }> & typeof QueryWindow.Type) =>
+      lookup: (query: Readonly<{ label: string }> & QuoteWindow) =>
         registrar.search(query.label, query.offset, query.limit),
     })
 
     const consume = (
-      source: typeof RateLimitSource.Type,
+      source: RateLimitSource,
       key: string,
       limit: number,
       window: Duration.Input,
@@ -76,27 +77,29 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
             const maybeRequest = yield* Effect.serviceOption(
               HttpServerRequest.HttpServerRequest,
             )
+
             const clientIp = Option.match(maybeRequest, {
               onNone: () => 'local',
               onSome: request => request.headers['cf-connecting-ip'] ?? 'local',
             })
+
             yield* consume(
               'Client',
               `client:${clientIp}`,
               SEARCHES_PER_MINUTE,
               '1 minute',
             )
+
             yield* consume(
               'Application',
               'registrar',
               UNCACHED_SEARCHES_PER_SECOND,
               '1 second',
             )
+
             const domains = yield* registrar.search(label, offset, limit).pipe(
               Effect.catch(error =>
-                RegistrarError.match<
-                  Effect.Effect<never, typeof SearchError.Type>
-                >(error, {
+                RegistrarError.match<Effect.Effect<never, SearchError>>(error, {
                   RateLimited: ({ retryAfterSeconds }) =>
                     Effect.fail(
                       SearchError.RateLimited({
@@ -112,7 +115,9 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
                 }),
               ),
             )
+
             yield* Cache.set(cache, query, domains)
+
             return domains
           }
         }).pipe(

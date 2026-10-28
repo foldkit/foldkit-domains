@@ -4,8 +4,8 @@ import { writeFile } from 'node:fs/promises'
 import AxeBuilder from '@axe-core/playwright'
 import { type Page, type TestInfo, expect, test } from '@playwright/test'
 
-import { makeDomainFixtures } from '../src/domain.fixture'
-import { SearchError } from '../src/domainsRpc'
+import { makeDomainFixtures } from '../src/shared/domain.fixture'
+import { SearchError } from '../src/shared/domainsRpc'
 import { mockDomainSearch } from './api'
 
 const MINIMUM_TEXT_CONTRAST = 4.5

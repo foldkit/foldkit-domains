@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers'
 
-import { makeSharedDomainsRpc } from './rpc'
+import { makeCoordinatedDomainsRpc } from './rpc'
 
-export const sharedDomainsRpc = makeSharedDomainsRpc(env)
+export const coordinatedDomainsRpc = makeCoordinatedDomainsRpc(env)

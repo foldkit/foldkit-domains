@@ -12,10 +12,10 @@ import { FetchHttpClient } from 'effect/http'
 
 import { expect, test } from '@playwright/test'
 
-import { QueryWindow } from '../src/domain'
-import { SearchError } from '../src/domainsRpc'
-import { DomainsClient, makeDomainsClientLayer } from '../src/rpc'
+import { DomainsClient, makeDomainsClientLayer } from '../src/client/rpc'
 import { CoordinatedSearch, SearchOutcome } from '../src/server/coordination'
+import { QuoteWindow } from '../src/shared/domain'
+import { SearchError } from '../src/shared/domainsRpc'
 
 const CLIENT_COUNT = 300
 const Stats = Schema.Struct({
@@ -31,7 +31,7 @@ const search = (
   baseURL: string | undefined,
   label: string,
   client = '192.0.2.1',
-  window: typeof QueryWindow.Type = { offset: 0, limit: 60 },
+  window: QuoteWindow = { offset: 0, limit: 60 },
   path = '/rpc',
   rpcHeaders: Readonly<Record<string, string>> = {},
 ) => {

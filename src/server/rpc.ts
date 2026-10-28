@@ -8,11 +8,11 @@ import {
 } from 'effect/http'
 import { RpcSerialization, RpcServer } from 'effect/rpc'
 
-import { DOMAINS_RPC_PATH, DomainsRpcs } from '../domainsRpc'
+import { DOMAINS_RPC_PATH, DomainsRpcs } from '../shared/domainsRpc'
+import { makeCoordinatedSearchHandlersLayer } from './coordinatedSearch'
 import type { SearchEnvironment } from './coordination'
 import { RegistrarLayer } from './registrar'
 import { SearchHandlersLayer, SearchRateLimiterLayer } from './search'
-import { makeSharedSearchHandlersLayer } from './sharedSearch'
 
 const MAX_RPC_REQUEST_BYTES = 1024
 
@@ -96,10 +96,12 @@ export const domainsRpc = HttpRouter.toWebHandler(DomainsRpcLayer, {
   disableLogger: true,
 })
 
-export const makeSharedDomainsRpc = (environment: SearchEnvironment) =>
+export const makeCoordinatedDomainsRpc = (environment: SearchEnvironment) =>
   HttpRouter.toWebHandler(
     DomainsRpcRoutes.pipe(
-      HttpRouter.provideRequest(makeSharedSearchHandlersLayer(environment)),
+      HttpRouter.provideRequest(
+        makeCoordinatedSearchHandlersLayer(environment),
+      ),
     ),
     { disableLogger: true },
   )

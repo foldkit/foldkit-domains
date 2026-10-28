@@ -5,7 +5,7 @@ import type { DurableObjectState } from '@cloudflare/workers-types'
 import type { SearchEnvironment } from '../../src/server/coordination'
 import { DomainSearchCoordinator } from '../../src/server/domainSearchCoordinator'
 import { RegistrarCoordinator } from '../../src/server/registrarCoordinator'
-import { makeSharedDomainsRpc } from '../../src/server/rpc'
+import { makeCoordinatedDomainsRpc } from '../../src/server/rpc'
 
 const RegistrarRequest = Schema.Struct({ domains: Schema.Array(Schema.String) })
 
@@ -208,8 +208,8 @@ export class PersistenceRegistrarCoordinator extends FixtureRegistrarCoordinator
 const handlers = new WeakMap<
   FixtureEnvironment,
   {
-    main: ReturnType<typeof makeSharedDomainsRpc>
-    low: ReturnType<typeof makeSharedDomainsRpc>
+    main: ReturnType<typeof makeCoordinatedDomainsRpc>
+    low: ReturnType<typeof makeCoordinatedDomainsRpc>
   }
 >()
 
@@ -260,8 +260,8 @@ export default {
 
     const existing = handlers.get(environment)
     const rpcHandlers = existing ?? {
-      main: makeSharedDomainsRpc(environment),
-      low: makeSharedDomainsRpc({
+      main: makeCoordinatedDomainsRpc(environment),
+      low: makeCoordinatedDomainsRpc({
         ...environment,
         DOMAIN_QUOTES: environment.LOW_QUOTES,
       }),

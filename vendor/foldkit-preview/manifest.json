@@ -1,42 +1,42 @@
 {
   "repository": "https://github.com/foldkit/foldkit",
-  "commit": "2899c6cbfe8d9a4ec9924d7219567697d33b4d55",
+  "commit": "8213671aafe6a0543079d44e5eae8377586ea542",
   "packages": [
     {
-      "name": "foldkit",
-      "version": "0.169.0-canary.2899c6cbfe8d",
-      "file": "foldkit-0.169.0-canary.2899c6cbfe8d.tgz",
-      "integrity": "sha512-uPQnSYPmX2O5+Gnkl2FNGq5B/MBUEEIAYarrFtpz14w1MXjbDYtQx+Ib+SZgHfPQpWgL+OG8xwoGDGnu9plbSA=="
-    },
-    {
       "name": "@foldkit/devtools",
-      "version": "0.169.0-canary.2899c6cbfe8d",
-      "file": "foldkit-devtools-0.169.0-canary.2899c6cbfe8d.tgz",
-      "integrity": "sha512-AcAZilBVOTvEbEZmw5eml+0BOtMbq8NXT7kmgL7MaAdYBJtlKKR09/ivVIAIapvQf/DFPUVrQye+cM9/vMoQNg=="
+      "version": "0.169.0-canary.8213671aafe6",
+      "file": "foldkit-devtools-0.169.0-canary.8213671aafe6.tgz",
+      "integrity": "sha512-dq2stQO1eKQAbNkfEcswL7AbA+R2AvjWQycAplo8kI2xAD4WR1S/WI0ZymN/jL8JzK+mrbTwL8U9NtcvTCoOyg=="
     },
     {
       "name": "@foldkit/devtools-mcp",
-      "version": "0.25.0-canary.2899c6cbfe8d",
-      "file": "foldkit-devtools-mcp-0.25.0-canary.2899c6cbfe8d.tgz",
-      "integrity": "sha512-2YVyysju2gQjkb9VJ0YISoefkKKPKRXEmdZUJ9t6Ne0buIxNqls+OYY/5eOs0RrMCIu1+pPrUI63OxNVWojhHQ=="
+      "version": "0.25.0-canary.8213671aafe6",
+      "file": "foldkit-devtools-mcp-0.25.0-canary.8213671aafe6.tgz",
+      "integrity": "sha512-2q+jBxQwgzWWucdsp61AndZ+WdZ8MVxhqfNq3sHebs9unK8mlKusmBLE48N+3RhHaDnpB5p2IZodrhaqZHKRKw=="
+    },
+    {
+      "name": "foldkit",
+      "version": "0.169.0-canary.8213671aafe6",
+      "file": "foldkit-0.169.0-canary.8213671aafe6.tgz",
+      "integrity": "sha512-AKR6w4IW9DkzKwT/ylZ/7+8xlkyQLKCy7AgvfTs3XarVRHjG7dUMD8ETE8ib1C/vDOdahSosmi0eDN1Q8nYO8g=="
     },
     {
       "name": "@foldkit/oxlint-plugin",
-      "version": "0.15.3-canary.2899c6cbfe8d",
-      "file": "foldkit-oxlint-plugin-0.15.3-canary.2899c6cbfe8d.tgz",
-      "integrity": "sha512-AwNskjQjZVpJ97Jwtyr8sBdb5V6t0jFZEDoRvc6THHUfmVAkWYarl3MfvD3H4fc4JTpO9TKg5XhzwdRzVw8KqA=="
+      "version": "0.15.3-canary.8213671aafe6",
+      "file": "foldkit-oxlint-plugin-0.15.3-canary.8213671aafe6.tgz",
+      "integrity": "sha512-ULgOnpPuqY/VXQhYnCbH2gHvdN9VbuqO7cXsmR8LMl04a05m4vVpBCLXsVpBodDVpHweMnIFvKCVmKOaE0D4Yw=="
     },
     {
       "name": "@foldkit/ui",
-      "version": "0.169.0-canary.2899c6cbfe8d",
-      "file": "foldkit-ui-0.169.0-canary.2899c6cbfe8d.tgz",
-      "integrity": "sha512-BG5PT8d3BuBgZiYGjJA/ychFp7tgtCX5M6Y9fVwE98NCTOMnpPOWyFfhMHjQlFGkiKwm5FOr+RqygCLZAQi8tw=="
+      "version": "0.169.0-canary.8213671aafe6",
+      "file": "foldkit-ui-0.169.0-canary.8213671aafe6.tgz",
+      "integrity": "sha512-B8hILFRNFI7OfHCuQBqlXL5noYtARDMSqRhhhhRkQ1AT+OsrzP1P9/J4q4umVHC7PlEk6fVgW1uU7WYCRZxjpA=="
     },
     {
       "name": "@foldkit/vite-plugin",
-      "version": "0.28.0-canary.2899c6cbfe8d",
-      "file": "foldkit-vite-plugin-0.28.0-canary.2899c6cbfe8d.tgz",
-      "integrity": "sha512-5GwTDRxgZ4BjRAni5FHo6VgQUzAutUvwnHqGL4Dg/+Yy7kaHkf4ZHC2aTc3hdERnXBg9dl8YH5ytaCQGRexyDQ=="
+      "version": "0.28.0-canary.8213671aafe6",
+      "file": "foldkit-vite-plugin-0.28.0-canary.8213671aafe6.tgz",
+      "integrity": "sha512-RUJQaCFUNqR/c1oK9TInB3cyQpMXD8b6iMeimi6l3GOT+KjQ7MCtG3+hTaYkYnpQ2BWwK5/GnntnjETEmXZOrg=="
     }
   ]
 }

@@ -23,18 +23,18 @@
   },
   "dependencies": {
     "@effect/platform-browser": "4.0.0",
-    "@foldkit/devtools": "file:vendor/foldkit-preview/foldkit-devtools-0.169.0-canary.2899c6cbfe8d.tgz",
-    "@foldkit/ui": "file:vendor/foldkit-preview/foldkit-ui-0.169.0-canary.2899c6cbfe8d.tgz",
+    "@foldkit/devtools": "file:vendor/foldkit-preview/foldkit-devtools-0.169.0-canary.8213671aafe6.tgz",
+    "@foldkit/ui": "file:vendor/foldkit-preview/foldkit-ui-0.169.0-canary.8213671aafe6.tgz",
     "effect": "4.0.0",
-    "foldkit": "file:vendor/foldkit-preview/foldkit-0.169.0-canary.2899c6cbfe8d.tgz"
+    "foldkit": "file:vendor/foldkit-preview/foldkit-0.169.0-canary.8213671aafe6.tgz"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@cloudflare/workers-types": "5.20261026.1",
     "@effect/tsgo": "0.50.0",
-    "@foldkit/devtools-mcp": "file:vendor/foldkit-preview/foldkit-devtools-mcp-0.25.0-canary.2899c6cbfe8d.tgz",
-    "@foldkit/oxlint-plugin": "file:vendor/foldkit-preview/foldkit-oxlint-plugin-0.15.3-canary.2899c6cbfe8d.tgz",
-    "@foldkit/vite-plugin": "file:vendor/foldkit-preview/foldkit-vite-plugin-0.28.0-canary.2899c6cbfe8d.tgz",
+    "@foldkit/devtools-mcp": "file:vendor/foldkit-preview/foldkit-devtools-mcp-0.25.0-canary.8213671aafe6.tgz",
+    "@foldkit/oxlint-plugin": "file:vendor/foldkit-preview/foldkit-oxlint-plugin-0.15.3-canary.8213671aafe6.tgz",
+    "@foldkit/vite-plugin": "file:vendor/foldkit-preview/foldkit-vite-plugin-0.28.0-canary.8213671aafe6.tgz",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.4.0",

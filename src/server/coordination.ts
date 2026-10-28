@@ -1,19 +1,21 @@
-import { Effect, Schema } from 'effect'
+import { Context, Effect, Layer, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Domain, DomainLabel, QueryWindow } from '../domain'
-import { SearchError } from '../domainsRpc'
+import { Domain, DomainLabel, QuoteWindow } from '../shared/domain'
+import { SearchError } from '../shared/domainsRpc'
 
 export const CoordinatedSearch = Schema.Struct({
   label: DomainLabel,
-  ...QueryWindow.fields,
+  ...QuoteWindow.fields,
   client: Schema.String.check(Schema.isMaxLength(128)),
 })
+export type CoordinatedSearch = typeof CoordinatedSearch.Type
 
 export const SearchOutcome = defineTaggedUnion({
   Success: { domains: Schema.Array(Domain) },
   Failure: { error: SearchError },
 })
+export type SearchOutcome = typeof SearchOutcome.Type
 
 export interface SearchNamespace {
   getByName(name: string): { fetch(request: Request): Promise<Response> }
@@ -28,59 +30,80 @@ export interface SearchEnvironment {
   readonly REGISTRAR_MAX_CONCURRENT?: string
 }
 
-export const searchObject = (
+export class CoordinatedSearchClient extends Context.Service<
+  CoordinatedSearchClient,
+  {
+    readonly search: (
+      query: CoordinatedSearch,
+    ) => Effect.Effect<ReadonlyArray<Domain>, SearchError>
+  }
+>()('domains/CoordinatedSearchClient') {}
+
+export const makeCoordinatedSearchClientLayer = (
   namespace: SearchNamespace,
-  name: string,
-  query: typeof CoordinatedSearch.Type,
+  queryToObjectName: (query: CoordinatedSearch) => string,
 ) =>
-  Effect.tryPromise(signal =>
-    namespace.getByName(name).fetch(
-      new Request('https://domains.internal/search', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(query),
-        signal,
+  Layer.succeed(CoordinatedSearchClient, {
+    search: query =>
+      Effect.gen(function* () {
+        const outcome = yield* Effect.gen(function* () {
+          const response = yield* Effect.tryPromise(signal =>
+            namespace.getByName(queryToObjectName(query)).fetch(
+              new Request('https://domains.internal/search', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(query),
+                signal,
+              }),
+            ),
+          )
+
+          if (!response.ok) {
+            return yield* Effect.fail(SearchError.Unavailable())
+          }
+
+          const body = yield* Effect.tryPromise(() => response.json())
+          return yield* Schema.decodeUnknownEffect(SearchOutcome)(body)
+        }).pipe(Effect.catch(() => Effect.fail(SearchError.Unavailable())))
+
+        return yield* SearchOutcome.match(outcome, {
+          Success: ({ domains }) => Effect.succeed(domains),
+          Failure: ({ error }) => Effect.fail(error),
+        })
       }),
-    ),
-  ).pipe(
-    Effect.flatMap(response =>
-      response.ok
-        ? Effect.tryPromise({
-            try: () => response.json(),
-            catch: () => SearchError.Unavailable(),
-          })
-        : Effect.fail(SearchError.Unavailable()),
-    ),
-    Effect.flatMap(Schema.decodeUnknownEffect(SearchOutcome)),
-    Effect.catch(() => Effect.fail(SearchError.Unavailable())),
-    Effect.flatMap(
-      SearchOutcome.match({
-        Success: ({ domains }) => Effect.succeed(domains),
-        Failure: ({ error }) => Effect.fail(error),
-      }),
-    ),
-  )
+  })
 
 export const readCoordinatedSearch = (request: Request) =>
-  Effect.tryPromise(() => request.json()).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(CoordinatedSearch)),
-  )
+  Effect.gen(function* () {
+    const body = yield* Effect.tryPromise(() => request.json())
+    return yield* Schema.decodeUnknownEffect(CoordinatedSearch)(body)
+  })
 
-export const toSearchResponse = (
-  search: Effect.Effect<
-    ReadonlyArray<typeof Domain.Type>,
-    typeof SearchError.Type
-  >,
-  signal: AbortSignal,
+export const handleSearchRequest = <Requirements>(
+  request: Request,
+  search: (
+    query: CoordinatedSearch,
+  ) => Effect.Effect<ReadonlyArray<Domain>, SearchError, Requirements>,
 ) =>
-  Effect.runPromise(
-    search.pipe(
+  Effect.gen(function* () {
+    const decoded = yield* readCoordinatedSearch(request).pipe(Effect.result)
+
+    if (decoded._tag === 'Failure') {
+      return new Response('Invalid search', { status: 400 })
+    }
+
+    const outcome = yield* search(decoded.success).pipe(
       Effect.map(domains => SearchOutcome.Success({ domains })),
       Effect.catch(error => Effect.succeed(SearchOutcome.Failure({ error }))),
-      Effect.map(outcome => Response.json(outcome)),
-    ),
-    { signal },
-  )
+      Effect.catchDefect(() =>
+        Effect.succeed(
+          SearchOutcome.Failure({ error: SearchError.Unavailable() }),
+        ),
+      ),
+    )
+
+    return Response.json(outcome)
+  })
 
 export const respondToCancellation = (
   response: Promise<Response>,

@@ -2,8 +2,8 @@ import { Effect, Result, Schema } from 'effect'
 
 import { expect, test } from '@playwright/test'
 
-import { DOMAINS_RPC_PATH, SearchError } from '../src/domainsRpc'
-import { DomainsClient, makeDomainsClientLayer } from '../src/rpc'
+import { DomainsClient, makeDomainsClientLayer } from '../src/client/rpc'
+import { DOMAINS_RPC_PATH, SearchError } from '../src/shared/domainsRpc'
 
 const searchDomains = (baseURL: string | undefined, label: string) => {
   if (baseURL === undefined) {

@@ -2,8 +2,8 @@ import { Array, Effect, Fiber, Result, Schema } from 'effect'
 
 import { expect, test } from '@playwright/test'
 
-import { SearchError } from '../src/domainsRpc'
-import { DomainsClient, makeDomainsClientLayer } from '../src/rpc'
+import { DomainsClient, makeDomainsClientLayer } from '../src/client/rpc'
+import { SearchError } from '../src/shared/domainsRpc'
 
 const SEARCH_BURST_SIZE = 10
 

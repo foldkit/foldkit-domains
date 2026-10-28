@@ -2,7 +2,7 @@ import { Effect } from 'effect'
 
 import { devices, expect, test } from '@playwright/test'
 
-import { makeDomainFixtures } from '../src/domain.fixture'
+import { makeDomainFixtures } from '../src/shared/domain.fixture'
 import { mockDomainSearch } from './api'
 
 test.beforeEach(async ({ page }) => {

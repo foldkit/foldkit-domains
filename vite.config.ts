@@ -17,8 +17,8 @@ export default defineConfig(({ command, isPreview }) => ({
       // NOTE: This preview assigns separate dev identities to client and SSR environments; use one shared development identity.
       ...(command === 'serve' && !isPreview ? { buildId: 'development' } : {}),
       ssr: {
-        serverEntry: '/src/entry.server.ts',
-        clientEntry: '/src/entry.ts',
+        serverEntry: '/src/server/entry.ts',
+        clientEntry: '/src/client/entry.ts',
         build: { prerender: true },
       },
     }),
@@ -27,5 +27,5 @@ export default defineConfig(({ command, isPreview }) => ({
   environments: {
     ssr: { build: { rolldownOptions: { external: ['cloudflare:workers'] } } },
   },
-  optimizeDeps: { entries: ['src/entry.ts'] },
+  optimizeDeps: { entries: ['src/client/entry.ts'] },
 }))

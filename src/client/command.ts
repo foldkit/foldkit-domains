@@ -1,0 +1,184 @@
+import { Clock, Effect, Layer, Match, Schema } from 'effect'
+import { Dom } from 'foldkit'
+import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
+
+import { QuoteWindow } from '../shared/domain'
+import { ApplicationDefinition } from './definition'
+import { Message } from './message'
+import { PageScrollKey } from './resultsList'
+import { searchRouter } from './route'
+import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
+import { subscriptions } from './subscription'
+
+export const DetermineSearchTime = ApplicationDefinition.makeCommand(
+  'DetermineSearchTime',
+  {
+    args: {
+      searchGeneration: Schema.Number,
+      ...QuoteWindow.fields,
+      isForced: Schema.Boolean,
+    },
+    messages: [Message.CompletedDetermineSearchTime],
+    handler: function* () {
+      return args =>
+        Effect.gen(function* () {
+          const nowMillis = yield* Clock.currentTimeMillis
+          return Message.CompletedDetermineSearchTime({ ...args, nowMillis })
+        })
+    },
+  },
+)
+
+export const ReplaceSearchUrl = ApplicationDefinition.makeCommand(
+  'ReplaceSearchUrl',
+  {
+    args: { q: Schema.Option(Schema.String) },
+    messages: [Message.CompletedReplaceSearchUrl],
+    handler: function* () {
+      return fields =>
+        Effect.gen(function* () {
+          yield* replaceUrl(searchRouter(fields))
+
+          return Message.CompletedReplaceSearchUrl()
+        })
+    },
+  },
+)
+
+export const NavigateInternal = ApplicationDefinition.makeCommand(
+  'NavigateInternal',
+  {
+    args: { url: Schema.String },
+    messages: [Message.CompletedNavigateInternal],
+    handler: function* () {
+      return ({ url }) =>
+        pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal()))
+    },
+  },
+)
+
+export const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
+  args: { href: Schema.String },
+  messages: [Message.CompletedLoadExternal],
+  handler: function* () {
+    return ({ href }) =>
+      load(href).pipe(Effect.as(Message.CompletedLoadExternal()))
+  },
+})
+
+export const FocusSearchInput = ApplicationDefinition.makeCommand(
+  'FocusSearchInput',
+  {
+    messages: [Message.CompletedFocusSearchInput],
+    handler: function* () {
+      return () =>
+        Dom.focus(SEARCH_INPUT_SELECTOR, { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusSearchInput()),
+        )
+    },
+  },
+)
+
+export const FocusCartButton = ApplicationDefinition.makeCommand(
+  'FocusCartButton',
+  {
+    messages: [Message.CompletedFocusCartButton],
+    handler: function* () {
+      return () =>
+        Effect.sync(() => {
+          document.getElementById('cart-button')?.focus({ preventScroll: true })
+        }).pipe(Effect.as(Message.CompletedFocusCartButton()))
+    },
+  },
+)
+
+export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
+  'FocusCartCloseButton',
+  {
+    messages: [Message.CompletedFocusCartCloseButton],
+    handler: function* () {
+      return () =>
+        Dom.focus('.cart-heading button', { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusCartCloseButton()),
+        )
+    },
+  },
+)
+
+const KEYBOARD_SCROLL_DISTANCE_PX = 40
+const PAGE_SCROLL_FRACTION = 0.9
+
+export const ScrollPage = ApplicationDefinition.makeCommand('ScrollPage', {
+  args: { key: PageScrollKey },
+  messages: [Message.CompletedScrollPage],
+  handler: function* () {
+    return ({ key }) =>
+      Effect.sync(() => {
+        const pageDistance = window.innerHeight * PAGE_SCROLL_FRACTION
+        const top = Match.value(key).pipe(
+          Match.when(
+            'ArrowUp',
+            () => window.scrollY - KEYBOARD_SCROLL_DISTANCE_PX,
+          ),
+          Match.when(
+            'ArrowDown',
+            () => window.scrollY + KEYBOARD_SCROLL_DISTANCE_PX,
+          ),
+          Match.when('PageUp', () => window.scrollY - pageDistance),
+          Match.when('PageDown', () => window.scrollY + pageDistance),
+          Match.when('Home', () => 0),
+          Match.exhaustive,
+        )
+        window.scrollTo({ top, behavior: 'instant' })
+      }).pipe(Effect.as(Message.CompletedScrollPage()))
+  },
+})
+
+export const DismissSearchKeyboard = ApplicationDefinition.makeCommand(
+  'DismissSearchKeyboard',
+  {
+    messages: [Message.CompletedDismissSearchKeyboard],
+    handler: function* () {
+      return () =>
+        Effect.sync(() => {
+          const input = document.getElementById(searchInputConfig.id)
+
+          if (
+            window.matchMedia(searchInputConfig.touchMediaQuery).matches &&
+            input instanceof HTMLInputElement
+          ) {
+            input.blur()
+          }
+        }).pipe(Effect.as(Message.CompletedDismissSearchKeyboard()))
+    },
+  },
+)
+
+export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
+  'ReleaseEarlySearchListeners',
+  {
+    messages: [Message.CompletedReleaseEarlySearchListeners],
+    handler: function* () {
+      return () =>
+        Effect.sync(() =>
+          document.dispatchEvent(new Event('domains:ready')),
+        ).pipe(Effect.as(Message.CompletedReleaseEarlySearchListeners()))
+    },
+  },
+)
+
+export const EffectsLayer = Layer.mergeAll(
+  subscriptions.layer,
+  DetermineSearchTime.layer,
+  ReplaceSearchUrl.layer,
+  NavigateInternal.layer,
+  LoadExternal.layer,
+  FocusSearchInput.layer,
+  FocusCartButton.layer,
+  FocusCartCloseButton.layer,
+  ScrollPage.layer,
+  DismissSearchKeyboard.layer,
+  ReleaseEarlySearchListeners.layer,
+)

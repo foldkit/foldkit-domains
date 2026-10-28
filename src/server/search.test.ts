@@ -16,9 +16,9 @@ import { FetchHttpClient, HttpRouter } from 'effect/http'
 import { TestClock } from 'effect/testing'
 import { afterEach, describe, expect, test } from 'vitest'
 
-import { QueryWindow, domainNames } from '../domain'
-import { SearchError } from '../domainsRpc'
-import { DomainsClient, makeDomainsClientLayer } from '../rpc'
+import { DomainsClient, makeDomainsClientLayer } from '../client/rpc'
+import { QuoteWindow, domainNames } from '../shared/domain'
+import { SearchError } from '../shared/domainsRpc'
 import { Registrar, RegistrarLayer } from './registrar'
 import { DomainsRpcLayer } from './rpc'
 
@@ -48,7 +48,7 @@ const callSearch = (
   ip = '192.0.2.1',
   context = Context.empty(),
   rpcHeaders: Readonly<Record<string, string>> = {},
-  window: typeof QueryWindow.Type = { offset: 0, limit: 556 },
+  window: QuoteWindow = { offset: 0, limit: 556 },
 ) =>
   Effect.scoped(
     Effect.gen(function* () {

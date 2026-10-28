@@ -50,14 +50,11 @@ describe('registrar retry delay', () => {
     { body: { retryAfter: { value: -1, str: '-1s' } }, seconds: 60 },
     { body: { retryAfter: { value: 100, str: '20s' } }, seconds: 60 },
     { body: { retryAfter: { value: 12 } }, seconds: 60 },
-  ])(
-    'uses a consistent numeric and human-readable body delay',
-    ({ body, seconds }) => {
-      expect(
-        registrarResponseToRetryAfterSeconds(Headers.empty, body, NOW_MILLIS),
-      ).toBe(seconds)
-    },
-  )
+  ])('returns $seconds seconds for retry body $body', ({ body, seconds }) => {
+    expect(
+      registrarResponseToRetryAfterSeconds(Headers.empty, body, NOW_MILLIS),
+    ).toBe(seconds)
+  })
 
   test('prefers the HTTP retry header over the response body', () => {
     expect(

@@ -19,7 +19,7 @@ import {
   DomainQuote,
   domainNames,
   domainTlds,
-} from '../domain'
+} from '../shared/domain'
 import { registrarResponseToRetryAfterSeconds } from './retryAfter'
 
 const REGISTRAR_SEARCH_URL =
@@ -53,6 +53,7 @@ export const RegistrarError = defineTaggedUnion({
   },
   Unavailable: {},
 })
+export type RegistrarError = typeof RegistrarError.Type
 
 export class Registrar extends Context.Service<
   Registrar,
@@ -61,16 +62,13 @@ export class Registrar extends Context.Service<
       label: string,
       offset?: number,
       limit?: number,
-    ) => Effect.Effect<
-      ReadonlyArray<typeof Domain.Type>,
-      typeof RegistrarError.Type
-    >
+    ) => Effect.Effect<ReadonlyArray<Domain>, RegistrarError>
   }
 >()('domains/Registrar') {}
 
 export type RegistrarBatch = Effect.Effect<
-  ReadonlyArray<typeof Domain.Type>,
-  typeof RegistrarError.Type
+  ReadonlyArray<Domain>,
+  RegistrarError
 >
 
 export class RegistrarAdmission extends Context.Service<
@@ -87,11 +85,11 @@ export const RegistrarLayer = Layer.effect(
       Config.option,
       Effect.orDie,
     )
-    const cooldown = yield* Ref.make<Option.Option<number>>(Option.none())
+    const cooldownRef = yield* Ref.make<Option.Option<number>>(Option.none())
 
     const ensureProviderReady = Effect.gen(function* () {
       const nowMillis = yield* Clock.currentTimeMillis
-      const maybeDeadline = yield* Ref.get(cooldown)
+      const maybeDeadline = yield* Ref.get(cooldownRef)
 
       if (Option.isSome(maybeDeadline) && maybeDeadline.value > nowMillis) {
         return yield* Effect.fail(
@@ -106,13 +104,15 @@ export const RegistrarLayer = Layer.effect(
       }
     })
 
-    const searchBatch = (candidates: ReadonlyArray<typeof DomainName.Type>) =>
+    const searchBatch = (candidates: ReadonlyArray<DomainName>) =>
       Effect.gen(function* () {
         yield* ensureProviderReady
+
         const names = Array.map(candidates, domain => domain.name)
         const request = yield* HttpClientRequest.post(
           REGISTRAR_SEARCH_URL,
         ).pipe(HttpClientRequest.bodyJson({ domains: names }))
+
         const authenticatedRequest = Option.match(maybeAccessToken, {
           onNone: () => request,
           onSome: accessToken =>
@@ -122,18 +122,22 @@ export const RegistrarLayer = Layer.effect(
 
         if (response.status === 429) {
           const nowMillis = yield* Clock.currentTimeMillis
+
           const body = yield* response.json.pipe(
             Effect.catch(() => Effect.succeed(undefined)),
           )
+
           const retryAfterSeconds = registrarResponseToRetryAfterSeconds(
             response.headers,
             body,
             nowMillis,
           )
+
           const nextDeadline =
             nowMillis + Duration.toMillis(Duration.seconds(retryAfterSeconds))
+
           yield* Ref.update(
-            cooldown,
+            cooldownRef,
             Option.match({
               onNone: () => Option.some(nextDeadline),
               onSome: deadline => Option.some(Math.max(deadline, nextDeadline)),
@@ -146,8 +150,10 @@ export const RegistrarLayer = Layer.effect(
         }
 
         yield* HttpClientResponse.filterStatusOk(response)
+
         const data =
           yield* HttpClientResponse.schemaBodyJson(RegistrarResponse)(response)
+
         const hasExactResults =
           data.results.length === names.length &&
           Array.every(data.results, (result, index) =>

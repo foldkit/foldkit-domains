@@ -7,9 +7,9 @@ import {
   test,
 } from '@playwright/test'
 
-import { Domain } from '../src/domain'
-import { makeDomainFixtures } from '../src/domain.fixture'
-import { SearchError } from '../src/domainsRpc'
+import { Domain } from '../src/shared/domain'
+import { makeDomainFixtures } from '../src/shared/domain.fixture'
+import { SearchError } from '../src/shared/domainsRpc'
 import { mockDomainSearch } from './api'
 import * as Page from './page'
 
@@ -749,6 +749,49 @@ test('hands URL synchronization to the Runtime without leaving duplicate early l
   )
 })
 
+test('backspacing to a loaded query restores quotes without waiting for debounce or RPC', async ({
+  page,
+}) => {
+  await page.clock.install()
+  const labels: Array<string> = []
+  await mockDomainSearch(page, label =>
+    Effect.sync(() => {
+      labels.push(label)
+      return makeDomainFixtures(label)
+    }),
+  )
+  await page.goto('/?q=devin')
+  const input = page.getByRole('searchbox', { name: 'Search domains' })
+  const card = page.locator('.domain-card').first()
+  await expect(card).toContainText('devin.com')
+  await expect(card).toContainText('$12.00')
+
+  await input.fill('devins')
+  await expect(card).toContainText('devins.com')
+  await expect(card).toContainText('$12.00')
+  expect(labels).toEqual(['devin', 'devins'])
+
+  const nowMillis = await page.evaluate(() => Date.now())
+  await page.clock.pauseAt(nowMillis + 100)
+  await input.press('Backspace')
+  await page.clock.runFor(16)
+
+  await expect(input).toHaveValue('devin')
+  await expect(input).toBeFocused()
+  await expect(page).toHaveURL(/q=devin$/)
+  await expect(card).toContainText('devin.com')
+  await expect(card).toContainText('$12.00')
+  await expect(card.locator('.skeleton-price')).toHaveCount(0)
+  expect(labels).toEqual(['devin', 'devins'])
+
+  await page.clock.runFor(61_000)
+  await page.clock.resume()
+  await input.fill('devins')
+  await expect(card).toContainText('devins.com')
+  await expect(card).toContainText('$12.00')
+  expect(labels).toEqual(['devin', 'devins', 'devins'])
+})
+
 test('recovers from a registrar rate limit through retry without showing stale quotes', async ({
   page,
 }) => {
@@ -921,11 +964,11 @@ for (const width of [1440, 390]) {
       await badge.click()
       await expect(panel).toBeVisible()
       await expect(panel).toContainText('while the app stays live.')
-      const successes = panel
+      const quoteMessages = panel
         .locator('.message-list')
-        .getByText('SucceededFetchDomains', { exact: true })
-      const completedSearches = await successes.count()
-      await successes.first().click()
+        .getByText('GotQuoteWindowsMessage', { exact: true })
+      const previousQuoteMessages = await quoteMessages.count()
+      await quoteMessages.first().click()
       await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
       await expect(page.locator('.dt-interaction-blocker')).toHaveCount(0)
       await expect(input).toHaveValue('devtools-search')
@@ -933,7 +976,7 @@ for (const width of [1440, 390]) {
         'devtools-search.com',
       )
       releaseQuotes()
-      await expect(successes).toHaveCount(completedSearches + 1)
+      await expect(quoteMessages).toHaveCount(previousQuoteMessages + 1)
       await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
       await expect(input).toHaveValue('devtools-search')
       await expect(page).toHaveURL(/q=devtools-search/)
