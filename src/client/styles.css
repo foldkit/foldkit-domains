@@ -477,7 +477,7 @@
   }
 
   .tld-search:focus-within {
-    @apply shadow-[inset_0_-2px_0_var(--color-gray-400)];
+    @apply border-gray-500;
   }
 
   .tld-options {
