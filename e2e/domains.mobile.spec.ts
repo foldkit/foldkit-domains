@@ -1046,3 +1046,65 @@ test('mobile TLD sheet searches the complete catalog, contains scrolling, and pr
     }
   }
 })
+
+test('a mobile search restarts at the page top after backspacing a scrolled query to empty', async ({
+  browser,
+  browserName,
+  baseURL,
+}) => {
+  if (baseURL === undefined) {
+    throw new Error('The domain example requires a base URL')
+  }
+
+  const context = await browser.newContext({
+    ...devices[browserName === 'webkit' ? 'iPhone 13' : 'Pixel 5'],
+    viewport: { width: 390, height: 852 },
+    baseURL,
+  })
+  const page = await context.newPage()
+  await mockDomainSearch(page)
+  try {
+    await page.goto('/?q=acme')
+    const input = page.getByRole('searchbox', { name: 'Search domains' })
+    const originalInput = await input.elementHandle()
+    await expect(page.locator('.domain-card .price').first()).toBeVisible()
+    for (const nextQuery of ['acme', 'jo']) {
+      await input.focus()
+      await page.setViewportSize({ width: 390, height: 400 })
+      await page.evaluate(() =>
+        window.scrollTo({ top: 1300, behavior: 'instant' }),
+      )
+      await expect
+        .poll(() => page.evaluate(() => window.scrollY))
+        .toBeGreaterThan(1000)
+      await input.press('End')
+      const previousQuery = await input.inputValue()
+      for (const _character of previousQuery) {
+        await input.press('Backspace')
+      }
+      await expect(input).toHaveValue('')
+      await expect(page).toHaveURL('/')
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+      await input.pressSequentially(nextQuery, { delay: 30 })
+      await expect(page.locator('.domain-card').first()).toContainText(
+        `${nextQuery}.com`,
+      )
+      await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+      await expect(
+        page.getByRole('heading', { name: 'Top Results', exact: true }),
+      ).toBeInViewport()
+      expect(
+        await input.evaluate(
+          (node, original) => node === original,
+          originalInput,
+        ),
+      ).toBe(true)
+      await expect(input).toBeFocused()
+      await page.setViewportSize({ width: 390, height: 852 })
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    }
+  } finally {
+    await context.close()
+  }
+})

@@ -46,6 +46,12 @@ export const RESULTS_GROUP_HEIGHT_PX = 114
 export const RESULTS_OVERSCAN_GROUPS = 2
 export const ResultsListBlock = VirtualList.makeBlock<DomainListingGroup>()
 
+export const resultsListConfig: VirtualList.InitConfig = {
+  id: RESULTS_LIST_ID,
+  rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
+  scrollContainer: VirtualList.ScrollContainer.Window(),
+}
+
 const MOBILE_RESULTS_WIDTH_PX = 668
 const TABLET_RESULTS_WIDTH_PX = 944
 const MOBILE_RESULT_HEIGHT_PX = 61

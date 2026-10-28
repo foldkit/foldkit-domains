@@ -3,7 +3,7 @@ import { Url } from 'foldkit'
 import { Command } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock, VirtualList } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { Domain, domainTlds, queryToMaybeDomainLabel } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
@@ -18,11 +18,7 @@ import {
   TldListboxBlock,
 } from './filterListboxes'
 import { Model } from './model'
-import {
-  RESULTS_GROUP_HEIGHT_PX,
-  RESULTS_LIST_ID,
-  ResultsListBlock,
-} from './resultsList'
+import { ResultsListBlock, resultsListConfig } from './resultsList'
 import { ApplicationRoute } from './route'
 import {
   SEARCH_MODE_CONTROL_ID,
@@ -40,11 +36,7 @@ export const emptyModel = Model.make({
   domainsQuery: DomainsQuery.init().model,
   maybeBlockedDomainCandidateRange: Option.none(),
   maybeSearchCooldown: Option.none(),
-  resultsList: ResultsListBlock.init({
-    id: RESULTS_LIST_ID,
-    rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
-    scrollContainer: VirtualList.ScrollContainer.Window(),
-  }).model,
+  resultsList: ResultsListBlock.init(resultsListConfig).model,
   tldListbox: TldListboxBlock.init({ id: TLD_FILTER_ID }).model,
   availabilityListbox: AvailabilityListboxBlock.init({
     id: AVAILABILITY_FILTER_ID,

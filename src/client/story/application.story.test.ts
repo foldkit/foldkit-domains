@@ -1,7 +1,10 @@
 import { Array, Option } from 'effect'
 import { UrlRequest } from 'foldkit/navigation'
 import { Command, given, message, model, story } from 'foldkit/story'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
+
+import { VirtualList } from '@foldkit/ui'
 
 import { Domain } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
@@ -13,9 +16,11 @@ import {
   ReplaceSearchUrl,
   ScrollPageToTop,
 } from '../command'
+import { ResultsListBinding } from '../composition'
 import { DomainsQuery } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, readyModel, urlOrThrow } from '../model.fixture'
+import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from '../route'
 import { SearchPresentation, searchPresentation } from '../searchPresentation'
 import { update } from '../update'
@@ -384,6 +389,49 @@ test('cart additions are unique and require confirmed availability', () => {
     model(model => {
       expect(model.carts.Demo).toEqual([])
     }),
+    Command.expectNone(),
+  )
+})
+
+test('clearing a scrolled search discards its virtual viewport before another search', () => {
+  story(
+    update,
+    given(readyModel('acme')),
+    message(
+      toParentMessage(
+        ResultsListBinding,
+        ResultsListBlock.Message.ObservedContainerScroll({
+          scrollTop: 1300,
+          scrollHeight: 12000,
+          containerHeight: 400,
+          anchor: VirtualList.ObservedAnchor.Row({
+            key: 'acme.studio',
+            index: 2,
+            viewportOffset: -20,
+          }),
+        }),
+      ),
+    ),
+    model(model => {
+      expect(model.resultsList.scrollTop).toBe(1300)
+      expect(model.resultsList.viewportAnchor._tag).toBe('Row')
+    }),
+    message(Message.UpdatedSearch({ value: '' })),
+    Command.resolve(
+      ReplaceSearchUrl({ q: Option.none() }),
+      Message.CompletedReplaceSearchUrl(),
+    ),
+    message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
+    Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
+    model(model => {
+      expect(model.resultsList.scrollTop).toBe(0)
+      expect(model.resultsList.viewportAnchor).toEqual({
+        _tag: 'Offset',
+        scrollTop: 0,
+      })
+      expect(model.resultsList.measurement._tag).toBe('Unmeasured')
+    }),
+    resolveResultsListScrolls,
     Command.expectNone(),
   )
 })

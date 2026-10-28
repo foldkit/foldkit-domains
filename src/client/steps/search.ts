@@ -26,7 +26,7 @@ import {
   makeTrackDomainCandidateRangeStep,
   makeUseCompleteCatalogRangeStep,
 } from './quoteLoading'
-import { informResultsListStep } from './resultsList'
+import { informResultsListStep, resetResultsListStep } from './resultsList'
 
 export const cancelSearchStep = makeStep(model =>
   Update.combineSteps(
@@ -61,7 +61,9 @@ export const makeSearchQueryStep = (isForced = false) =>
           ],
         }),
       ),
-      informResultsListStep,
+      String.isEmpty(routeToQuery(model.route))
+        ? resetResultsListStep
+        : informResultsListStep,
     ])
   })
 

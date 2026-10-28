@@ -1,7 +1,7 @@
 import { Option, Result } from 'effect'
 import { Block, Update } from 'foldkit'
 
-import { DialogBlock, VirtualList } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { queryToMaybeDomainLabel } from '../shared/domain'
 import {
@@ -27,11 +27,7 @@ import {
   TLD_FILTER_ID,
   TldListboxBlock,
 } from './filterListboxes'
-import {
-  RESULTS_GROUP_HEIGHT_PX,
-  RESULTS_LIST_ID,
-  ResultsListBlock,
-} from './resultsList'
+import { ResultsListBlock, resultsListConfig } from './resultsList'
 import { routeToQuery } from './route'
 import {
   SEARCH_MODE_CONTROL_ID,
@@ -52,13 +48,7 @@ import { makeChangeSearchModeStep } from './steps/search'
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
   field: 'resultsList',
   init: {
-    contextToArgs: () => [
-      {
-        id: RESULTS_LIST_ID,
-        rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
-        scrollContainer: VirtualList.ScrollContainer.Window(),
-      },
-    ],
+    contextToArgs: () => [resultsListConfig],
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(ResultsListBlock, {

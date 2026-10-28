@@ -1,5 +1,5 @@
 import { Clock, Effect, Layer, Match, Schema } from 'effect'
-import { Dom } from 'foldkit'
+import { Dom, Render } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
 import { DomainCandidateRange } from '../shared/domain'
@@ -162,9 +162,13 @@ export const ScrollPageToTop = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedScrollPageToTop],
     handler: function* () {
       return () =>
-        Effect.sync(() => {
-          window.scrollTo({ top: 0, behavior: 'instant' })
-        }).pipe(Effect.as(Message.CompletedScrollPageToTop()))
+        Effect.gen(function* () {
+          yield* Render.afterCommit
+          yield* Effect.sync(() => {
+            window.scrollTo({ top: 0, behavior: 'instant' })
+          })
+          return Message.CompletedScrollPageToTop()
+        })
     },
   },
 )
