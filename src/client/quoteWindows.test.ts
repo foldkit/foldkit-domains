@@ -19,7 +19,7 @@ import {
   QuoteFailure,
   QuoteWindowArgs,
   QuoteWindows,
-  makeFetchQuoteWindow,
+  fetchQuoteWindow,
 } from './quoteWindows'
 import { makeDomainsClientLayer } from './rpc'
 import { SearchCooldown } from './searchCooldown'
@@ -167,10 +167,7 @@ describe('quote window fetching', () => {
       const quoteWindowResult = await Effect.runPromise(
         Effect.gen(function* () {
           const fetch = yield* Effect.forkChild(
-            makeFetchQuoteWindow().pipe(
-              Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
-              Effect.result,
-            ),
+            fetchQuoteWindow(args).pipe(Effect.result),
           )
 
           yield* TestClock.adjust('350 millis')
@@ -189,10 +186,7 @@ describe('quote window fetching', () => {
     const quoteWindowResult = await Effect.runPromise(
       Effect.gen(function* () {
         const fetch = yield* Effect.forkChild(
-          makeFetchQuoteWindow().pipe(
-            Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
-            Effect.result,
-          ),
+          fetchQuoteWindow(args).pipe(Effect.result),
         )
 
         yield* TestClock.adjust('350 millis')
@@ -231,10 +225,7 @@ describe('quote window fetching', () => {
     const quoteWindowResult = await Effect.runPromise(
       Effect.gen(function* () {
         const fetch = yield* Effect.forkChild(
-          makeFetchQuoteWindow().pipe(
-            Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
-            Effect.result,
-          ),
+          fetchQuoteWindow(args).pipe(Effect.result),
         )
 
         yield* TestClock.adjust('350 millis')
@@ -276,10 +267,7 @@ describe('quote window fetching', () => {
     const exit = await Effect.runPromise(
       Effect.gen(function* () {
         const fetch = yield* Effect.forkChild(
-          makeFetchQuoteWindow().pipe(
-            Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
-            Effect.result,
-          ),
+          fetchQuoteWindow(args).pipe(Effect.result),
         )
 
         yield* TestClock.adjust('350 millis')

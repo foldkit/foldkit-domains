@@ -20,55 +20,52 @@ export const QuoteFailure = Schema.Struct({
 })
 export type QuoteFailure = typeof QuoteFailure.Type
 
-export const makeFetchQuoteWindow = () =>
-  Effect.gen(function* () {
+export const fetchQuoteWindow = (args: QuoteWindowArgs) => {
+  const unavailable = (error: string) =>
+    Effect.fail(
+      QuoteFailure.make({ error, maybeSearchCooldown: Option.none() }),
+    )
+
+  return Effect.gen(function* () {
     const client = yield* DomainsClient
 
-    return (args: QuoteWindowArgs) => {
-      const unavailable = (error: string) =>
-        Effect.fail(
-          QuoteFailure.make({ error, maybeSearchCooldown: Option.none() }),
-        )
-
-      return Effect.gen(function* () {
-        yield* Effect.sleep(SEARCH_DEBOUNCE)
-        return yield* client.SearchDomains(args)
-      }).pipe(
-        Effect.timeout(SEARCH_TIMEOUT),
-        Effect.catchTags({
-          RateLimited: ({ source, retryAfterSeconds }) =>
-            Effect.gen(function* () {
-              const nowMillis = yield* Clock.currentTimeMillis
-              return yield* Effect.fail(
-                QuoteFailure.make({
-                  error: formatRateLimitMessage(source, retryAfterSeconds),
-                  maybeSearchCooldown: Option.some(
-                    SearchCooldown.make({
-                      source,
-                      expiresAtMillis:
-                        nowMillis +
-                        Duration.toMillis(Duration.seconds(retryAfterSeconds)),
-                    }),
-                  ),
+    yield* Effect.sleep(SEARCH_DEBOUNCE)
+    return yield* client.SearchDomains(args)
+  }).pipe(
+    Effect.timeout(SEARCH_TIMEOUT),
+    Effect.catchTags({
+      RateLimited: ({ source, retryAfterSeconds }) =>
+        Effect.gen(function* () {
+          const nowMillis = yield* Clock.currentTimeMillis
+          return yield* Effect.fail(
+            QuoteFailure.make({
+              error: formatRateLimitMessage(source, retryAfterSeconds),
+              maybeSearchCooldown: Option.some(
+                SearchCooldown.make({
+                  source,
+                  expiresAtMillis:
+                    nowMillis +
+                    Duration.toMillis(Duration.seconds(retryAfterSeconds)),
                 }),
-              )
+              ),
             }),
-          Unavailable: () =>
-            unavailable(
-              'Could not check availability and prices. Please try again.',
-            ),
+          )
         }),
-        Effect.catch(error =>
-          Schema.is(QuoteFailure)(error)
-            ? Effect.fail(error)
-            : unavailable('Could not search domains. Please try again.'),
+      Unavailable: () =>
+        unavailable(
+          'Could not check availability and prices. Please try again.',
         ),
-        Effect.catchDefect(() =>
-          unavailable('Could not search domains. Please try again.'),
-        ),
-      )
-    }
-  })
+    }),
+    Effect.catch(error =>
+      Schema.is(QuoteFailure)(error)
+        ? Effect.fail(error)
+        : unavailable('Could not search domains. Please try again.'),
+    ),
+    Effect.catchDefect(() =>
+      unavailable('Could not search domains. Please try again.'),
+    ),
+  )
+}
 
 export const QuoteWindows = Query.define({
   name: 'QuoteWindows',
@@ -79,6 +76,9 @@ export const QuoteWindows = Query.define({
   maxSettledEntries: 100,
   notifyOnCompletion: true,
   handler: function* () {
-    return yield* makeFetchQuoteWindow()
+    const client = yield* DomainsClient
+
+    return args =>
+      fetchQuoteWindow(args).pipe(Effect.provideService(DomainsClient, client))
   },
 })
