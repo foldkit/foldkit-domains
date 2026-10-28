@@ -277,6 +277,7 @@ test('mobile search scrolls with the hero and stays pinned during a search', asy
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   const header = page.locator('.header')
   const assertHeroScroll = async () => {
+    await expect(page.locator('form.search')).toHaveCSS('position', 'absolute')
     await page.evaluate(() => window.scrollTo(0, 0))
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
     const documentTop = await input.evaluate(
