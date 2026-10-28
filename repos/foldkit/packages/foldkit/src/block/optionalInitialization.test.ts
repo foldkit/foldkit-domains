@@ -15,10 +15,12 @@ import { withOperationGraph } from './operationGraph.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   UpdatedCount: { count: Schema.Number },
   CompletedInitialization: { count: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 const ChildDefinition = Block.makeDefinition('OptionalInitializationChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -65,14 +67,17 @@ const ChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 > = Block.assemble(prepareChild)
 
 const Entry = Schema.Struct({ id: Schema.String, child: ChildBlock.Model })
+type Entry = typeof Entry.Type
 const Model = Schema.Struct({
   maybeEntry: Schema.Option(Entry),
   label: Schema.String,
 })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedInit: { id: Schema.String, count: Schema.Number },
   RequestedSetCount: { id: Schema.String, count: Schema.Number },
 })
+type Message = typeof Message.Type
 const ParentDefinition = Block.makeDefinition('OptionalInitializationParent', {
   Model,
   Message,
@@ -199,9 +204,11 @@ describe('initAndSet keyed Option storage', () => {
       child: ChildBlock.Model,
       label: Schema.String,
     })
+    type LabeledEntry = typeof LabeledEntry.Type
     const LabeledModel = Schema.Struct({
       maybeEntry: Schema.Option(LabeledEntry),
     })
+    type LabeledModel = typeof LabeledModel.Type
     const LabeledParent = Block.makeDefinition(
       'OptionalInitializationLabeledParent',
       { Model: LabeledModel, Message: Schema.Never },
@@ -228,9 +235,7 @@ describe('initAndSet keyed Option storage', () => {
     const second = ParentBlock.operations.initEntry(sameKey, 'B', 3).model
     const replacement = ParentBlock.operations.initEntry(second, 'A', 4).model
     const maybeSlowSubscriptionDependencies: Option.Option<
-      ResolvedSlowPhaseConfig<
-        SlowSubscriptionDependenciesContext<typeof Model.Type>
-      >
+      ResolvedSlowPhaseConfig<SlowSubscriptionDependenciesContext<Model>>
     > = Option.none()
 
     await Effect.runPromise(

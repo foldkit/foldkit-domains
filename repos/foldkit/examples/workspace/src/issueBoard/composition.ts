@@ -18,9 +18,9 @@ import {
 } from './dragAndDrop'
 import { OutMessage } from './outMessage'
 
-const maybeMoveFromDrop = (
-  reordered: typeof DragAndDropBlock.OutMessage.Reordered.Type,
-) => {
+type ReorderedDragAndDrop = typeof DragAndDropBlock.OutMessage.Reordered.Type
+
+const maybeMoveFromDrop = (reordered: ReorderedDragAndDrop) => {
   if (
     reordered.fromContainerId === reordered.toContainerId &&
     reordered.fromIndex === reordered.toIndex

@@ -30,7 +30,7 @@ import {
   type VirtualListChatMessage,
   historyModeForSource,
 } from './domain/domain'
-import { Message } from './message'
+import { type CompletedFetchVirtualListChatHistory, Message } from './message'
 
 export const INITIAL_CHAT_MESSAGE_COUNT = 24
 export const UNBOUNDED_CHAT_START_RUNWAY_PX = 800
@@ -50,23 +50,21 @@ const chatBodies = [
   'Perfect. I’ll queue the release once CI finishes.',
 ]
 
-export const initialVirtualListChatMessages: ReadonlyArray<
-  typeof VirtualListChatMessage.Type
-> = Array.makeBy(INITIAL_CHAT_MESSAGE_COUNT, index => ({
-  id: index,
-  body: Option.getOrElse(
-    Array.get(chatBodies, index % chatBodies.length),
-    () => 'Message',
-  ),
-  isExpanded: index % 7 === 0,
-}))
+export const initialVirtualListChatMessages: ReadonlyArray<VirtualListChatMessage> =
+  Array.makeBy(INITIAL_CHAT_MESSAGE_COUNT, index => ({
+    id: index,
+    body: Option.getOrElse(
+      Array.get(chatBodies, index % chatBodies.length),
+      () => 'Message',
+    ),
+    isExpanded: index % 7 === 0,
+  }))
 
-export const chatMessageKey = (
-  message: typeof VirtualListChatMessage.Type,
-): string => globalThis.String(message.id)
+export const chatMessageKey = (message: VirtualListChatMessage): string =>
+  globalThis.String(message.id)
 
 const virtualListChatInitConfig = (
-  source: typeof VirtualListChatHistorySource.Type,
+  source: VirtualListChatHistorySource,
 ): VirtualList.InitConfig => ({
   id: VirtualListChatHistorySource.match(source, {
     Unbounded: () => 'virtual-list-chat-demo',
@@ -248,7 +246,7 @@ export const VirtualListChatDemoBindingWithOutMessagePolicy =
   })
 
 const selectVirtualListChatHistoryModeStep = (
-  mode: typeof VirtualListChatHistoryMode.Type,
+  mode: VirtualListChatHistoryMode,
 ) =>
   makeStep(model => {
     if (mode === historyModeForSource(model.virtualListChatHistorySource)) {
@@ -256,7 +254,7 @@ const selectVirtualListChatHistoryModeStep = (
     }
 
     const nextHistorySource = Match.value(mode).pipe(
-      Match.withReturnType<typeof VirtualListChatHistorySource.Type>(),
+      Match.withReturnType<VirtualListChatHistorySource>(),
       Match.when('Infinite', () => VirtualListChatHistorySource.Unbounded()),
       Match.when('Finite', () =>
         VirtualListChatHistorySource.Finite({
@@ -297,7 +295,7 @@ export const VirtualListChatHistoryModeGroupBinding = UiDefinition.makeBinding(
 })
 
 export const updateVirtualListChatMessagesStep = (
-  nextMessages: ReadonlyArray<typeof VirtualListChatMessage.Type>,
+  nextMessages: ReadonlyArray<VirtualListChatMessage>,
   nextId?: number,
 ) =>
   makeStep(model => {
@@ -330,7 +328,7 @@ export const handleCompletedFetchVirtualListChatHistory = makeStep(
       messages,
       source,
       page,
-    }: typeof Message.CompletedFetchVirtualListChatHistory.Type,
+    }: CompletedFetchVirtualListChatHistory,
   ) => {
     if (
       model.virtualListChatHistoryLoad._tag === 'Idle' ||

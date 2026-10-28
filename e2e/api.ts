@@ -6,8 +6,8 @@ import type { Page } from '@playwright/test'
 import { DomainsRpcRoutes } from '../src/server/rpc'
 import {
   Domain,
-  QuoteWindow,
-  domainNames,
+  DomainCandidateRange,
+  domainCandidates,
   domainTlds,
 } from '../src/shared/domain'
 import { makeDomainFixtures } from '../src/shared/domain.fixture'
@@ -16,12 +16,14 @@ import {
   DomainsRpcs,
   SearchError,
 } from '../src/shared/domainsRpc'
+import { SearchMode } from '../src/shared/searchMode'
 
 export const mockDomainSearch = async (
   page: Page,
   search: (
     label: string,
-    window: QuoteWindow,
+    range: DomainCandidateRange,
+    mode: SearchMode,
   ) => Effect.Effect<ReadonlyArray<Domain>, SearchError> = label =>
     Effect.succeed(makeDomainFixtures(label)),
 ): Promise<void> => {
@@ -29,15 +31,23 @@ export const mockDomainSearch = async (
     DomainsRpcRoutes.pipe(
       HttpRouter.provideRequest(
         DomainsRpcs.toLayer({
-          SearchDomains: ({ label, offset = 0, limit = domainTlds.length }) =>
-            search(label, { offset, limit }).pipe(
-              Effect.map(quotes =>
+          SearchDomains: ({
+            mode = 'Demo',
+            label,
+            offset = 0,
+            limit = domainTlds.length,
+          }) =>
+            search(label, { offset, limit }, mode).pipe(
+              Effect.map(domains =>
                 Array.map(
-                  Array.take(Array.drop(domainNames(label), offset), limit),
+                  Array.take(
+                    Array.drop(domainCandidates(label), offset),
+                    limit,
+                  ),
                   name =>
                     Array.findFirst(
-                      quotes,
-                      quote => quote.name === name.name,
+                      domains,
+                      domain => domain.name === name.name,
                     ).pipe(Option.getOrElse(() => Domain.Unconfirmed(name))),
                 ),
               ),

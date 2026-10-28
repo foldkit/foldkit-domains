@@ -1,4 +1,5 @@
 const PostList = Schema.Array(Post)
+type PostList = typeof PostList.Type
 
 const fetchPosts = Effect.gen(function* () {
   const response = yield* Effect.tryPromise({

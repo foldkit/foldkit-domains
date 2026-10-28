@@ -19,6 +19,7 @@ const ViewInputs = Schema.Struct({
   issues: Schema.Array(Issue),
   activeMemberId: Schema.String,
 })
+type ViewInputs = typeof ViewInputs.Type
 
 const TITLE_ID = 'workspace-notifications-title'
 const UNREAD_DESCRIPTION_ID = 'workspace-notifications-unread-description'
@@ -67,9 +68,9 @@ const readStateIcon = (
   )
 
 const notificationView = (
-  notification: typeof Notification.Type,
-  model: typeof Model.Type,
-  viewInputs: typeof ViewInputs.Type,
+  notification: Notification,
+  model: Model,
+  viewInputs: ViewInputs,
   h: NotificationCenterViewBuilder,
 ): Html => {
   const maybeActor = Array.findFirst(
@@ -224,157 +225,161 @@ const notificationView = (
   )
 }
 
-export const view = NotificationCenterComposition.makeView.withInputs<
-  typeof ViewInputs.Type
->((model, viewInputs, h) => {
-  const visibleNotifications = Array.filter(
-    model.notifications,
-    notification => notification.recipientId === viewInputs.activeMemberId,
-  )
+export const view =
+  NotificationCenterComposition.makeView.withInputs<ViewInputs>(
+    (model, viewInputs, h) => {
+      const visibleNotifications = Array.filter(
+        model.notifications,
+        notification => notification.recipientId === viewInputs.activeMemberId,
+      )
 
-  const unreadCount = Array.filter(
-    visibleNotifications,
-    notification => !notification.isRead,
-  ).length
+      const unreadCount = Array.filter(
+        visibleNotifications,
+        notification => !notification.isRead,
+      ).length
 
-  const unreadDescription =
-    unreadCount === 1
-      ? '1 unread notification'
-      : `${unreadCount} unread notifications`
+      const unreadDescription =
+        unreadCount === 1
+          ? '1 unread notification'
+          : `${unreadCount} unread notifications`
 
-  return h.block(
-    PopoverBinding.embedView({
-      slotId: model.popover.id,
-      model: model.popover,
-      viewInputs: {
-        ariaLabel: 'Notifications',
-        anchor: { placement: 'bottom-end', gap: 8, padding: 8 },
-        toView: ({ button, panel, backdrop, isVisible }) =>
-          h.div(
-            [h.Class(clsx('relative inline-flex', { 'z-20': isVisible }))],
-            [
-              h.button(
+      return h.block(
+        PopoverBinding.embedView({
+          slotId: model.popover.id,
+          model: model.popover,
+          viewInputs: {
+            ariaLabel: 'Notifications',
+            anchor: { placement: 'bottom-end', gap: 8, padding: 8 },
+            toView: ({ button, panel, backdrop, isVisible }) =>
+              h.div(
+                [h.Class(clsx('relative inline-flex', { 'z-20': isVisible }))],
                 [
-                  ...button,
-                  h.AriaDescribedBy(UNREAD_DESCRIPTION_ID),
-                  h.Class(
-                    'relative inline-grid size-9 cursor-pointer place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-xs outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
+                  h.button(
+                    [
+                      ...button,
+                      h.AriaDescribedBy(UNREAD_DESCRIPTION_ID),
+                      h.Class(
+                        'relative inline-grid size-9 cursor-pointer place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-xs outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500',
+                      ),
+                    ],
+                    [
+                      bellIcon(h),
+                      ...(unreadCount > 0
+                        ? [
+                            h.span(
+                              [
+                                h.AriaHidden(true),
+                                h.Class(
+                                  'absolute -right-1.5 -top-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-xs font-semibold leading-5 text-white',
+                                ),
+                              ],
+                              [
+                                unreadCount > 99
+                                  ? '99+'
+                                  : globalThis.String(unreadCount),
+                              ],
+                            ),
+                          ]
+                        : []),
+                    ],
                   ),
-                ],
-                [
-                  bellIcon(h),
-                  ...(unreadCount > 0
+                  h.span(
+                    [h.Id(UNREAD_DESCRIPTION_ID), h.Class('sr-only')],
+                    [unreadDescription],
+                  ),
+                  ...(isVisible
                     ? [
-                        h.span(
+                        h.div([...backdrop, h.Class('fixed inset-0 z-0')]),
+                        h.div(
                           [
-                            h.AriaHidden(true),
+                            ...panel,
+                            h.Role('dialog'),
+                            h.AriaLabelledBy(TITLE_ID),
                             h.Class(
-                              'absolute -right-1.5 -top-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1 text-xs font-semibold leading-5 text-white',
+                              'popover-surface z-10 w-[min(22rem,calc(100vw-1rem))] overflow-hidden text-sm font-medium',
                             ),
                           ],
                           [
-                            unreadCount > 99
-                              ? '99+'
-                              : globalThis.String(unreadCount),
+                            h.header(
+                              [
+                                h.Class(
+                                  'flex min-h-14 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3',
+                                ),
+                              ],
+                              [
+                                h.h2(
+                                  [
+                                    h.Id(TITLE_ID),
+                                    h.Class(
+                                      'text-base font-semibold text-slate-700',
+                                    ),
+                                  ],
+                                  ['Notifications'],
+                                ),
+                                ...(unreadCount > 0
+                                  ? [
+                                      Button.view(
+                                        {
+                                          type: 'button',
+                                          onClick: Message.ClickedMarkAllAsRead(
+                                            {
+                                              recipientId:
+                                                viewInputs.activeMemberId,
+                                            },
+                                          ),
+                                          toView: attributes =>
+                                            h.button(
+                                              [
+                                                ...attributes.button,
+                                                h.Class('button-compact'),
+                                              ],
+                                              ['Mark all as read'],
+                                            ),
+                                        },
+                                        h,
+                                      ),
+                                    ]
+                                  : []),
+                              ],
+                            ),
+                            ...Array.match(visibleNotifications, {
+                              onEmpty: () => [
+                                h.p(
+                                  [
+                                    h.Class(
+                                      'px-5 py-10 text-center text-sm font-normal text-slate-500',
+                                    ),
+                                  ],
+                                  ["You're all caught up."],
+                                ),
+                              ],
+                              onNonEmpty: notifications => [
+                                h.ul(
+                                  [
+                                    h.AriaLabel('Notification list'),
+                                    h.Class(
+                                      'max-h-[min(60dvh,28rem)] overflow-y-auto overscroll-contain',
+                                    ),
+                                  ],
+                                  Array.map(notifications, notification =>
+                                    notificationView(
+                                      notification,
+                                      model,
+                                      viewInputs,
+                                      h,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            }),
                           ],
                         ),
                       ]
                     : []),
                 ],
               ),
-              h.span(
-                [h.Id(UNREAD_DESCRIPTION_ID), h.Class('sr-only')],
-                [unreadDescription],
-              ),
-              ...(isVisible
-                ? [
-                    h.div([...backdrop, h.Class('fixed inset-0 z-0')]),
-                    h.div(
-                      [
-                        ...panel,
-                        h.Role('dialog'),
-                        h.AriaLabelledBy(TITLE_ID),
-                        h.Class(
-                          'popover-surface z-10 w-[min(22rem,calc(100vw-1rem))] overflow-hidden text-sm font-medium',
-                        ),
-                      ],
-                      [
-                        h.header(
-                          [
-                            h.Class(
-                              'flex min-h-14 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3',
-                            ),
-                          ],
-                          [
-                            h.h2(
-                              [
-                                h.Id(TITLE_ID),
-                                h.Class(
-                                  'text-base font-semibold text-slate-700',
-                                ),
-                              ],
-                              ['Notifications'],
-                            ),
-                            ...(unreadCount > 0
-                              ? [
-                                  Button.view(
-                                    {
-                                      type: 'button',
-                                      onClick: Message.ClickedMarkAllAsRead({
-                                        recipientId: viewInputs.activeMemberId,
-                                      }),
-                                      toView: attributes =>
-                                        h.button(
-                                          [
-                                            ...attributes.button,
-                                            h.Class('button-compact'),
-                                          ],
-                                          ['Mark all as read'],
-                                        ),
-                                    },
-                                    h,
-                                  ),
-                                ]
-                              : []),
-                          ],
-                        ),
-                        ...Array.match(visibleNotifications, {
-                          onEmpty: () => [
-                            h.p(
-                              [
-                                h.Class(
-                                  'px-5 py-10 text-center text-sm font-normal text-slate-500',
-                                ),
-                              ],
-                              ["You're all caught up."],
-                            ),
-                          ],
-                          onNonEmpty: notifications => [
-                            h.ul(
-                              [
-                                h.AriaLabel('Notification list'),
-                                h.Class(
-                                  'max-h-[min(60dvh,28rem)] overflow-y-auto overscroll-contain',
-                                ),
-                              ],
-                              Array.map(notifications, notification =>
-                                notificationView(
-                                  notification,
-                                  model,
-                                  viewInputs,
-                                  h,
-                                ),
-                              ),
-                            ),
-                          ],
-                        }),
-                      ],
-                    ),
-                  ]
-                : []),
-            ],
-          ),
-      },
-    }),
+          },
+        }),
+      )
+    },
   )
-})

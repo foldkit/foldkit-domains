@@ -15,7 +15,7 @@ import {
   makeWorkspaceRepositoryLayer,
 } from './index'
 
-const toDraft = (issue: typeof Issue.Type) =>
+const toDraft = (issue: Issue) =>
   IssueDraft.make({
     title: issue.title,
     description: issue.description,

@@ -17,12 +17,14 @@ const Message = defineMessageUnion({
   CompletedRecordBeforeReplay: {},
   CompletedRecordAfterReplay: {},
 })
+type Message = typeof Message.Type
 const ParentMessage = defineMessageUnion({
   Advanced: {},
   CompletedRecordBeforeReplay: {},
   CompletedRecordAfterReplay: {},
   RequestedInitChild: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 
 const ParentModel = Schema.Struct({
   primary: ChildModel,
@@ -368,10 +370,12 @@ const PendingEntry = Schema.Struct({
   id: Schema.String,
   child: ChildModel,
 })
+type PendingEntry = typeof PendingEntry.Type
 const PendingParentModel = Schema.Struct({
   entries: Schema.Array(PendingEntry),
   status: Schema.String,
 })
+type PendingParentModel = typeof PendingParentModel.Type
 const PendingParent = makeDefinition('PendingParent', {
   Model: PendingParentModel,
   Message: ParentMessage,
@@ -439,12 +443,12 @@ it('replays a deferred combined operation from the active Model without restorin
   const pending = Reflect.apply(Update.combineSteps, undefined, [
     capturedPendingModel,
     [
-      (model: typeof PendingParentModel.Type) => ({
+      (model: PendingParentModel) => ({
         model: modifyFields(model, { status: status => `${status}/Before` }),
         commands: [RecordBeforeReplay()],
       }),
       () => pendingRegisteredKeyedReset,
-      (model: typeof PendingParentModel.Type) => ({
+      (model: PendingParentModel) => ({
         model: modifyFields(model, { status: status => `${status}/After` }),
         commands: [RecordAfterReplay()],
       }),
@@ -507,6 +511,7 @@ const PolicyChild: Block.FromAssemblyWithViewAndOutMessage<
 > = Block.assemble(preparePolicyChild)
 
 const PolicyParentMessage = Schema.Never
+type PolicyParentMessage = typeof PolicyParentMessage.Type
 const PolicyParentBaseDefinition = makeNamespace(
   'OperationGraphPolicyParent',
 ).makeDefinition({

@@ -14,7 +14,8 @@ import { expect, test } from '@playwright/test'
 
 import { DomainsClient, makeDomainsClientLayer } from '../src/client/rpc'
 import { CoordinatedSearch, SearchOutcome } from '../src/server/coordination'
-import { QuoteWindow } from '../src/shared/domain'
+import { parseSearchTimings } from '../src/server/searchTiming'
+import { DomainCandidateRange } from '../src/shared/domain'
 import { SearchError } from '../src/shared/domainsRpc'
 
 const CLIENT_COUNT = 300
@@ -31,7 +32,7 @@ const search = (
   baseURL: string | undefined,
   label: string,
   client = '192.0.2.1',
-  window: QuoteWindow = { offset: 0, limit: 60 },
+  range: DomainCandidateRange = { offset: 0, limit: 60 },
   path = '/rpc',
   rpcHeaders: Readonly<Record<string, string>> = {},
 ) => {
@@ -43,7 +44,7 @@ const search = (
     Effect.gen(function* () {
       const rpc = yield* DomainsClient
       return yield* rpc.SearchDomains(
-        { label, ...window },
+        { mode: 'Live', label, ...range },
         { headers: rpcHeaders },
       )
     }),
@@ -63,7 +64,75 @@ const readStats = async (baseURL: string | undefined, path = '/stats') =>
     await (await fetch(`${baseURL}${path}`)).json(),
   )
 
-test('300 identical cold-window clients share one provider lookup and reuse completed quotes', async ({
+test('RPC timing headers carry shared cache, admission, and provider measurements across both coordinators', async ({
+  baseURL,
+}) => {
+  const lookup = (isTimingEnabled = true) =>
+    fetch(`${baseURL}/rpc`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'cf-connecting-ip': '192.0.2.123',
+        ...(isTimingEnabled ? { 'x-domains-timing': '1' } : {}),
+      },
+      body: JSON.stringify({
+        _tag: 'Request',
+        id: 'timing',
+        tag: 'SearchDomains',
+        payload: {
+          mode: 'Live',
+          label: 'timing-capacity',
+          offset: 0,
+          limit: 4,
+        },
+        headers: [],
+      }),
+    })
+  const cold = await lookup()
+  expect(cold.status).toBe(200)
+  await cold.text()
+  const coldHeader = cold.headers.get('server-timing') ?? ''
+  const coldPhases = Array.map(
+    parseSearchTimings(coldHeader),
+    ({ name }) => name,
+  )
+  expect(coldPhases).toEqual(
+    expect.arrayContaining([
+      'cache-miss',
+      'cache',
+      'queue',
+      'budget-persist',
+      'provider',
+      'registrar',
+      'cache-write',
+      'lookup',
+      'quotes',
+      'rpc',
+    ]),
+  )
+  expect(coldHeader).not.toContain('timing-capacity')
+  expect(coldHeader).not.toContain('192.0.2.123')
+
+  const warm = await lookup()
+  expect(warm.status).toBe(200)
+  await warm.text()
+  const warmPhases = Array.map(
+    parseSearchTimings(warm.headers.get('server-timing') ?? ''),
+    ({ name }) => name,
+  )
+  expect(warmPhases).toEqual(
+    expect.arrayContaining(['cache-hit', 'cache', 'lookup', 'quotes', 'rpc']),
+  )
+  expect(warmPhases).not.toContain('provider')
+  expect(warmPhases).not.toContain('queue')
+
+  const unmeasured = await lookup(false)
+  expect(unmeasured.status).toBe(200)
+  expect(unmeasured.headers.get('server-timing')).toBeNull()
+  await unmeasured.text()
+})
+
+test('300 identical cold-range clients share one provider lookup and reuse completed quotes', async ({
   baseURL,
 }, testInfo) => {
   const before = await readStats(baseURL)
@@ -282,30 +351,30 @@ test('shared admission meters every batch and rejects excess work within a bound
     .toBe(true)
 })
 
-test('completed windows stay independent, expire, and failed lookups can retry', async ({
+test('completed ranges stay independent, expire, and failed lookups can retry', async ({
   baseURL,
   request,
 }) => {
   const before = await readStats(baseURL)
-  const first = await Effect.runPromise(search(baseURL, 'cache-windows'))
+  const first = await Effect.runPromise(search(baseURL, 'cache-ranges'))
   const second = await Effect.runPromise(
-    search(baseURL, 'cache-windows', '192.0.2.20', { offset: 60, limit: 60 }),
+    search(baseURL, 'cache-ranges', '192.0.2.20', { offset: 60, limit: 60 }),
   )
-  expect(Option.getOrThrow(Array.head(first)).name).toBe('cache-windows.com')
+  expect(Option.getOrThrow(Array.head(first)).name).toBe('cache-ranges.com')
   expect(Option.getOrThrow(Array.head(second)).name).not.toBe(
-    'cache-windows.com',
+    'cache-ranges.com',
   )
-  expect(await Effect.runPromise(search(baseURL, 'cache-windows'))).toEqual(
+  expect(await Effect.runPromise(search(baseURL, 'cache-ranges'))).toEqual(
     first,
   )
   expect((await readStats(baseURL)).calls - before.calls).toBe(2)
-  const reopened = await request.post('/reopen/cache-windows', {
-    data: { label: 'cache-windows', offset: 0, limit: 60, client: 'local' },
+  const reopened = await request.post('/reopen/cache-ranges', {
+    data: { label: 'cache-ranges', offset: 0, limit: 60, client: 'local' },
   })
   expect(await reopened.json()).toEqual({ _tag: 'Success', domains: first })
   expect((await readStats(baseURL)).calls - before.calls).toBe(2)
-  expect((await request.post('/expire/cache-windows')).status()).toBe(204)
-  expect(await Effect.runPromise(search(baseURL, 'cache-windows'))).toEqual(
+  expect((await request.post('/expire/cache-ranges')).status()).toBe(204)
+  expect(await Effect.runPromise(search(baseURL, 'cache-ranges'))).toEqual(
     first,
   )
   expect((await readStats(baseURL)).calls - before.calls).toBe(3)
@@ -447,3 +516,28 @@ for (const { name, label, initialTag, rateLimitSource } of [
     expect((await readStats(baseURL, `${path}/stats`)).calls).toBe(0)
   })
 }
+
+test('Demo RPC requests return sample quotes without registrar calls', async ({
+  baseURL,
+}) => {
+  const before = await readStats(baseURL)
+  const domains = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const client = yield* DomainsClient
+        return yield* client.SearchDomains({
+          mode: 'Demo',
+          label: 'demo-capacity',
+          offset: 60,
+          limit: 60,
+        })
+      }),
+    ).pipe(
+      Effect.provide(makeDomainsClientLayer(`${baseURL}/rpc`)),
+      Effect.provide(FetchHttpClient.layer),
+    ),
+  )
+  const after = await readStats(baseURL)
+  expect(domains).toHaveLength(60)
+  expect(after.calls).toBe(before.calls)
+})

@@ -66,6 +66,44 @@ const tabKeys = (browserName: string) => {
   return { next: `${modifier}Tab`, previous: `${modifier}Shift+Tab` }
 }
 
+for (const javaScriptEnabled of [false, true]) {
+  test(`landing Tab order follows pricing, search, and source ${javaScriptEnabled ? 'after hydration' : 'in static HTML'}`, async ({
+    browser,
+    browserName,
+  }) => {
+    const context = await browser.newContext({
+      javaScriptEnabled,
+      viewport: { width: 1280, height: 900 },
+    })
+
+    try {
+      const page = await context.newPage()
+      await mockDomainSearch(page)
+      await page.goto('/')
+      await expect(page.locator('[data-foldkit-app]')).toHaveCount(
+        javaScriptEnabled ? 0 : 1,
+      )
+
+      const pricing = page.getByRole('link', { name: 'View pricing.' })
+      const input = page.getByRole('searchbox', { name: 'Search domains' })
+      const source = page.getByRole('link', { name: 'View source' })
+      const keys = tabKeys(browserName)
+
+      await pricing.focus()
+      await page.keyboard.press(keys.next)
+      await expect(input).toBeFocused()
+      await page.keyboard.press(keys.next)
+      await expect(source).toBeFocused()
+      await page.keyboard.press(keys.previous)
+      await expect(input).toBeFocused()
+      await page.keyboard.press(keys.previous)
+      await expect(pricing).toBeFocused()
+    } finally {
+      await context.close()
+    }
+  })
+}
+
 const checkAccessibility = async (
   page: Page,
   testInfo: TestInfo,
@@ -114,24 +152,57 @@ for (const width of [1440, 390, 320]) {
     )
     await checkAccessibility(page, testInfo, 'results')
 
-    await page.getByLabel('Filter by TLD').selectOption('Com')
+    const tldTrigger = page.getByRole('button', {
+      name: 'Filter by TLD',
+      exact: false,
+    })
+    const tldPopupRole = await tldTrigger.getAttribute('aria-haspopup')
+    await tldTrigger.click()
+    if (tldPopupRole === 'dialog') {
+      const tldDialog = page.getByRole('dialog', {
+        name: 'Filter by TLD',
+        exact: true,
+      })
+      await expect(
+        tldDialog.getByRole('searchbox', { name: 'Search TLDs' }),
+      ).toBeFocused()
+      await expect(tldDialog.locator('.tld-panel')).not.toHaveAttribute(
+        'data-transition',
+        '',
+      )
+      await checkAccessibility(page, testInfo, 'tld-sheet')
+      await tldDialog.getByRole('button', { name: '.com', exact: true }).click()
+      await expect(tldDialog).toBeHidden()
+    } else {
+      await checkAccessibility(page, testInfo, 'tld-listbox')
+      await page.getByRole('option', { name: '.com', exact: true }).click()
+    }
     if (width < 701) {
       await page
         .getByRole('button', { name: 'Filters and sort', exact: true })
         .click()
+      const dialog = page.getByRole('dialog', { name: 'Filters and sort' })
       await expect(
-        page.getByRole('button', { name: 'Close filters and sort' }),
+        dialog.getByRole('button', { name: 'Show All', exact: true }),
       ).toBeFocused()
+      await expect(dialog.locator('.filters-panel')).not.toHaveAttribute(
+        'data-transition',
+        '',
+      )
       await checkAccessibility(page, testInfo, 'filters-sheet')
-    }
-    await page
-      .getByRole('combobox', { name: 'Filter availability' })
-      .selectOption('Available')
-    if (width < 701) {
-      await page.getByRole('button', { name: 'Done', exact: true }).click()
+      await dialog
+        .getByRole('button', { name: 'Available', exact: true })
+        .click()
+      await expect(dialog).toBeHidden()
       await expect(
         page.getByRole('button', { name: 'Filters and sort', exact: true }),
       ).toBeFocused()
+    } else {
+      await page
+        .getByRole('button', { name: 'Filter availability', exact: false })
+        .click()
+      await checkAccessibility(page, testInfo, 'availability-listbox')
+      await page.getByRole('option', { name: 'Available', exact: true }).click()
     }
     await expect(page.getByRole('status')).toContainText([
       'No domains match',
@@ -243,6 +314,85 @@ test('keyboard cart removal and retry preserve a useful focus target', async ({
   await expect(page.locator('.domain-card .price').first()).toBeVisible()
 })
 
+test('filter listboxes support keyboard navigation, typeahead, selection, and dismissal', async ({
+  page,
+  browserName,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await mockDomainSearch(page)
+  await page.goto('/?q=acme')
+  await expect(page.locator('.domain-card .price').first()).toBeVisible()
+  const trigger = page.getByRole('button', {
+    name: 'Filter by TLD',
+    exact: false,
+  })
+  const listbox = page.getByRole('listbox', {
+    name: 'Filter by TLD',
+    exact: false,
+  })
+  await trigger.focus()
+  await page.keyboard.press('Enter')
+  await expect(listbox).toBeVisible()
+  await expect(listbox).toBeFocused()
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  await page.screenshot({ path: testInfo.outputPath('tld-listbox.png') })
+  await expect(
+    listbox.getByRole('option', { name: 'All TLDs', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true')
+  await page.keyboard.press('ArrowDown')
+  const comOption = listbox.getByRole('option', { name: '.com', exact: true })
+  await expect(comOption).toHaveAttribute('data-active', '')
+  await page.keyboard.press('Enter')
+  await expect(listbox).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toContainText('.com')
+  await expect(page.locator('#domain-results .domain-row')).toHaveCount(1)
+  await expect(page.locator('#domain-results .domain-row')).toContainText(
+    'acme.com',
+  )
+
+  await page.keyboard.press('ArrowDown')
+  await expect(listbox).toBeFocused()
+  await page.keyboard.press('a')
+  await expect(
+    listbox.getByRole('option', { name: '.app', exact: true }),
+  ).toHaveAttribute('data-active', '')
+  await page.keyboard.press('i')
+  const aiOption = listbox.getByRole('option', { name: '.ai', exact: true })
+  await expect(aiOption).toHaveAttribute('data-active', '')
+  await page.keyboard.press('Enter')
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toContainText('.ai')
+  await expect(page.locator('#domain-results .domain-row')).toHaveCount(1)
+  await expect(page.locator('#domain-results .domain-row')).toContainText(
+    'acme.ai',
+  )
+
+  await page.keyboard.press('Enter')
+  await expect(listbox).toBeFocused()
+  await page.keyboard.press('ArrowUp')
+  await expect(
+    listbox.getByRole('option', { name: '.io', exact: true }),
+  ).toHaveAttribute('data-active', '')
+  await page.keyboard.press('Escape')
+  await expect(listbox).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await expect(trigger).toContainText('.ai')
+  await page.keyboard.press('Enter')
+  await expect(listbox).toBeFocused()
+  await page.keyboard.press(tabKeys(browserName).next)
+  await expect(listbox).toBeHidden()
+  await expect(
+    page.getByRole('button', { name: 'Filter availability', exact: false }),
+  ).toBeFocused()
+  await expect(trigger).toContainText('.ai')
+  await trigger.click()
+  await expect(listbox).toBeVisible()
+  await page.locator('.filter-backdrop').click({ position: { x: 8, y: 8 } })
+  await expect(listbox).toBeHidden()
+  await expect(trigger).toContainText('.ai')
+})
+
 test('keyboard users can skip navigation, scroll the complete catalog, and leave the results', async ({
   page,
   browserName,
@@ -257,6 +407,7 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
     page.getByRole('link', { name: 'Sign Up', exact: true }),
     page.getByRole('link', { name: 'Login', exact: true }),
     page.getByRole('button', { name: 'Cart, 0 domains' }),
+    page.getByRole('radio', { name: 'Demo', exact: true }),
     page.getByRole('link', { name: 'Domains home' }),
     page.getByRole('link', { name: 'Skip to main content' }),
   ]) {
@@ -268,13 +419,12 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
   ).toBeInViewport()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('main')).toBeFocused()
-  await page.keyboard.press(tabKeys(browserName).next)
-  await expect(
+  for (const target of [
+    input,
+    page.getByRole('button', { name: 'Clear search, Esc', exact: true }),
     page
       .locator('.domain-card')
       .getByRole('button', { name: 'Add acme.com to cart', exact: true }),
-  ).toBeFocused()
-  for (const target of [
     page
       .locator('.domain-card')
       .getByRole('button', { name: 'Add acme.dev to cart', exact: true }),
@@ -284,37 +434,44 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
     page
       .locator('.domain-card')
       .getByRole('button', { name: 'Add acme.io to cart', exact: true }),
-    page.getByLabel('Filter by TLD'),
-    page.getByLabel('Filter availability'),
-    page.getByLabel('Sort results'),
+    page.getByRole('button', { name: 'Filter by TLD', exact: false }),
+    page.getByRole('button', { name: 'Filter availability', exact: false }),
+    page.getByRole('button', { name: 'Sort results', exact: false }),
     page.getByRole('list', { name: 'All domain results' }),
   ]) {
     await page.keyboard.press(tabKeys(browserName).next)
     await expect(target).toBeFocused()
   }
   const results = page.getByRole('list', { name: 'All domain results' })
-  await page.keyboard.press('ArrowDown')
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(0)
-  await page.keyboard.press('PageDown')
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(0)
+  for (const key of ['ArrowDown', 'PageDown']) {
+    const previousOffsetPx = await page.evaluate(() => window.scrollY)
+    await page.keyboard.press(key)
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(previousOffsetPx)
+  }
   await expect(results).toBeFocused()
   await page.keyboard.press('End')
   await expect(
     results.getByRole('button', { name: 'Add acme.zone to cart', exact: true }),
   ).toBeVisible()
   await expect(results).toBeFocused()
-  await page.keyboard.press('PageUp')
-  await page.keyboard.press('ArrowUp')
+  for (const key of ['PageUp', 'ArrowUp']) {
+    const previousOffsetPx = await page.evaluate(() => window.scrollY)
+    await page.keyboard.press(key)
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeLessThan(previousOffsetPx)
+  }
   await page.keyboard.press('Home')
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
   await expect(
     results.getByRole('button', { name: 'Add acme.com to cart', exact: true }),
   ).toBeVisible()
   await page.keyboard.press(tabKeys(browserName).previous)
-  await expect(page.getByLabel('Sort results')).toBeFocused()
+  await expect(
+    page.getByRole('button', { name: 'Sort results', exact: false }),
+  ).toBeFocused()
 })
 
 for (const viewport of [
@@ -334,7 +491,7 @@ for (const viewport of [
     const precedingControl =
       viewport.width < 701
         ? page.getByRole('button', { name: 'Filters and sort', exact: true })
-        : page.getByLabel('Sort results')
+        : page.getByRole('button', { name: 'Sort results', exact: false })
     const headerBottom = await page
       .locator('.header')
       .evaluate(element => element.getBoundingClientRect().bottom)
@@ -457,7 +614,7 @@ test('custom filter backgrounds and modal text have readable contrast, and the c
   await page.goto('/?q=acme')
   await expect(page.locator('.domain-card .price').first()).toBeVisible()
   const filterColors = await page
-    .locator('.filters select')
+    .locator('.filters .filter-trigger')
     .evaluateAll(elements =>
       elements.map(element => {
         const style = getComputedStyle(element)

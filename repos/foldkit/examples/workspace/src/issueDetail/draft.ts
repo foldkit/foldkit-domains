@@ -11,7 +11,7 @@ export const CONFLICT_MESSAGE =
 const equivalentDraft = Schema.toEquivalence(IssueDraft)
 
 type ReconciliationState = Pick<
-  typeof Model.Type,
+  Model,
   'issueId' | 'baseline' | 'draft' | 'maybeIncomingRevision' | 'saveState'
 >
 
@@ -21,10 +21,7 @@ export const isDirty = (model: ReconciliationState) =>
 export const latestRevision = (model: ReconciliationState) =>
   Option.getOrElse(model.maybeIncomingRevision, () => model.baseline)
 
-export const reconcileIssue = (
-  model: typeof Model.Type,
-  issue: typeof Issue.Type,
-) => {
+export const reconcileIssue = (model: Model, issue: Issue) => {
   if (
     issue.id !== model.issueId ||
     issue.version <= latestRevision(model).version
@@ -57,7 +54,7 @@ export const reconcileIssue = (
   })
 }
 
-export const maybeDraftSummary = (model: typeof Model.Type) => {
+export const maybeDraftSummary = (model: Model) => {
   if (!isDirty(model) && !isDraftNonEmpty(model.commentComposer)) {
     return Option.none()
   }

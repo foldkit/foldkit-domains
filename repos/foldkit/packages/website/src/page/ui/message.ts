@@ -49,3 +49,6 @@ export const Message = defineMessageUnion({
   ClickedVirtualListChatAppend: {},
   ClickedVirtualListChatToggleMessage: { messageId: Schema.Number },
 })
+export type Message = typeof Message.Type
+export type CompletedFetchVirtualListChatHistory =
+  typeof Message.CompletedFetchVirtualListChatHistory.Type

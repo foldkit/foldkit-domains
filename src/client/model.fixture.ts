@@ -7,61 +7,84 @@ import { DialogBlock, VirtualList } from '@foldkit/ui'
 
 import { Domain, domainTlds, queryToMaybeDomainLabel } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
-import { CART_DIALOG_ID, FILTERS_DIALOG_ID } from './composition'
+import { CART_DIALOG_ID, FILTERS_DIALOG_ID, TLD_DIALOG_ID } from './composition'
+import { DomainsQuery, DomainsQueryArgs } from './domainsQuery'
+import {
+  AVAILABILITY_FILTER_ID,
+  AvailabilityListboxBlock,
+  SORT_ORDER_ID,
+  SortListboxBlock,
+  TLD_FILTER_ID,
+  TldListboxBlock,
+} from './filterListboxes'
 import { Model } from './model'
-import { QuoteWindowArgs, QuoteWindows } from './quoteWindows'
 import {
   RESULTS_GROUP_HEIGHT_PX,
   RESULTS_LIST_ID,
   ResultsListBlock,
 } from './resultsList'
 import { ApplicationRoute } from './route'
+import {
+  SEARCH_MODE_CONTROL_ID,
+  SearchModeControlBlock,
+} from './searchModeControl'
 
 export const emptyModel = Model.make({
   route: ApplicationRoute.Search({ q: Option.none() }),
+  searchMode: 'Demo',
+  searchModeControl: SearchModeControlBlock.init({ id: SEARCH_MODE_CONTROL_ID })
+    .model,
   searchGeneration: 0,
-  searchTimeMillis: 0,
-  quotePlan: [],
-  quoteWindows: QuoteWindows.init().model,
-  maybeBlockedQuoteWindow: Option.none(),
+  searchPlanningTimeMillis: 0,
+  domainCandidateRanges: [],
+  domainsQuery: DomainsQuery.init().model,
+  maybeBlockedDomainCandidateRange: Option.none(),
   maybeSearchCooldown: Option.none(),
   resultsList: ResultsListBlock.init({
     id: RESULTS_LIST_ID,
     rowHeightPx: RESULTS_GROUP_HEIGHT_PX,
     scrollContainer: VirtualList.ScrollContainer.Window(),
   }).model,
+  tldListbox: TldListboxBlock.init({ id: TLD_FILTER_ID }).model,
+  availabilityListbox: AvailabilityListboxBlock.init({
+    id: AVAILABILITY_FILTER_ID,
+  }).model,
+  sortListbox: SortListboxBlock.init({ id: SORT_ORDER_ID }).model,
   tldFilter: 'All',
+  tldSearchQuery: '',
   availabilityFilter: 'All',
   sortOrder: 'Relevance',
-  cart: [],
+  carts: { Demo: [], Live: [] },
   cartDialog: DialogBlock.init({ id: CART_DIALOG_ID }).model,
-  filtersDialog: DialogBlock.init({ id: FILTERS_DIALOG_ID }).model,
+  tldDialog: DialogBlock.init({ id: TLD_DIALOG_ID, isAnimated: true }).model,
+  filtersDialog: DialogBlock.init({ id: FILTERS_DIALOG_ID, isAnimated: true })
+    .model,
 })
 
-export const withQuotedWindow = (
+export const withDomainsForRange = (
   model: Model,
-  args: QuoteWindowArgs,
+  args: DomainsQueryArgs,
   domains: ReadonlyArray<Domain>,
   completedAtMillis = 0,
 ): Model => {
-  const windowLoad = QuoteWindows.requestRevalidationOrLoad(
-    model.quoteWindows,
+  const domainsLoad = DomainsQuery.requestRevalidationOrLoad(
+    model.domainsQuery,
     args,
   )
   const fetchArgs = Option.getOrThrow(
     Array.findFirst(
       Array.getSomes(
         Array.map(
-          windowLoad.commands ?? [],
-          Command.argsOf(QuoteWindows.Fetch),
+          domainsLoad.commands ?? [],
+          Command.argsOf(DomainsQuery.Fetch),
         ),
       ),
       () => true,
     ),
   )
-  const windowCompletion = QuoteWindows.update(
-    windowLoad.model,
-    QuoteWindows.Message.CompletedFetch({
+  const domainsCompletion = DomainsQuery.update(
+    domainsLoad.model,
+    DomainsQuery.Message.CompletedFetch({
       ...fetchArgs,
       result: Result.succeed(domains),
       completedAtMillis,
@@ -69,25 +92,26 @@ export const withQuotedWindow = (
   )
 
   return modifyFields(model, {
-    quoteWindows: () => windowCompletion.model,
-    searchTimeMillis: () => completedAtMillis,
-    quotePlan: windows =>
+    domainsQuery: () => domainsCompletion.model,
+    searchPlanningTimeMillis: () => completedAtMillis,
+    domainCandidateRanges: ranges =>
       Array.some(
-        windows,
-        window => window.offset === args.offset && window.limit === args.limit,
+        ranges,
+        range => range.offset === args.offset && range.limit === args.limit,
       )
-        ? windows
-        : Array.append(windows, { offset: args.offset, limit: args.limit }),
+        ? ranges
+        : Array.append(ranges, { offset: args.offset, limit: args.limit }),
   })
 }
 
 export const readyModel = (query: string): Model =>
-  withQuotedWindow(
+  withDomainsForRange(
     modifyFields(emptyModel, {
       route: () => ApplicationRoute.Search({ q: Option.some(query) }),
       searchGeneration: () => 1,
     }),
     {
+      mode: 'Demo',
       label: Option.getOrThrow(queryToMaybeDomainLabel(query)),
       offset: 0,
       limit: domainTlds.length,

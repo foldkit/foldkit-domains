@@ -2,17 +2,21 @@ import { Array, Duration, Effect, Option, Schema, String, pipe } from 'effect'
 import { AsyncData } from 'foldkit'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Domain, QuoteWindow, queryToMaybeDomainLabel } from '../shared/domain'
-import { mergeDomainQuotes } from './domain'
+import {
+  Domain,
+  DomainCandidateRange,
+  queryToMaybeDomainLabel,
+} from '../shared/domain'
+import { mergeDomainsByName } from './domain'
+import { DomainsQuery } from './domainsQuery'
 import type { Model } from './model'
-import { QuoteWindows } from './quoteWindows'
 import { routeToQuery } from './route'
 import { formatRateLimitMessage } from './searchCooldown'
 
 export const QuoteRequestPresentation = defineTaggedUnion({
   Idle: {},
-  Loading: QuoteWindow.fields,
-  Failed: { ...QuoteWindow.fields, error: Schema.String },
+  Loading: DomainCandidateRange.fields,
+  Failed: { ...DomainCandidateRange.fields, error: Schema.String },
 })
 export type QuoteRequestPresentation = typeof QuoteRequestPresentation.Type
 
@@ -47,39 +51,40 @@ export const searchPresentation = (model: Model): SearchPresentation => {
     })
   }
 
-  const windows = Array.map(model.quotePlan, window => ({
-    window,
-    data: QuoteWindows.read(model.quoteWindows, {
+  const rangeQueries = Array.map(model.domainCandidateRanges, range => ({
+    range,
+    data: DomainsQuery.read(model.domainsQuery, {
+      mode: model.searchMode,
       label: maybeLabel.value,
-      ...window,
+      ...range,
     }),
   }))
   const domains = Array.reduce(
-    windows,
+    rangeQueries,
     Array.empty<Domain>(),
     (quotes, { data }) =>
       AsyncData.isPending(data)
         ? quotes
         : Option.match(AsyncData.getData(data), {
             onNone: () => quotes,
-            onSome: incoming => mergeDomainQuotes(quotes, incoming),
+            onSome: incoming => mergeDomainsByName(quotes, incoming),
           }),
   )
-  const maybePending = Array.findFirst(windows, ({ data }) =>
+  const maybePendingRangeQuery = Array.findFirst(rangeQueries, ({ data }) =>
     AsyncData.isPending(data),
   )
   const maybeFailure = pipe(
-    windows,
+    rangeQueries,
     Array.findLast(({ data }) => AsyncData.hasError(data)),
-    Option.flatMap(({ window, data }) =>
+    Option.flatMap(({ range, data }) =>
       Option.map(AsyncData.getError(data), failure => ({
-        ...window,
+        ...range,
         error: failure.error,
       })),
     ),
     Option.orElse(() =>
-      Option.map(model.maybeBlockedQuoteWindow, window => ({
-        ...window,
+      Option.map(model.maybeBlockedDomainCandidateRange, range => ({
+        ...range,
         error: Option.match(model.maybeSearchCooldown, {
           onNone: () => 'Please try again.',
           onSome: cooldown =>
@@ -90,7 +95,7 @@ export const searchPresentation = (model: Model): SearchPresentation => {
                 Math.ceil(
                   Duration.toSeconds(
                     Duration.millis(
-                      cooldown.expiresAtMillis - model.searchTimeMillis,
+                      cooldown.expiresAtMillis - model.searchPlanningTimeMillis,
                     ),
                   ),
                 ),
@@ -100,20 +105,20 @@ export const searchPresentation = (model: Model): SearchPresentation => {
       })),
     ),
   )
-  const isAnyWindowChecked = Array.some(
-    windows,
+  const isAnyRangeChecked = Array.some(
+    rangeQueries,
     ({ data }) => AsyncData.hasData(data) && !AsyncData.isPending(data),
   )
 
-  if (!isAnyWindowChecked) {
+  if (!isAnyRangeChecked) {
     return Option.match(maybeFailure, {
       onNone: SearchPresentation.Loading,
       onSome: ({ error }) => SearchPresentation.Failed({ error }),
     })
   }
 
-  const quoteRequest = Option.match(maybePending, {
-    onSome: ({ window }) => QuoteRequestPresentation.Loading(window),
+  const quoteRequest = Option.match(maybePendingRangeQuery, {
+    onSome: ({ range }) => QuoteRequestPresentation.Loading(range),
     onNone: () =>
       Option.match(maybeFailure, {
         onNone: QuoteRequestPresentation.Idle,

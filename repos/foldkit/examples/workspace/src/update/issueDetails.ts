@@ -20,13 +20,13 @@ export const informIssueChangedStep = (issueId: string) =>
     ),
   )
 
-export const receiveIssueSnapshotStep = (issue: typeof Issue.Type) =>
+export const receiveIssueSnapshotStep = (issue: Issue) =>
   Update.combineSteps([
     applyIssueSnapshotStep(issue),
     informIssueChangedStep(issue.id),
   ])
 
-export const receiveSavedIssueStep = (savedIssue: typeof SavedIssue.Type) =>
+export const receiveSavedIssueStep = (savedIssue: SavedIssue) =>
   Update.combineSteps([
     applySavedIssueStep(savedIssue),
     informIssueChangedStep(savedIssue.issueId),

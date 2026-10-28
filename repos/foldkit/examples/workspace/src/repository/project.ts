@@ -9,9 +9,9 @@ import {
 } from './state'
 
 export const saveProjectInState = (
-  state: typeof RepositoryState.Type,
-  project: typeof Project.Type,
-): RepositoryTransition<typeof Project.Type> => {
+  state: RepositoryState,
+  project: Project,
+): RepositoryTransition<Project> => {
   if (!hasProject(state, project.id)) {
     return [
       Result.fail(

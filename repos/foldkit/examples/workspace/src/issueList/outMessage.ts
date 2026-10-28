@@ -12,3 +12,4 @@ export const OutMessage = defineMessageUnion({
   RequestedCreation: {},
   SavedFilter: { name: Schema.String, filters: IssueFilters },
 })
+export type OutMessage = typeof OutMessage.Type

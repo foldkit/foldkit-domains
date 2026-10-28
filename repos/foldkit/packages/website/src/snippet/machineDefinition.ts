@@ -13,7 +13,7 @@ export const CheckoutState = defineTaggedUnion({
   Review: { isShippingRequired: Schema.Boolean },
   Cancelled: {},
 })
-
+export type CheckoutState = typeof CheckoutState.Type
 // MESSAGE
 
 export const Message = defineMessageUnion({
@@ -23,7 +23,7 @@ export const Message = defineMessageUnion({
   ClickedCancel: {},
   ToggledHelp: { isOpen: Schema.Boolean },
 })
-
+export type Message = typeof Message.Type
 // MACHINE
 
 export const CheckoutDefinition = Machine.makeDefinition({

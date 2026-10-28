@@ -100,10 +100,12 @@ const DataState = defineTaggedUnion({
   Error: { error: Schema.String },
   Ok: { data: Data },
 })
+type DataState = typeof DataState.Type
 
 const Model = Schema.Struct({
   dataState: DataState,
 })
+type Model = typeof Model.Type
 ```
 
 With booleans, you can have `isLoading: true` AND `isError: true`, an impossible state. With unions, you're always in exactly one state.
@@ -114,10 +116,12 @@ For **remote data specifically**, don't hand-roll the union. The `AsyncData` mod
 import { AsyncData } from 'foldkit'
 
 const WeatherAsyncData = AsyncData.Schema(WeatherData, Schema.String)
+type WeatherAsyncData = typeof WeatherAsyncData.schema.Type
 
 const Model = Schema.Struct({
   weatherAsyncData: WeatherAsyncData.schema,
 })
+type Model = typeof Model.Type
 ```
 
 That gives six states, not four: `Idle`, `Loading`, `Refreshing`, `Failure`, `Stale`, `Success`. The two extra ones are the reason to use it. `Refreshing` carries the previous data while a reload runs, so a refetch doesn't blank the screen. `Stale` carries both the previous data and the new error, so a failed reload doesn't discard what the user was reading. A hand-rolled `Idle | Loading | Error | Ok` forces both of those regressions.
@@ -157,6 +161,7 @@ const Message = defineMessageUnion({
   SelectedFilter: { filter: Schema.String },
   ClickedOpenModal: {},
 })
+type Message = typeof Message.Type
 ```
 
 ## Update Return Types
@@ -269,18 +274,19 @@ const unsafeInit = ApplicationComposition.makeInit(() => ({
 const Flags = Schema.Struct({
   createdAt: Schema.Number,
 })
+type Flags = typeof Flags.Type
 
 const flags = Effect.gen(function* () {
   const now = yield* Clock.currentTimeMillis
   return Flags.make({ createdAt: now })
 })
 
-const init = ApplicationComposition.makeInit((flags: typeof Flags.Type) => ({
+const init = ApplicationComposition.makeInit((flags: Flags) => ({
   model: Model.make({ createdAt: flags.createdAt }),
 }))
 ```
 
-For a fresh browser boot, Flags are produced by an `Effect<typeof Flags.Type>`. The runtime executes it once before init and passes the result in. This keeps init pure while still allowing side effects to populate the initial Model. Common uses:
+For a fresh browser boot, Flags are produced by an `Effect<Flags>`. The runtime executes it once before init and passes the result in. This keeps init pure while still allowing side effects to populate the initial Model. Common uses:
 
 - Reading from localStorage/sessionStorage (restoring saved state)
 - Getting the current time

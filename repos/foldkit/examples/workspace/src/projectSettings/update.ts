@@ -8,9 +8,7 @@ import { isDirty } from './draft'
 import { type Model, type ProjectDraft, SaveState } from './model'
 import { OutMessage } from './outMessage'
 
-const editDraftStep = (
-  transformDraft: (draft: typeof ProjectDraft.Type) => typeof ProjectDraft.Type,
-) =>
+const editDraftStep = (transformDraft: (draft: ProjectDraft) => ProjectDraft) =>
   makeStep(model => {
     if (SaveState.guards.Saving(model.saveState)) {
       return { model }
@@ -48,7 +46,7 @@ const saveProjectStep = makeStep(model => {
   }
 })
 
-const handleClickedDiscardChanges = (model: typeof Model.Type) => {
+const handleClickedDiscardChanges = (model: Model) => {
   if (SaveState.guards.Saving(model.saveState)) {
     return { model }
   }

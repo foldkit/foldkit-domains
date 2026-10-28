@@ -15,12 +15,14 @@ import {
 } from './config'
 
 const RowContent = defineTaggedUnion({ Compact: {}, Expanded: {} })
+type RowContent = typeof RowContent.Type
 const Item = Schema.Struct({
   id: Schema.String,
   index: Schema.Number,
   content: RowContent,
 })
-const ItemVirtualListBlock = VirtualList.create<typeof Item.Type>()
+type Item = typeof Item.Type
+const ItemVirtualListBlock = VirtualList.makeBlock<Item>()
 const Model = Schema.Struct({
   config: FixtureConfig,
   maybeList: Schema.Option(ItemVirtualListBlock.Model),
@@ -28,6 +30,7 @@ const Model = Schema.Struct({
   precedingHeight: Schema.Number,
   containerHeight: Schema.Number,
 })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   ClickedJumpToIndex: {},
   ClickedJumpToKey: {},
@@ -43,6 +46,7 @@ const Message = defineMessageUnion({
   ClickedAppendItem: {},
   ClickedUnmountList: {},
 })
+type Message = typeof Message.Type
 const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message,
@@ -50,7 +54,7 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
 })
 const { makeFieldsStep, makeNoopStep, makeStep } = ApplicationDefinition
 
-const scrollContainerFor = (config: typeof FixtureConfig.Type) => {
+const scrollContainerFor = (config: FixtureConfig) => {
   if (config.scrollMode === 'Self') {
     return VirtualList.ScrollContainer.Self()
   } else if (config.scrollMode === 'Ancestor') {
@@ -86,24 +90,22 @@ type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
 
-const init = ApplicationComposition.makeInit(
-  (config: typeof FixtureConfig.Type) => ({
-    model: {
-      config,
-      items: Array.makeBy(
-        config.isShort ? SHORT_ROW_COUNT : ROW_COUNT,
-        index => ({
-          id: `item-${index}`,
-          index,
-          content: RowContent.Compact(),
-        }),
-      ),
-      precedingHeight: 800,
-      containerHeight: 420,
-    },
-    childInitContext: config,
-  }),
-)
+const init = ApplicationComposition.makeInit((config: FixtureConfig) => ({
+  model: {
+    config,
+    items: Array.makeBy(
+      config.isShort ? SHORT_ROW_COUNT : ROW_COUNT,
+      index => ({
+        id: `item-${index}`,
+        index,
+        content: RowContent.Compact(),
+      }),
+    ),
+    precedingHeight: 800,
+    containerHeight: 420,
+  },
+  childInitContext: config,
+}))
 
 const update = ApplicationComposition.makeUpdate({
   ClickedJumpToIndex: ListBinding.requestScrollToIndex(120, {
@@ -169,7 +171,7 @@ const update = ApplicationComposition.makeUpdate({
 })
 
 const rowContent = (
-  item: typeof Item.Type,
+  item: Item,
   isDynamic: boolean,
   h: ApplicationViewBuilder,
 ) => {
@@ -187,12 +189,12 @@ const rowContent = (
   )
 }
 
-const virtualListView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
+const virtualListView = (model: Model, h: ApplicationViewBuilder) =>
   Option.match(model.maybeList, {
     onNone: () => h.p([h.Id('unmounted')], ['List unmounted']),
     onSome: list => {
-      const rowInputs: VirtualList.RowHeightInputs<typeof Item.Type> = model
-        .config.isDynamic
+      const rowInputs: VirtualList.RowHeightInputs<Item> = model.config
+        .isDynamic
         ? {
             dynamicRowHeights: true,
             itemToEstimatedRowHeightPx: () => ROW_HEIGHT_PX,
@@ -201,7 +203,7 @@ const virtualListView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
       const commonInputs = {
         ...rowInputs,
         items: model.items,
-        itemToKey: (item: typeof Item.Type) => item.id,
+        itemToKey: (item: Item) => item.id,
         overscan: 3,
         containerClassName:
           model.config.scrollMode === 'Self' ? 'self-list' : 'external-list',

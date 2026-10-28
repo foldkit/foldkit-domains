@@ -44,7 +44,7 @@ export type ResultsListScrollKey = typeof ResultsListScrollKey.Type
 export const RESULTS_LIST_ID = 'domain-results'
 export const RESULTS_GROUP_HEIGHT_PX = 114
 export const RESULTS_OVERSCAN_GROUPS = 2
-export const ResultsListBlock = VirtualList.create<DomainListingGroup>()
+export const ResultsListBlock = VirtualList.makeBlock<DomainListingGroup>()
 
 const MOBILE_RESULTS_WIDTH_PX = 668
 const TABLET_RESULTS_WIDTH_PX = 944

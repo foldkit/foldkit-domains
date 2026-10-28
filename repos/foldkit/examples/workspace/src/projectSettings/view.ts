@@ -11,10 +11,7 @@ import { isDirty } from './draft'
 import { Message } from './message'
 import { type Model, SaveState } from './model'
 
-const saveFeedback = (
-  model: typeof Model.Type,
-  h: ProjectSettingsViewBuilder,
-): Html =>
+const saveFeedback = (model: Model, h: ProjectSettingsViewBuilder): Html =>
   SaveState.match(model.saveState, {
     Idle: () => h.empty,
     Saving: () =>
@@ -50,10 +47,7 @@ const saveFeedback = (
       ),
   })
 
-const projectNameField = (
-  model: typeof Model.Type,
-  h: ProjectSettingsViewBuilder,
-): Html =>
+const projectNameField = (model: Model, h: ProjectSettingsViewBuilder): Html =>
   Input.view(
     {
       id: 'workspace-project-name',
@@ -85,7 +79,7 @@ const projectNameField = (
   )
 
 const projectDescriptionField = (
-  model: typeof Model.Type,
+  model: Model,
   h: ProjectSettingsViewBuilder,
 ): Html =>
   Textarea.view(
@@ -118,10 +112,7 @@ const projectDescriptionField = (
     h,
   )
 
-const formActions = (
-  model: typeof Model.Type,
-  h: ProjectSettingsViewBuilder,
-): Html => {
+const formActions = (model: Model, h: ProjectSettingsViewBuilder): Html => {
   const isSaving = SaveState.guards.Saving(model.saveState)
   const isChanged = isDirty(model)
   const isValid = String.isNonEmpty(String.trim(model.draft.name))

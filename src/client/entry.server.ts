@@ -2,6 +2,8 @@ import { Effect, Option, pipe } from 'effect'
 import { Url } from 'foldkit'
 import { Server } from 'foldkit/experimental'
 
+import geistLatinUrl from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url'
+
 import { ApplicationBlock } from './block'
 import { bootstrapSearchInput } from './bootstrap'
 import { ApplicationRoute, urlToApplicationRoute } from './route'
@@ -24,7 +26,7 @@ export const renderDocument: Server.DocumentRenderer = (
     : assets
 
   return Server.renderDocument(application, documentAssets, {
-    head: '<meta name="color-scheme" content="dark">',
+    head: `<meta name="color-scheme" content="dark"><link rel="preload" href="${geistLatinUrl}" as="font" type="font/woff2" crossorigin>`,
   }).replace(
     '<script type="module"',
     `<script>(${bootstrapSearchInput.toString()})(${JSON.stringify(searchInputConfig)});</script><script type="module"`,

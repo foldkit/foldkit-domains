@@ -10,12 +10,18 @@ const Invoice = Schema.Struct({
   customer: Schema.String,
   total: Schema.String,
 })
-const InvoiceRowsBlock = VirtualList.create<typeof Invoice.Type>()
+type Invoice = typeof Invoice.Type
+
+const InvoiceRowsBlock = VirtualList.makeBlock<Invoice>()
 const Model = Schema.Struct({
   invoices: Schema.Array(Invoice),
   invoiceRows: InvoiceRowsBlock.Model,
 })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({ ClickedJumpToLastInvoice: {} })
+type Message = typeof Message.Type
+
 const InvoiceTableDefinition = Block.makeDefinition('InvoiceTable', {
   Model,
   Message,
@@ -48,7 +54,7 @@ const InvoiceTableComposition = InvoiceTableDefinition.makeComposition({
   bindings: [InvoiceRowsBinding],
 })
 const init = InvoiceTableComposition.makeInit(
-  (invoices: ReadonlyArray<typeof Invoice.Type>) => ({ model: { invoices } }),
+  (invoices: ReadonlyArray<Invoice>) => ({ model: { invoices } }),
 )
 const update = InvoiceTableComposition.makeUpdate({
   ClickedJumpToLastInvoice: InvoiceRowsBinding.requestScrollToEnd(),

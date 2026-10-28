@@ -11,3 +11,4 @@ export const OutMessage = defineMessageUnion({
     insertionIndex: Schema.Number,
   },
 })
+export type OutMessage = typeof OutMessage.Type

@@ -14,7 +14,7 @@ import {
   mergeIssue,
 } from '../domain'
 
-const notifyNewCommentsStep = (issue: typeof Issue.Type) =>
+const notifyNewCommentsStep = (issue: Issue) =>
   makeStep(model => {
     const maybePreviousIssue = Option.flatMap(
       AsyncData.getData(model.workspaceAsyncData),
@@ -47,7 +47,7 @@ const notifyNewCommentsStep = (issue: typeof Issue.Type) =>
     )
   })
 
-export const applyIssueSnapshotStep = (issue: typeof Issue.Type) =>
+export const applyIssueSnapshotStep = (issue: Issue) =>
   Update.combineSteps([
     notifyNewCommentsStep(issue),
     makeFieldsStep(() => ({
@@ -63,17 +63,14 @@ export const applyIssueSnapshotStep = (issue: typeof Issue.Type) =>
     })),
   ])
 
-export const applySavedIssueStep = (savedIssue: typeof SavedIssue.Type) =>
+export const applySavedIssueStep = (savedIssue: SavedIssue) =>
   makeFieldsStep(() => ({
     workspaceAsyncData: AsyncData.map(workspace =>
       applySavedIssue(workspace, savedIssue),
     ),
   }))
 
-export const applyIssueCommentStep = (
-  issueId: string,
-  comment: typeof Comment.Type,
-) =>
+export const applyIssueCommentStep = (issueId: string, comment: Comment) =>
   makeStep(model => {
     const maybeIssue = Option.flatMap(
       AsyncData.getData(model.workspaceAsyncData),

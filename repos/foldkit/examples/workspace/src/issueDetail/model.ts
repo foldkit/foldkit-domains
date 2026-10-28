@@ -14,6 +14,7 @@ export const SaveState = defineTaggedUnion({
   Saving: { expectedVersion: Schema.Number },
   Failed: { error: Schema.String },
 })
+export type SaveState = typeof SaveState.Type
 
 export const Model = Schema.Struct({
   issueId: Schema.String,
@@ -27,3 +28,4 @@ export const Model = Schema.Struct({
   projectListbox: WorkspaceListboxBlock.Model,
   assigneeListbox: WorkspaceListboxBlock.Model,
 })
+export type Model = typeof Model.Type

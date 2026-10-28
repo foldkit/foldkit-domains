@@ -5,11 +5,15 @@ import { modifyFields } from 'foldkit/struct'
 import { makeNotifications } from '../domain'
 import { NotificationCenterComposition, PopoverBinding } from './composition'
 import { makeFieldsStep, makeNoopStep } from './definition'
-import { Message } from './message'
+import type {
+  ClickedMarkAllAsRead,
+  ClickedNotificationReadState,
+  InformedOfActivity,
+} from './message'
 import { OutMessage } from './outMessage'
 
 const handleInformedOfActivityStep = makeFieldsStep.fromMessage(
-  ({ activity }: typeof Message.InformedOfActivity.Type) => ({
+  ({ activity }: InformedOfActivity) => ({
     notifications: notifications => {
       const incomingNotifications = makeNotifications(activity)
 
@@ -28,7 +32,7 @@ const handleInformedOfActivityStep = makeFieldsStep.fromMessage(
 )
 
 const handleClickedMarkAllAsReadStep = makeFieldsStep.fromMessage(
-  ({ recipientId }: typeof Message.ClickedMarkAllAsRead.Type) => ({
+  ({ recipientId }: ClickedMarkAllAsRead) => ({
     notifications: Array.map(notification =>
       notification.recipientId === recipientId
         ? modifyFields(notification, { isRead: () => true })
@@ -38,7 +42,7 @@ const handleClickedMarkAllAsReadStep = makeFieldsStep.fromMessage(
 )
 
 const handleClickedNotificationReadStateStep = makeFieldsStep.fromMessage(
-  ({ notificationId }: typeof Message.ClickedNotificationReadState.Type) => ({
+  ({ notificationId }: ClickedNotificationReadState) => ({
     notifications: Array.map(notification =>
       notification.id === notificationId
         ? modifyFields(notification, {

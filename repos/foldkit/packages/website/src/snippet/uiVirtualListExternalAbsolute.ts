@@ -9,12 +9,18 @@ const Activity = Schema.Struct({
   title: Schema.String,
   summary: Schema.String,
 })
-const ActivityListBlock = VirtualList.create<typeof Activity.Type>()
+type Activity = typeof Activity.Type
+
+const ActivityListBlock = VirtualList.makeBlock<Activity>()
 const Model = Schema.Struct({
   activities: Schema.Array(Activity),
   activityList: ActivityListBlock.Model,
 })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({ ClickedJumpToLatestActivity: {} })
+type Message = typeof Message.Type
+
 const ActivityFeedDefinition = Block.makeDefinition('ActivityFeed', {
   Model,
   Message,
@@ -45,7 +51,7 @@ const ActivityFeedComposition = ActivityFeedDefinition.makeComposition({
   bindings: [ActivityListBinding],
 })
 const init = ActivityFeedComposition.makeInit(
-  (activities: ReadonlyArray<typeof Activity.Type>) => ({
+  (activities: ReadonlyArray<Activity>) => ({
     model: { activities },
   }),
 )

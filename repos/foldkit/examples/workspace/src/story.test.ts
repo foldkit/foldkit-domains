@@ -79,6 +79,13 @@ import {
 } from './selection'
 import { update } from './update'
 
+type IssueDetailBlockMessage = typeof IssueDetailBlock.Message.Type
+type ProjectSettingsMessage = typeof ProjectSettingsBlock.Message.Type
+type NotificationCenterMessage = typeof NotificationCenterBlock.Message.Type
+type IssueListMessage = typeof IssueListBlock.Message.Type
+type CommentComposerMessage = typeof CommentComposerBlock.Message.Type
+type DragAndDropMessage = typeof DragAndDropBlock.Message.Type
+
 const issueA = Option.getOrThrow(Array.head(initialWorkspace.issues))
 const issueB = Option.getOrThrow(Array.get(initialWorkspace.issues, 1))
 const issueC = Option.getOrThrow(Array.get(initialWorkspace.issues, 2))
@@ -97,19 +104,16 @@ const loadedModel = (path = '/') => {
   return workspaceLoad.model
 }
 
-const activeIssueDetailModel = (model: typeof Model.Type) =>
+const activeIssueDetailModel = (model: Model) =>
   Option.getOrThrow(maybeActiveIssueDetail(model))
 
-const activeIssueBoardModel = (model: typeof Model.Type) =>
+const activeIssueBoardModel = (model: Model) =>
   Option.getOrThrow(maybeActiveIssueBoard(model))
 
-const retainedIssueDetailModel = (model: typeof Model.Type, issueId: string) =>
+const retainedIssueDetailModel = (model: Model, issueId: string) =>
   Option.getOrThrow(Record.get(model.issueDetails, issueId))
 
-const issueDetailMessage = (
-  model: typeof Model.Type,
-  message: typeof IssueDetailBlock.Message.Type,
-) => {
+const issueDetailMessage = (model: Model, message: IssueDetailBlockMessage) => {
   const issueDetail = activeIssueDetailModel(model)
 
   return toParentMessage(IssueDetailBinding, issueDetail.issueId, message)
@@ -117,15 +121,15 @@ const issueDetailMessage = (
 
 const issueDetailMessageFor = (
   issueId: string,
-  message: typeof IssueDetailBlock.Message.Type,
+  message: IssueDetailBlockMessage,
 ) => toParentMessage(IssueDetailBinding, issueId, message)
 
 const projectSettingsMessage = (
   projectId: string,
-  message: typeof ProjectSettingsBlock.Message.Type,
+  message: ProjectSettingsMessage,
 ) => toParentMessage(ProjectSettingsBinding, projectId, message)
 
-const projectSettingsModel = (model: typeof Model.Type, projectId: string) =>
+const projectSettingsModel = (model: Model, projectId: string) =>
   Option.getOrThrow(Record.get(model.projectSettings, projectId))
 
 describe('workspace navigation', () => {
@@ -392,18 +396,17 @@ const unrelatedIssue = Option.getOrThrow(
   Array.findFirst(initialWorkspace.issues, issue => issue.id === 'issue-104'),
 )
 
-const visibleWorkspaceOf = (model: typeof Model.Type) =>
+const visibleWorkspaceOf = (model: Model) =>
   Option.getOrThrow(AsyncData.getData(visibleWorkspaceAsyncData(model)))
 
-const visibleNotifications = (model: typeof Model.Type) =>
+const visibleNotifications = (model: Model) =>
   Array.filter(
     model.notificationCenter.notifications,
     notification => notification.recipientId === model.activeMemberId,
   )
 
-const notificationMessage = (
-  childMessage: typeof NotificationCenterBlock.Message.Type,
-) => toParentMessage(NotificationCenterBinding, childMessage)
+const notificationMessage = (childMessage: NotificationCenterMessage) =>
+  toParentMessage(NotificationCenterBinding, childMessage)
 
 const activeMemberMessage = (memberId: string) =>
   toParentMessage(
@@ -967,7 +970,7 @@ describe('workspace project settings', () => {
 })
 
 describe('Application child policies', () => {
-  const listMessage = (message: typeof IssueListBlock.Message.Type) =>
+  const listMessage = (message: IssueListMessage) =>
     toParentMessage(IssueListBinding, message)
 
   test('retains one Board instance per project across navigation', () => {
@@ -1375,12 +1378,12 @@ describe('Issue drafts', () => {
       Message.SucceededLoadWorkspace({ workspace: initialWorkspace }),
     ).model
 
-  const activeIssueDetailModel = (model: typeof Model.Type) =>
+  const activeIssueDetailModel = (model: Model) =>
     Option.getOrThrow(maybeActiveIssueDetail(model))
 
   const issueDetailMessage = (
-    model: typeof Model.Type,
-    childMessage: typeof IssueDetailBlock.Message.Type,
+    model: Model,
+    childMessage: IssueDetailBlockMessage,
   ) => {
     const issueDetail = activeIssueDetailModel(model)
 
@@ -1392,8 +1395,8 @@ describe('Issue drafts', () => {
   }
 
   const commentComposerMessage = (
-    model: typeof Model.Type,
-    childMessage: typeof CommentComposerBlock.Message.Type,
+    model: Model,
+    childMessage: CommentComposerMessage,
   ) => {
     const commentComposerDelivery = toParentMessage(
       CommentComposerBinding,
@@ -1403,12 +1406,10 @@ describe('Issue drafts', () => {
     return issueDetailMessage(model, commentComposerDelivery)
   }
 
-  const retainedIssueDetailModel = (
-    model: typeof Model.Type,
-    issueId = issueA.id,
-  ) => Option.getOrThrow(Record.get(model.issueDetails, issueId))
+  const retainedIssueDetailModel = (model: Model, issueId = issueA.id) =>
+    Option.getOrThrow(Record.get(model.issueDetails, issueId))
 
-  const visibleIssue = (model: typeof Model.Type, issueId = issueA.id) =>
+  const visibleIssue = (model: Model, issueId = issueA.id) =>
     Option.getOrThrow(
       Option.flatMap(
         AsyncData.getData(visibleWorkspaceAsyncData(model)),
@@ -1417,10 +1418,10 @@ describe('Issue drafts', () => {
       ),
     )
 
-  const updatedTitle = (model: typeof Model.Type, value = editedTitle) =>
+  const updatedTitle = (model: Model, value = editedTitle) =>
     issueDetailMessage(model, IssueDetailMessage.UpdatedTitle({ value }))
 
-  const updatedComment = (model: typeof Model.Type, value = commentBody) =>
+  const updatedComment = (model: Model, value = commentBody) =>
     commentComposerMessage(
       model,
       CommentComposerBlock.Message.UpdatedBody({ value }),
@@ -1974,10 +1975,10 @@ describe('Issue drafts', () => {
 })
 
 describe('Board moves', () => {
-  const visibleWorkspaceOf = (model: typeof Model.Type) =>
+  const visibleWorkspaceOf = (model: Model) =>
     Option.getOrThrow(AsyncData.getData(visibleWorkspaceAsyncData(model)))
 
-  const visibleIssueOf = (model: typeof Model.Type, issueId: string) =>
+  const visibleIssueOf = (model: Model, issueId: string) =>
     Option.getOrThrow(
       Array.findFirst(
         visibleWorkspaceOf(model).issues,
@@ -1985,7 +1986,7 @@ describe('Board moves', () => {
       ),
     )
 
-  const visibleIssueIds = (model: typeof Model.Type) =>
+  const visibleIssueIds = (model: Model) =>
     Array.map(visibleWorkspaceOf(model).issues, issue => issue.id)
 
   const loadedBoardModel = () =>
@@ -1999,9 +2000,9 @@ describe('Board moves', () => {
     ).model
 
   const modelWithPendingIssueMove = (
-    initialModel: typeof Model.Type,
+    initialModel: Model,
     issueId: string,
-    status: typeof IssueStatus.Type,
+    status: IssueStatus,
     insertionIndex: number,
   ) => {
     const issue = visibleIssueOf(initialModel, issueId)
@@ -2017,10 +2018,7 @@ describe('Board moves', () => {
     })
   }
 
-  const withWorkspaceIssue = (
-    model: typeof Model.Type,
-    issue: typeof Issue.Type,
-  ) =>
+  const withWorkspaceIssue = (model: Model, issue: Issue) =>
     modifyFields(model, {
       workspaceAsyncData: AsyncData.map(workspace =>
         modifyFields(workspace, {
@@ -2124,7 +2122,7 @@ describe('Board moves', () => {
     })
     const itemId = draggableId(issue.id)
 
-    const childMessage = (message: typeof DragAndDropBlock.Message.Type) =>
+    const childMessage = (message: DragAndDropMessage) =>
       toParentMessage(
         IssueBoardBinding,
         issue.projectId,

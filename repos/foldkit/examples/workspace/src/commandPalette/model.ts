@@ -7,3 +7,4 @@ export const Model = Schema.Struct({
   activeResultIndex: Schema.Number,
   dialog: DialogBlock.Model,
 })
+export type Model = typeof Model.Type

@@ -9,7 +9,6 @@ export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({ ClickedIncrement: {} })
 export type Message = typeof Message.Type
-
 // composition.ts
 export const CounterComposition = Block.makeDefinition('Counter', {
   Model,

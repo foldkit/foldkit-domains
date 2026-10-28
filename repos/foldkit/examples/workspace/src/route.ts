@@ -14,10 +14,12 @@ export const defaultIssueFilters = IssueFilters.make({
 const RouteIssueFilters = Schema.Struct({
   filters: Schema.optionalKey(IssueFilters),
 })
+type RouteIssueFilters = typeof RouteIssueFilters.Type
 
 const RouteIssueSelection = Schema.Struct({
   issueId: Schema.optionalKey(Schema.String),
 })
+type RouteIssueSelection = typeof RouteIssueSelection.Type
 
 const issueSelectionFromQuery = RouteIssueSelection.pipe(
   Schema.encodeKeys({ issueId: 'issue' }),
@@ -44,6 +46,7 @@ export const ApplicationRoute = defineRouteUnion({
   Issue: { issueId: Schema.String },
   NotFound: { path: Schema.String },
 })
+export type ApplicationRoute = typeof ApplicationRoute.Type
 
 const pageRouteTags = Tuple.make(
   'Issues',
@@ -58,6 +61,7 @@ const pageRouteTags = Tuple.make(
 )
 
 export const PageRoute = ApplicationRoute.subset(pageRouteTags)
+export type PageRoute = typeof PageRoute.Type
 
 export const isPageRoute = ApplicationRoute.isAnyOf(pageRouteTags)
 
@@ -68,12 +72,13 @@ const FilterQueryParams = Schema.Struct({
   group: Schema.optional(Schema.String),
   filters: Schema.optional(Schema.String),
 })
+type FilterQueryParams = typeof FilterQueryParams.Type
 
 const decodeStatus = Schema.decodeUnknownOption(IssueStatus)
 const decodeSort = Schema.decodeUnknownOption(IssueFilters.fields.sort)
 const decodeGroupBy = Schema.decodeUnknownOption(GroupBy)
 
-const hasNonDefaultFilters = (filters: typeof IssueFilters.Type) =>
+const hasNonDefaultFilters = (filters: IssueFilters) =>
   filters.query !== defaultIssueFilters.query ||
   Option.isSome(filters.maybeStatus) ||
   filters.sort !== defaultIssueFilters.sort ||
@@ -212,7 +217,7 @@ export const projectSettingsRouter = pipe(
   Route.mapTo(ApplicationRoute.ProjectSettings),
 )
 
-export const maybeProjectId = (route: typeof ApplicationRoute.Type) =>
+export const maybeProjectId = (route: ApplicationRoute) =>
   ApplicationRoute.matchOrElse<Option.Option<string>>(
     route,
     {
@@ -224,8 +229,8 @@ export const maybeProjectId = (route: typeof ApplicationRoute.Type) =>
     Option.none,
   )
 
-export const maybeRouteFilters = (route: typeof ApplicationRoute.Type) =>
-  ApplicationRoute.matchOrElse<Option.Option<typeof IssueFilters.Type>>(
+export const maybeRouteFilters = (route: ApplicationRoute) =>
+  ApplicationRoute.matchOrElse<Option.Option<IssueFilters>>(
     route,
     {
       Issues: ({ filters }) => Option.fromNullishOr(filters),
@@ -236,10 +241,7 @@ export const maybeRouteFilters = (route: typeof ApplicationRoute.Type) =>
     Option.none,
   )
 
-export const withRouteFilters = (
-  route: typeof PageRoute.Type,
-  filters: typeof IssueFilters.Type,
-) => {
+export const withRouteFilters = (route: PageRoute, filters: IssueFilters) => {
   if (
     ApplicationRoute.isAnyOf(['Issues', 'MyIssues', 'Project', 'SavedView'])(
       route,
@@ -289,17 +291,17 @@ export const urlToApplicationRoute = Route.parseUrlWithFallback(
   ApplicationRoute.NotFound,
 )
 
-export const maybeIssueId = (route: typeof ApplicationRoute.Type) =>
+export const maybeIssueId = (route: ApplicationRoute) =>
   ApplicationRoute.guards.NotFound(route)
     ? Option.none()
     : Option.fromNullishOr(route.issueId)
 
-export const withIssueId = (route: typeof PageRoute.Type, issueId: string) => ({
+export const withIssueId = (route: PageRoute, issueId: string) => ({
   ...route,
   issueId,
 })
 
-export const withoutIssueId = (route: typeof PageRoute.Type) => {
+export const withoutIssueId = (route: PageRoute) => {
   const { issueId: _issueId, ...pageRoute } = route
 
   return pageRoute

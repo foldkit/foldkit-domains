@@ -33,9 +33,11 @@ const notifyingQuery = Query.define({
 describe('Query freshness and cancellation', () => {
   it('runs stale loading through the ordinary Query update story', () => {
     const Model = Schema.Struct({ query: finiteQuery.Model })
+    type Model = typeof Model.Type
     const Message = defineMessageUnion({
       RequestedLoad: { nowMillis: Schema.Number },
     })
+    type Message = typeof Message.Type
     const Definition = Block.makeDefinition('FinitePolicyParent', {
       Model,
       Message,

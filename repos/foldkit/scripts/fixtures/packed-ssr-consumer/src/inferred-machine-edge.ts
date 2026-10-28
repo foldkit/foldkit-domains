@@ -7,11 +7,14 @@ const MachineState = defineTaggedUnion({
   Idle: {},
   Running: { label: Schema.String },
 })
+type MachineState = typeof MachineState.Type
 const MachineMessage = defineMessageUnion({ Started: {} })
+type MachineMessage = typeof MachineMessage.Type
 const MachineContext = Schema.Struct({
   canStart: Schema.Boolean,
   label: Schema.String,
 })
+type MachineContext = typeof MachineContext.Type
 
 const RunDefinition = makeDefinition({
   State: MachineState,

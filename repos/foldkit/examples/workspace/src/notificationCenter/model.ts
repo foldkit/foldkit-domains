@@ -9,3 +9,4 @@ export const Model = Schema.Struct({
   now: Schema.Number,
   popover: PopoverBlock.Model,
 })
+export type Model = typeof Model.Type

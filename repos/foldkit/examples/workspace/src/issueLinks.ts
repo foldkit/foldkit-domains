@@ -11,7 +11,7 @@ import {
 } from './route'
 import { appliedIssueFilters } from './selection'
 
-export const issueHref = (model: typeof Model.Type, issueId: string) => {
+export const issueHref = (model: Model, issueId: string) => {
   const { route } = model
 
   if (!isPageRoute(route)) {
@@ -23,10 +23,7 @@ export const issueHref = (model: typeof Model.Type, issueId: string) => {
   )
 }
 
-export const issueFiltersHref = (
-  model: typeof Model.Type,
-  filters: typeof IssueFilters.Type,
-) => {
+export const issueFiltersHref = (model: Model, filters: IssueFilters) => {
   const { route } = model
 
   return isPageRoute(route)
@@ -34,10 +31,7 @@ export const issueFiltersHref = (
     : routeToPath(route)
 }
 
-export const issueHrefs = (
-  model: typeof Model.Type,
-  issues: ReadonlyArray<typeof Issue.Type>,
-) =>
+export const issueHrefs = (model: Model, issues: ReadonlyArray<Issue>) =>
   Record.fromIterableWith(issues, issue => [
     issue.id,
     issueHref(model, issue.id),

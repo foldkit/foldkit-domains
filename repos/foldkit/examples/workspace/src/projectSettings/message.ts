@@ -12,3 +12,4 @@ export const Message = defineMessageUnion({
   SucceededSaveProject: { project: Project },
   FailedSaveProject: { error: Schema.String },
 })
+export type Message = typeof Message.Type

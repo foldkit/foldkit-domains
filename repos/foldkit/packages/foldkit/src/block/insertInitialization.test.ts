@@ -20,12 +20,15 @@ import { withOperationGraph } from './operationGraph.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   CompletedRead: { count: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 const ChildOutMessage = defineMessageUnion({
   ChangedCount: { count: Schema.Number },
 })
+type ChildOutMessage = typeof ChildOutMessage.Type
 const ChildDefinition = Block.makeDefinition('InsertChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -59,13 +62,16 @@ const ChildBlock: Block.FromAssemblyWithOutMessage<
 const EntryId = Schema.String.check(Schema.isMinLength(2)).pipe(
   Schema.brand('InsertEntryId'),
 )
+type EntryId = typeof EntryId.Type
 const Wrapper = Schema.Struct({ child: ChildModel, label: Schema.String })
+type Wrapper = typeof Wrapper.Type
 const Model = Schema.Struct({
   childrenById: Schema.Record(EntryId, ChildModel),
   childrenByNumber: Schema.HashMap(Schema.Int, ChildModel),
   rowsById: Schema.Record(EntryId, Wrapper),
   label: Schema.String,
 })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedRecordInsert: { key: EntryId, count: Schema.Number },
   RequestedHashMapInsert: { key: Schema.Int, count: Schema.Number },
@@ -73,6 +79,7 @@ const Message = defineMessageUnion({
   RequestedHashMapInit: { key: Schema.Int, count: Schema.Number },
   RequestedInitTwice: { key: EntryId, count: Schema.Number },
 })
+type Message = typeof Message.Type
 const ParentDefinition = Block.makeDefinition('InsertParent', {
   Model,
   Message,
@@ -135,7 +142,7 @@ const prepareParent = () =>
         ]),
     }),
     operations: {
-      insertRecord: (key: typeof EntryId.Type, count: number) =>
+      insertRecord: (key: EntryId, count: number) =>
         Tuple.make(Message.RequestedRecordInsert({ key, count })),
       insertHashMap: (key: number, count: number) =>
         Tuple.make(Message.RequestedHashMapInsert({ key, count })),
@@ -295,7 +302,7 @@ describe('makeInitIfMissingStep', () => {
       key: firstId,
       args: [4],
     })
-    const applyStep = (model: typeof Model.Type) =>
+    const applyStep = (model: Model) =>
       withOperationGraph([ChildrenByIdBinding], () =>
         resolveOperationOutput(
           Reflect.apply(initChildStep, undefined, [model]),

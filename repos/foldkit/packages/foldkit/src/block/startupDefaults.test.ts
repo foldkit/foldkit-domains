@@ -16,10 +16,12 @@ class StartupClient extends Context.Service<
 >()('StartupDefaults/StartupClient') {}
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 
 const ChildMessage = defineMessageUnion({
   CompletedInitialization: { count: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const Child = makeDefinition('StartupDefaultsChild', {
   Model: ChildModel,
@@ -163,6 +165,7 @@ const RequiredChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 > = Block.assemble(prepareRequiredChildBlock)
 
 const Entry = Schema.Struct({ id: Schema.String, child: ChildModel })
+type Entry = typeof Entry.Type
 const ChildInitContext = Schema.Struct({
   count: Schema.Number,
   includeOptional: Schema.Boolean,
@@ -186,6 +189,7 @@ const ParentMessage = defineMessageUnion({
   CompletedParentInitialization: {},
   CompletedParentStep: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('StartupDefaultsParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -410,6 +414,7 @@ if (false) {
 }
 
 const ExactStartupModel = Schema.Struct({ child: ChildModel })
+type ExactStartupModel = typeof ExactStartupModel.Type
 const ExactStartupNamespace = makeNamespace('StartupDefaultsExact')
 const ExactStartupDefinition = ExactStartupNamespace.makeDefinition({
   Model: ExactStartupModel,
@@ -442,6 +447,7 @@ const ZeroParameterStartupComposition = ExactStartupDefinition.makeComposition({
 ZeroParameterStartupComposition.makeInit(() => ({ model: {} }))
 
 const ForeignChildInitContext = Schema.Struct({ token: Schema.String })
+type ForeignChildInitContext = typeof ForeignChildInitContext.Type
 const ForeignStartupDefinition = ExactStartupNamespace.makeDefinition({
   Model: ExactStartupModel,
   Message: Schema.Never,

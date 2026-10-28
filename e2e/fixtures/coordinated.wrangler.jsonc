@@ -9,6 +9,7 @@
     "enable_request_signal",
     "request_signal_passthrough",
   ],
+  "define": { "globalThis.__ALCHEMY_RUNTIME__": "true" },
   "vars": {
     "REGISTRAR_REQUESTS_PER_SECOND": "1000",
     "REGISTRAR_REQUESTS_PER_MINUTE": "60000",

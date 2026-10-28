@@ -6,12 +6,16 @@ import { SaveIssue } from './command'
 import { IssueDetailComposition } from './composition'
 import { makeOutMessageStep, makeStep } from './definition'
 import { isDirty, latestRevision, reconcileIssue } from './draft'
-import { Message } from './message'
+import type {
+  FailedSaveIssue,
+  InformedOfIssueChange,
+  SucceededSaveIssue,
+} from './message'
 import { type Model, SaveState } from './model'
 import { OutMessage } from './outMessage'
 import { editDraftStep } from './steps'
 
-const resetDraftFields = (model: typeof Model.Type) => {
+const resetDraftFields = (model: Model) => {
   const nextBaseline = latestRevision(model)
 
   return {
@@ -64,12 +68,12 @@ const saveIssueStep = makeStep(model => {
 })
 
 const handleInformedOfIssueChange = (
-  model: typeof Model.Type,
-  { issue }: typeof Message.InformedOfIssueChange.Type,
+  model: Model,
+  { issue }: InformedOfIssueChange,
 ) => ({ model: reconcileIssue(model, issue) })
 
 const isCurrentSave = (
-  model: typeof Model.Type,
+  model: Model,
   issueId: string,
   expectedVersion: number,
 ) =>
@@ -78,8 +82,8 @@ const isCurrentSave = (
   model.saveState.expectedVersion === expectedVersion
 
 const handleSucceededSaveIssue = (
-  model: typeof Model.Type,
-  { savedIssue, expectedVersion }: typeof Message.SucceededSaveIssue.Type,
+  model: Model,
+  { savedIssue, expectedVersion }: SucceededSaveIssue,
 ) => {
   if (!isCurrentSave(model, savedIssue.issueId, expectedVersion)) {
     return { model }
@@ -105,8 +109,8 @@ const handleSucceededSaveIssue = (
 }
 
 const handleFailedSaveIssue = (
-  model: typeof Model.Type,
-  { issueId, expectedVersion, error }: typeof Message.FailedSaveIssue.Type,
+  model: Model,
+  { issueId, expectedVersion, error }: FailedSaveIssue,
 ) => {
   if (!isCurrentSave(model, issueId, expectedVersion)) {
     return { model }

@@ -13,7 +13,7 @@ const clearRoomInstanceStep = makeFieldsStep(() => ({
 
 const keepRoomInstanceStep = makeNoopStep()
 
-export const changeRoute = (model: typeof Model.Type, url: Url.Url) => {
+export const changeRoute = (model: Model, url: Url.Url) => {
   const route = urlToApplicationRoute(url)
   const routeChanged = modifyFields(model, { route: () => route })
 

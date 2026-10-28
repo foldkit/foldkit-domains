@@ -7,8 +7,10 @@ import { DOMAINS_RPC_PATH } from '../shared/domainsRpc'
 import { domainsRpc } from './rpc'
 
 export { prerenderPaths, renderDocument } from '../client/entry.server'
-export { DomainSearchCoordinator } from './domainSearchCoordinator'
-export { RegistrarCoordinator } from './registrarCoordinator'
+export {
+  DomainSearchCoordinator,
+  RegistrarCoordinator,
+} from './coordinatorExports'
 
 export const renderPage = (request: Request): Promise<Server.EntryResult> => {
   const isRpcRequest = Option.exists(

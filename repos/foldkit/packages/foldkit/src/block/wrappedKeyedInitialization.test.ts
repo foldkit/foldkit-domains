@@ -15,6 +15,7 @@ const ChildMessage = defineMessageUnion({
   CompletedInitialization: { count: Schema.Number },
   CompletedIncrement: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const Child = makeDefinition('WrappedInitializationChild', {
   Model: ChildModel,
@@ -76,6 +77,7 @@ const Entry = Schema.Struct({
   child: ChildModel,
   label: Schema.String,
 })
+type Entry = typeof Entry.Type
 
 const ParentModel = Schema.Struct({
   entries: Schema.Array(Entry),
@@ -86,6 +88,7 @@ type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({
   CompletedParentInitialization: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('WrappedInitializationParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -184,6 +187,7 @@ const KeyedParentModel = Schema.Struct({
   entries: Schema.Array(KeyedChildModel),
   status: Schema.Literal('Ready'),
 })
+type KeyedParentModel = typeof KeyedParentModel.Type
 const KeyedParent = makeDefinition('KeyedInitializationParent', {
   Model: KeyedParentModel,
   Message: ParentMessage,
@@ -342,6 +346,7 @@ it('preflights every Binding selector before calling any child init', () => {
     entries: Schema.Array(Entry),
     status: Schema.Literal('Ready'),
   })
+  type AllPlansModel = typeof AllPlansModel.Type
   const AllPlansParent = makeDefinition('WrappedInitializationAllPlansParent', {
     Model: AllPlansModel,
     Message: Schema.Never,

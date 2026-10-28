@@ -27,13 +27,14 @@ const FIELD_CLASS = 'grid gap-2'
 const LABEL_CLASS = 'text-[13px] font-medium text-slate-600'
 
 const ViewInputs = Schema.Struct({ projects: Schema.Array(Project) })
-const STATUS_OPTIONS: ReadonlyArray<typeof StatusListboxOption.Type> = [
+type ViewInputs = typeof ViewInputs.Type
+const STATUS_OPTIONS: ReadonlyArray<StatusListboxOption> = [
   { value: 'Backlog', label: 'Backlog' },
   { value: 'Todo', label: 'Todo' },
   { value: 'InProgress', label: 'In progress' },
   { value: 'Done', label: 'Done' },
 ]
-const PRIORITY_OPTIONS: ReadonlyArray<typeof PriorityListboxOption.Type> = [
+const PRIORITY_OPTIONS: ReadonlyArray<PriorityListboxOption> = [
   { value: 'Low', label: 'Low' },
   { value: 'Medium', label: 'Medium' },
   { value: 'High', label: 'High' },
@@ -54,7 +55,7 @@ const listboxField = (
   )
 
 const titleField = (
-  model: typeof Model.Type,
+  model: Model,
   initialFocus: RenderInfo['initialFocus'],
   h: CreateIssueViewBuilder,
 ): Html =>
@@ -85,10 +86,7 @@ const titleField = (
     h,
   )
 
-const descriptionField = (
-  model: typeof Model.Type,
-  h: CreateIssueViewBuilder,
-): Html =>
+const descriptionField = (model: Model, h: CreateIssueViewBuilder): Html =>
   Textarea.view(
     {
       id: 'create-issue-description',
@@ -115,8 +113,8 @@ const descriptionField = (
   )
 
 const fields = (
-  model: typeof Model.Type,
-  viewInputs: typeof ViewInputs.Type,
+  model: Model,
+  viewInputs: ViewInputs,
   initialFocus: RenderInfo['initialFocus'],
   h: CreateIssueViewBuilder,
 ): Html => {
@@ -199,7 +197,7 @@ const fields = (
 }
 
 const feedback = (
-  model: typeof Model.Type,
+  model: Model,
   h: CreateIssueViewBuilder,
 ): ReadonlyArray<Html> =>
   CreateState.match(model.createState, {
@@ -220,10 +218,7 @@ const feedback = (
     ],
   })
 
-const submitButton = (
-  model: typeof Model.Type,
-  h: CreateIssueViewBuilder,
-): Html => {
+const submitButton = (model: Model, h: CreateIssueViewBuilder): Html => {
   const isCreating = CreateState.guards.Creating(model.createState)
 
   return Button.view(
@@ -244,84 +239,85 @@ const submitButton = (
   )
 }
 
-export const view = CreateIssueComposition.makeView.withInputs<
-  typeof ViewInputs.Type
->((model, viewInputs, h) =>
-  h.block(
-    DialogBinding.embedView({
-      slotId: model.dialog.id,
-      model: model.dialog,
-      viewInputs: {
-        toView: ({
-          dialog,
-          backdrop,
-          panel,
-          title,
-          closeButton,
-          initialFocus,
-          isVisible,
-        }) =>
-          h.dialog(
-            [
-              ...dialog,
-              h.Class(
-                'overflow-y-auto open:flex open:items-start open:justify-center',
-              ),
-            ],
-            isVisible
-              ? [
-                  h.div([
-                    ...backdrop,
-                    h.Class('fixed inset-0 bg-slate-950/35 backdrop-blur-xs'),
-                  ]),
-                  h.div(
-                    [
-                      ...panel,
-                      h.Class(
-                        'dialog-surface relative z-10 my-8 w-[calc(100vw-2rem)] max-w-lg p-6 text-sm font-medium sm:my-[10vh] sm:p-8',
-                      ),
-                    ],
-                    [
-                      h.h2(
-                        [
-                          ...title,
-                          h.Class(
-                            'mb-6 text-xl font-semibold tracking-tight text-slate-800',
-                          ),
-                        ],
-                        ['Create issue'],
-                      ),
-                      h.form(
-                        [h.OnSubmit(Message.SubmittedIssueForm())],
-                        [
-                          fields(model, viewInputs, initialFocus, h),
-                          ...feedback(model, h),
-                          h.div(
-                            [
-                              h.Class(
-                                'mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-5',
-                              ),
-                            ],
-                            [
-                              h.button(
-                                [...closeButton, h.Class('button')],
-                                [
-                                  CreateState.guards.Creating(model.createState)
-                                    ? 'Close'
-                                    : 'Cancel',
-                                ],
-                              ),
-                              submitButton(model, h),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ]
-              : [],
-          ),
-      },
-    }),
-  ),
+export const view = CreateIssueComposition.makeView.withInputs<ViewInputs>(
+  (model, viewInputs, h) =>
+    h.block(
+      DialogBinding.embedView({
+        slotId: model.dialog.id,
+        model: model.dialog,
+        viewInputs: {
+          toView: ({
+            dialog,
+            backdrop,
+            panel,
+            title,
+            closeButton,
+            initialFocus,
+            isVisible,
+          }) =>
+            h.dialog(
+              [
+                ...dialog,
+                h.Class(
+                  'overflow-y-auto open:flex open:items-start open:justify-center',
+                ),
+              ],
+              isVisible
+                ? [
+                    h.div([
+                      ...backdrop,
+                      h.Class('fixed inset-0 bg-slate-950/35 backdrop-blur-xs'),
+                    ]),
+                    h.div(
+                      [
+                        ...panel,
+                        h.Class(
+                          'dialog-surface relative z-10 my-8 w-[calc(100vw-2rem)] max-w-lg p-6 text-sm font-medium sm:my-[10vh] sm:p-8',
+                        ),
+                      ],
+                      [
+                        h.h2(
+                          [
+                            ...title,
+                            h.Class(
+                              'mb-6 text-xl font-semibold tracking-tight text-slate-800',
+                            ),
+                          ],
+                          ['Create issue'],
+                        ),
+                        h.form(
+                          [h.OnSubmit(Message.SubmittedIssueForm())],
+                          [
+                            fields(model, viewInputs, initialFocus, h),
+                            ...feedback(model, h),
+                            h.div(
+                              [
+                                h.Class(
+                                  'mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-5',
+                                ),
+                              ],
+                              [
+                                h.button(
+                                  [...closeButton, h.Class('button')],
+                                  [
+                                    CreateState.guards.Creating(
+                                      model.createState,
+                                    )
+                                      ? 'Close'
+                                      : 'Cancel',
+                                  ],
+                                ),
+                                submitButton(model, h),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ]
+                : [],
+            ),
+        },
+      }),
+    ),
 )

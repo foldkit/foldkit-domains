@@ -1,44 +1,29 @@
-import { Effect, ManagedRuntime } from 'effect'
+import { Effect } from 'effect'
 
-import type { DurableObjectState } from '@cloudflare/workers-types'
+import { DurableObjectState } from '@alchemy.run/cloudflare/Workers/DurableObjectState'
 
-import {
-  type SearchEnvironment,
-  handleSearchRequest,
-  respondToCancellation,
-} from './coordination'
+import type { SearchEnvironment } from './coordination'
+import { handleCoordinatorRequest } from './coordinatorRequest'
 import { RegistrarSearch, makeRegistrarSearchLayer } from './registrarSearch'
 
-export class RegistrarCoordinator {
-  protected readonly fetchRegistrar = globalThis.fetch
-  private readonly runtime: ManagedRuntime.ManagedRuntime<
-    RegistrarSearch,
-    never
-  >
+export const makeRegistrarCoordinatorImplementation = (
+  environment: SearchEnvironment,
+  fetchRegistrar: typeof globalThis.fetch = globalThis.fetch,
+) =>
+  Effect.gen(function* () {
+    const state = yield* DurableObjectState
 
-  constructor(state: DurableObjectState, environment: SearchEnvironment) {
-    this.runtime = ManagedRuntime.make(
-      makeRegistrarSearchLayer(state.storage, environment, (input, init) =>
-        this.fetchRegistrar.call(globalThis, input, init),
-      ),
-    )
-    void state.blockConcurrencyWhile(() =>
-      this.runtime.context().then(() => undefined),
-    )
-  }
+    return yield* Effect.gen(function* () {
+      const search = yield* RegistrarSearch
 
-  fetch(request: Request): Promise<Response> {
-    return respondToCancellation(
-      this.runtime.runPromise(
-        handleSearchRequest(request, query =>
-          Effect.gen(function* () {
-            const search = yield* RegistrarSearch
-            return yield* search.search(query)
-          }),
+      return { fetch: handleCoordinatorRequest(search.search, 'registrar') }
+    }).pipe(
+      Effect.provide(
+        makeRegistrarSearchLayer(
+          state.raw.storage,
+          environment,
+          (input, init) => fetchRegistrar.call(globalThis, input, init),
         ),
-        { signal: request.signal },
       ),
-      request.signal,
     )
-  }
-}
+  })

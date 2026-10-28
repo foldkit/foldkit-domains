@@ -5,7 +5,7 @@ import { makeStep } from './definition'
 import { SaveState } from './model'
 
 export const editDraftStep = (
-  transformDraft: (draft: typeof IssueDraft.Type) => typeof IssueDraft.Type,
+  transformDraft: (draft: IssueDraft) => IssueDraft,
 ) =>
   makeStep(model => ({
     model: SaveState.guards.Saving(model.saveState)

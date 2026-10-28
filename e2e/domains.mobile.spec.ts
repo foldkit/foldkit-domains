@@ -1,9 +1,11 @@
-import { Effect } from 'effect'
+import { Array, Effect, String } from 'effect'
 
 import { devices, expect, test } from '@playwright/test'
 
 import { makeDomainFixtures } from '../src/shared/domain.fixture'
+import { supportedTlds } from '../src/shared/tld'
 import { mockDomainSearch } from './api'
+import { chooseFilterOption } from './page'
 
 test.beforeEach(async ({ page }) => {
   await mockDomainSearch(page)
@@ -55,7 +57,7 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
       for (const control of [
         page.getByRole('button', { name: 'Clear search' }),
         page.getByRole('button', { name: /^Cart,/ }),
-        page.getByRole('combobox', { name: 'Filter by TLD' }),
+        page.getByRole('button', { name: 'Filter by TLD' }),
         filtersAndSort,
       ]) {
         const bounds = await control.boundingBox()
@@ -76,50 +78,40 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
       const filtersDialog = page.getByRole('dialog', {
         name: 'Filters and sort',
       })
-      const availability = filtersDialog.getByRole('combobox', {
-        name: 'Filter availability',
-      })
-      const sort = filtersDialog.getByRole('combobox', {
-        name: 'Sort results',
-      })
-      const closeFilters = filtersDialog.getByRole('button', { name: 'Done' })
       await expect(filtersDialog).toBeVisible()
-      for (const control of [availability, sort, closeFilters]) {
+      await expect(filtersDialog.locator('.filters-panel')).not.toHaveAttribute(
+        'data-transition',
+        '',
+      )
+      const choices = filtersDialog.locator('.filter-choice')
+      for (const control of await choices.all()) {
         const bounds = await control.boundingBox()
         expect(bounds?.width).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_SIZE_PX)
         expect(bounds?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_SIZE_PX)
       }
-      await sort.selectOption('PriceDescending')
-      await availability.selectOption('Available')
-      const sortTextFits = await sort.evaluate(element => {
-        if (!(element instanceof HTMLSelectElement)) {
-          return false
-        }
-
-        const style = getComputedStyle(element)
-        const canvas = document.createElement('canvas')
-        const drawing = canvas.getContext('2d')
-        if (drawing === null) {
-          return false
-        }
-
-        drawing.font = style.font
-        const selected = element.selectedOptions.item(0)
-        const textWidth = drawing.measureText(selected?.textContent ?? '').width
-        return (
-          textWidth <=
-          element.clientWidth -
-            parseFloat(style.paddingLeft) -
-            parseFloat(style.paddingRight)
-        )
-      })
-      expect(sortTextFits).toBe(true)
-      await closeFilters.tap()
+      await expect(
+        filtersDialog.getByRole('button', { name: 'Show All', exact: true }),
+      ).toBeFocused()
+      await expect(
+        filtersDialog.getByRole('button', { name: 'Show All', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true')
+      await expect(filtersDialog.getByRole('listbox')).toHaveCount(0)
+      await filtersDialog
+        .getByRole('button', { name: 'Price', exact: true })
+        .tap()
       await expect(filtersDialog).toBeHidden()
-      await expect(page.locator('.domain-row').first()).toContainText('$80.00')
-      await page
-        .getByRole('combobox', { name: 'Filter by TLD' })
-        .selectOption('App')
+      await expect(filtersAndSort).toBeFocused()
+      await filtersAndSort.tap()
+      await expect(
+        filtersDialog.getByRole('button', { name: 'Price', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true')
+      await filtersDialog
+        .getByRole('button', { name: 'Available', exact: true })
+        .tap()
+      await expect(filtersDialog).toBeHidden()
+      await expect(filtersAndSort).toBeFocused()
+      await expect(page.locator('.domain-row').first()).toContainText('$1.99')
+      await chooseFilterOption(page, 'Filter by TLD', '.app')
       await expect(page.locator('.result-count')).toHaveText(
         '1 domains · Registration prices in USD',
       )
@@ -133,7 +125,7 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
       await expect(input).toBeFocused()
       await expect(input).toBeInViewport()
       await expect(page).toHaveURL('/')
-      await page.getByText('A Foldkit example', { exact: true }).tap()
+      await page.getByRole('heading', { name: 'Begin your search' }).tap()
       await expect(input).not.toBeFocused()
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
       expect(
@@ -147,6 +139,88 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
     }
   })
 }
+
+test('mobile empty search matches the compact header and survives hydration without moving focus', async ({
+  browser,
+  browserName,
+  baseURL,
+}) => {
+  if (baseURL === undefined) {
+    throw new Error('The domain example requires a base URL')
+  }
+
+  const context = await browser.newContext({
+    ...devices[browserName === 'webkit' ? 'iPhone 13' : 'Pixel 5'],
+    viewport: { width: 393, height: 852 },
+    baseURL,
+  })
+  const page = await context.newPage()
+  await mockDomainSearch(page)
+  let releaseBundle = () => {}
+  const bundleGate = new Promise<void>(resolve => {
+    releaseBundle = resolve
+  })
+  await page.route('**/assets/*.js', async route => {
+    await bundleGate
+    await route.continue()
+  })
+
+  try {
+    await page.goto('/', { waitUntil: 'commit' })
+    const input = page.getByRole('searchbox', { name: 'Search domains' })
+    const hero = page.getByRole('heading', {
+      name: 'Find a domain for the next viral idea.',
+    })
+    const beginSearch = page.getByRole('heading', { name: 'Begin your search' })
+    await expect(hero).toBeVisible()
+    await expect(beginSearch).not.toBeVisible()
+    await page.evaluate(() => document.fonts.load('600 40px "Geist Variable"'))
+    const heroBounds = await hero.boundingBox()
+    expect(heroBounds?.y).toBeCloseTo(273, 0)
+    await expect(hero).toHaveCSS('font-size', '40px')
+    await expect(page.locator('form.search')).toHaveCSS('height', '38px')
+    const originalInput = await input.elementHandle()
+
+    await input.tap()
+    await expect(input).toBeFocused()
+    await expect(hero).not.toBeVisible()
+    await expect(beginSearch).toBeVisible()
+    const headerBounds = await page.locator('.header').boundingBox()
+    const inputBounds = await page.locator('form.search').boundingBox()
+    expect(headerBounds?.height).toBeCloseTo(123, 0)
+    expect(inputBounds?.y).toBeCloseTo(75, 0)
+    expect(inputBounds?.height).toBeCloseTo(38, 0)
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+    const emptyBounds = await beginSearch.boundingBox()
+
+    releaseBundle()
+    await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+    await expect(input).toBeFocused()
+    await expect(beginSearch).toBeVisible()
+    expect(await beginSearch.boundingBox()).toEqual(emptyBounds)
+    expect(
+      await originalInput?.evaluate(
+        element => element === document.getElementById('domain-search'),
+      ),
+    ).toBe(true)
+
+    await input.fill('new-project')
+    await expect(
+      page.getByRole('heading', { name: 'Top Results' }),
+    ).toBeVisible()
+    await expect(beginSearch).not.toBeVisible()
+    await input.fill('')
+    await expect(input).toBeFocused()
+    await expect(beginSearch).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Top Results' }),
+    ).not.toBeVisible()
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+  } finally {
+    releaseBundle()
+    await context.close()
+  }
+})
 
 for (const phase of ['before hydration', 'after hydration']) {
   test(`tapping Domains focuses search during the mobile gesture ${phase}`, async ({
@@ -439,11 +513,11 @@ test('mobile results use a dark two-row header and single-column layout', async 
   })
 
   expect(geometry.header.y).toBe(0)
-  expect(geometry.header.height).toBeCloseTo(129, 0)
+  expect(geometry.header.height).toBeCloseTo(123, 0)
   expect(geometry.search.x).toBeCloseTo(16, 0)
   expect(geometry.search.y).toBeCloseTo(75, 0)
   expect(geometry.search.width).toBeCloseTo(geometry.viewportWidth - 32, 0)
-  expect(geometry.search.height).toBeCloseTo(44, 0)
+  expect(geometry.search.height).toBeCloseTo(38, 0)
   expect(geometry.search.y).toBeGreaterThan(geometry.brand.bottom)
   expect(geometry.search.bottom).toBeLessThanOrEqual(geometry.header.bottom)
   expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth)
@@ -534,7 +608,7 @@ for (const phase of ['before hydration', 'after hydration']) {
         )
         document.documentElement.setAttribute(
           'data-max-page-scroll',
-          String(maximum),
+          globalThis.String(maximum),
         )
       })
     })
@@ -601,3 +675,374 @@ for (const phase of ['before hydration', 'after hydration']) {
     }
   })
 }
+
+test('mobile filter sheet slides from the bottom, preserves selected choices, and slides out on Escape', async ({
+  browser,
+  baseURL,
+}, testInfo) => {
+  if (baseURL === undefined) {
+    throw new Error('The domain example requires a base URL')
+  }
+
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 390, height: 844 },
+    recordVideo: {
+      dir: testInfo.outputPath('motion-video'),
+      size: { width: 390, height: 844 },
+    },
+  })
+  const page = await context.newPage()
+  await mockDomainSearch(page)
+
+  try {
+    await page.goto('/?q=acme')
+    await expect(page.locator('.domain-card .price').first()).toBeVisible()
+    const trigger = page.getByRole('button', {
+      name: 'Filters and sort',
+      exact: true,
+    })
+    const dialog = page.getByRole('dialog', { name: 'Filters and sort' })
+    const panel = dialog.locator('.filters-panel')
+    const frames = page.evaluate(
+      () =>
+        new Promise<
+          ReadonlyArray<{
+            top: number
+            height: number
+            viewportHeight: number
+            isLeaving: boolean
+          }>
+        >(resolve => {
+          const samples: Array<{
+            top: number
+            height: number
+            viewportHeight: number
+            isLeaving: boolean
+          }> = []
+          let hasAppeared = false
+          const sample = () => {
+            const element = document.querySelector('.filters-panel')
+            if (element !== null) {
+              hasAppeared = true
+              const bounds = element.getBoundingClientRect()
+              samples.push({
+                top: bounds.top,
+                height: bounds.height,
+                viewportHeight: innerHeight,
+                isLeaving: element.hasAttribute('data-leave'),
+              })
+            } else if (hasAppeared) {
+              resolve(samples)
+              return
+            }
+
+            requestAnimationFrame(sample)
+          }
+          requestAnimationFrame(sample)
+        }),
+    )
+    await trigger.click()
+    await expect(panel).toHaveCSS('transition-duration', '0.5s')
+    await expect(panel).not.toHaveAttribute('data-transition', '')
+    const selectedAvailability = dialog.getByRole('button', {
+      name: 'Show All',
+      exact: true,
+    })
+    const selectedSort = dialog.getByRole('button', {
+      name: 'Relevance',
+      exact: true,
+    })
+    await expect(selectedAvailability).toBeFocused()
+    await expect(selectedAvailability).toHaveAttribute('aria-pressed', 'true')
+    await expect(selectedSort).toHaveAttribute('aria-pressed', 'true')
+    await expect(
+      selectedAvailability.locator('.filter-choice-check'),
+    ).toBeVisible()
+    await expect(selectedSort.locator('.filter-choice-check')).toBeVisible()
+    await expect(
+      dialog
+        .getByRole('button', { name: 'Available', exact: true })
+        .locator('.filter-choice-check'),
+    ).toBeHidden()
+    await expect(dialog.getByRole('listbox')).toHaveCount(0)
+    await page.screenshot({
+      path: testInfo.outputPath('mobile-filter-sheet.png'),
+    })
+    await page.keyboard.press('Escape')
+    await expect(panel).toHaveAttribute('data-leave', '')
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    const samples = await frames
+    for (const isLeaving of [false, true]) {
+      expect(
+        samples.some(
+          sample =>
+            sample.isLeaving === isLeaving &&
+            sample.top > sample.viewportHeight - sample.height + 4 &&
+            sample.top < sample.viewportHeight - 4,
+        ),
+      ).toBe(true)
+    }
+  } finally {
+    await context.close()
+    const video = page.video()
+    if (video !== null) {
+      await testInfo.attach('mobile-filter-sheet-motion', {
+        path: await video.path(),
+        contentType: 'video/webm',
+      })
+    }
+  }
+})
+
+test('mobile filter sheet respects reduced motion and focuses the selected availability on reopen', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?q=acme')
+  await expect(page.locator('.domain-card .price').first()).toBeVisible()
+  const trigger = page.getByRole('button', {
+    name: 'Filters and sort',
+    exact: true,
+  })
+  const dialog = page.getByRole('dialog', { name: 'Filters and sort' })
+  await trigger.click()
+  await expect(dialog.locator('.filters-panel')).toHaveCSS(
+    'transition-duration',
+    '0s',
+  )
+  await expect(dialog.locator('.filters-backdrop')).toHaveCSS(
+    'transition-duration',
+    '0s',
+  )
+  await dialog.getByRole('button', { name: 'Available', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  const selected = dialog.getByRole('button', {
+    name: 'Available',
+    exact: true,
+  })
+  await expect(selected).toBeFocused()
+  await expect(selected).toHaveAttribute('aria-pressed', 'true')
+  await expect(selected.locator('.filter-choice-check')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toBeHidden()
+  await expect(trigger).toBeFocused()
+})
+
+for (const phase of ['before hydration', 'after hydration']) {
+  for (const action of ['backspace', 'clear button', 'Escape']) {
+    test(`emptying a scrolled mobile search with ${action} returns to the top ${phase}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 664 })
+      let releaseBundle = () => {}
+      const bundleGate = new Promise<void>(resolve => {
+        releaseBundle = resolve
+      })
+
+      if (phase === 'before hydration') {
+        await page.route('**/assets/*.js', async route => {
+          await bundleGate
+          await route.continue()
+        })
+      }
+
+      try {
+        await page.goto('/?q=acme', { waitUntil: 'commit' })
+        const input = page.getByRole('searchbox', { name: 'Search domains' })
+        await expect(input).toHaveValue('acme')
+
+        if (phase === 'after hydration') {
+          await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+          await expect(
+            page.locator('.domain-card .price').first(),
+          ).toBeVisible()
+        }
+
+        await input.focus()
+        const scrollOffsetPx = phase === 'before hydration' ? 150 : 600
+        await page.evaluate(top => {
+          window.scrollTo({ top, behavior: 'instant' })
+        }, scrollOffsetPx)
+        await expect
+          .poll(() => page.evaluate(() => window.scrollY))
+          .toBe(scrollOffsetPx)
+
+        if (action === 'backspace') {
+          await input.press('End')
+          for (let remaining = 3; remaining >= 0; remaining--) {
+            await input.press('Backspace')
+            await expect(input).toHaveValue('acme'.slice(0, remaining))
+          }
+        } else if (action === 'clear button') {
+          await page
+            .getByRole('button', { name: 'Clear search', exact: false })
+            .click()
+        } else {
+          await input.press('Escape')
+        }
+
+        await expect(input).toHaveValue('')
+        await expect(input).toBeFocused()
+        await expect(page).toHaveURL('/')
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+        await expect(input).toBeInViewport()
+
+        releaseBundle()
+        await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+        await expect(input).toHaveValue('')
+        await expect(input).toBeFocused()
+      } finally {
+        releaseBundle()
+      }
+    })
+  }
+}
+
+test('mobile TLD sheet searches the complete catalog, contains scrolling, and preserves selection on dismissal', async ({
+  browser,
+  baseURL,
+}, testInfo) => {
+  if (baseURL === undefined) {
+    throw new Error('The domain example requires a base URL')
+  }
+
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 390, height: 844 },
+    recordVideo: {
+      dir: testInfo.outputPath('tld-video'),
+      size: { width: 390, height: 844 },
+    },
+  })
+  const page = await context.newPage()
+  await mockDomainSearch(page)
+
+  try {
+    await page.goto('/?q=acme')
+    await expect(page.locator('.domain-card .price').first()).toBeVisible()
+    const trigger = page.getByRole('button', {
+      name: 'Filter by TLD',
+      exact: false,
+    })
+    const dialog = page.getByRole('dialog', {
+      name: 'Filter by TLD',
+      exact: true,
+    })
+    const search = dialog.getByRole('searchbox', { name: 'Search TLDs' })
+    const tldChoices = dialog.getByRole('button').filter({ hasText: /^\./ })
+    await trigger.click()
+    await expect
+      .poll(
+        () =>
+          dialog.locator('.tld-panel').evaluate(element => {
+            const bounds = element.getBoundingClientRect()
+            return (
+              element.hasAttribute('data-enter') &&
+              bounds.top > innerHeight - bounds.height + 4 &&
+              bounds.top < innerHeight - 4
+            )
+          }),
+        { intervals: [16, 32, 64] },
+      )
+      .toBe(true)
+    await expect(search).toBeFocused()
+    await expect(search).toHaveValue('')
+    await expect(dialog.getByRole('combobox')).toHaveCount(0)
+    await expect(
+      dialog.getByRole('button', { name: 'All TLDs', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(tldChoices).toHaveCount(supportedTlds.length)
+    const labels = await tldChoices.allTextContents()
+    expect(labels).toEqual(
+      Array.sort(
+        Array.map(supportedTlds, tld => `.${tld}`),
+        String.Order,
+      ),
+    )
+    await expect(dialog.locator('.tld-panel')).not.toHaveAttribute(
+      'data-transition',
+      '',
+    )
+    await page.mouse.move(20, 20)
+    await page.screenshot({ path: testInfo.outputPath('mobile-tld-sheet.png') })
+    const pageOffsetPx = await page.evaluate(() => window.scrollY)
+    await expect(page.locator('html')).toHaveCSS('overflow', 'hidden')
+    await tldChoices.last().scrollIntoViewIfNeeded()
+    await expect(tldChoices.last()).toBeInViewport()
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBe(pageOffsetPx)
+    await search.fill('  .ACADEMY  ')
+    await expect(tldChoices).toHaveCount(1)
+    await expect(tldChoices).toHaveText('.academy')
+    await tldChoices.click()
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toContainText('.academy')
+    await expect(page.locator('#domain-results .domain-row')).toHaveCount(1)
+    await expect(page.locator('#domain-results .domain-row')).toContainText(
+      'acme.academy',
+    )
+
+    await trigger.click()
+    await expect(search).toBeFocused()
+    await expect(search).toHaveValue('')
+    await expect(
+      dialog.getByRole('button', { name: '.academy', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await search.fill('no-such-tld')
+    await expect(
+      dialog.getByText('No TLDs found.', { exact: true }),
+    ).toBeVisible()
+    await expect(tldChoices).toHaveCount(0)
+    await search.press('Escape')
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toContainText('.academy')
+    await expect(
+      page.getByRole('searchbox', { name: 'Search domains' }),
+    ).toHaveValue('acme')
+    await expect(page.locator('#domain-results .domain-row')).toContainText(
+      'acme.academy',
+    )
+    await trigger.click()
+    await expect(search).toHaveValue('')
+    await expect(tldChoices).toHaveCount(supportedTlds.length)
+    await search.fill('zone')
+    await dialog.getByRole('button', { name: '.zone', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await expect(page.locator('#domain-results .domain-row')).toHaveCount(1)
+    await expect(page.locator('#domain-results .domain-row')).toContainText(
+      'acme.zone',
+    )
+    await expect(
+      page.locator('#domain-results .domain-row .price'),
+    ).toBeVisible()
+    await trigger.click()
+    await expect(search).toHaveValue('')
+    await expect(
+      dialog.getByRole('button', { name: '.zone', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await dialog.getByRole('button', { name: 'All TLDs', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    await expect(trigger).toBeFocused()
+    await expect(trigger).toContainText('All TLDs')
+    await expect(page.locator('#domain-results .domain-row')).not.toHaveCount(1)
+  } finally {
+    await context.close()
+    const video = page.video()
+    if (video !== null) {
+      await testInfo.attach('mobile-tld-sheet', {
+        path: await video.path(),
+        contentType: 'video/webm',
+      })
+    }
+  }
+})

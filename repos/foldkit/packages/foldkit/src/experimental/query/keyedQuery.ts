@@ -821,8 +821,8 @@ type KeyedQueryExposedOperations<
     KeyedQueryMessageType<A, AI, E, EI, Fields>,
     KeyedQueryFetchHandler<Name, A, AI, E, EI, Fields>
   >
-  /** Invalidates and interrupts the pending generation at one key, retaining
-   * its last successful data and leaving other keys unchanged. */
+  /** Invalidates and interrupts the pending generation at one key. A canceled
+   * refresh restores retained data, subject to the settled-entry limit. */
   requestCancel: (
     model: KeyedQueryModelType<A, AI, E, EI, Fields>,
     args: KeyedArgs<Fields>,
@@ -954,7 +954,8 @@ type KeyedQueryConveniences<
       KeyedQueryFetchHandler<Name, A, AI, E, EI, Fields>
     >
   }
-  /** Cancels one pending key and preserves unrelated cached data. */
+  /** Cancels one pending key. Restoring a refresh applies the settled-entry
+   * limit and may evict retained data; other pending keys are unaffected. */
   requestCancel: Update.Fold<
     KeyedQueryModelType<A, AI, E, EI, Fields>,
     KeyedQueryMessageType<A, AI, E, EI, Fields>,

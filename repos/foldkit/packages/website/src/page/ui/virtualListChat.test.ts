@@ -17,7 +17,9 @@ import {
   VirtualListChatHistoryModeGroupBinding,
 } from './virtualListChat'
 
-const chatMessage = (message: typeof ChatVirtualListBlock.Message.Type) =>
+type ChatVirtualListBlockMessage = typeof ChatVirtualListBlock.Message.Type
+
+const chatMessage = (message: ChatVirtualListBlockMessage) =>
   toParentMessage(VirtualListChatDemoBinding, message)
 
 const selectHistoryMode = (value: 'Infinite' | 'Finite') =>

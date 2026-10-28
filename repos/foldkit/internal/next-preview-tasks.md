@@ -14,6 +14,36 @@ original status, source pins and publication holds as historical evidence.
 
 ## Current Blocks + Effect Layers release scope
 
+- [x] Widen published Effect peers to `4.0.0 || 4.0.6` and verify both versions
+      through strict packed installs, public types, SSR and hydration. Check
+      platform peer floors and one resolved Effect runtime; preserve exact
+      development/application pins. Record the platform-shared constraint and
+      retain the publication hold.
+      [Compatibility evidence](effect-peer-compatibility-20261028.md).
+
+- [x] Apply adjacent same-named decoded Schema aliases throughout active source,
+      examples, Website, Typing Game, scaffolds, ordinary tests and guidance.
+      Prefer the aliases in explicit value annotations while preserving Schema
+      arguments, inferred callbacks, generic/recursive contracts and historical
+      material. Verify source, emitted declarations, lint and compiler costs.
+      [Adoption and verification](schema-type-alias-adoption-20261028.md).
+
+- [ ] Resolve the Machine compiler fixture's broad experimental-barrel cost.
+      Fresh package builds reproduce 110,086 instantiations and 27,144 types
+      against the unchanged 83,700/18,800 ceilings, including on the pre-alias
+      packed core. Query exports account for the additional work in temporary
+      controls. Do not describe this gate as passed or increase budgets as part
+      of the alias migration.
+      [Paired diagnosis](schema-type-alias-adoption-20261028.md#open-compiler-performance-release-check).
+
+- [x] Standardize generic UI Block factories as `makeBlock`: replace `create`
+      on selection components and VirtualList, and replace `Toast.make`.
+      Migrate public barrels, consumers, lint recognition, active guidance and
+      preview upgrade notes. Preserve exact generic contracts, passive assembly,
+      runtime behavior and historical material. Verify source/emitted consumers,
+      focused runtime/lint suites and unchanged compiler ceilings.
+      [Migration and verification](ui-block-factory-names-20261028.md).
+
 - [x] #1821: Add explicit Scene URL-change delivery through optional Program-style
       routing configuration. Preserve pending-work and lifecycle bookkeeping;
       verify search through navigation, exact routing types and relocated

@@ -44,3 +44,6 @@ export const Message = defineMessageUnion({
   },
   ClickedRetryMove: {},
 })
+export type Message = typeof Message.Type
+export type ChangedUrl = typeof Message.ChangedUrl.Type
+export type ClickedDeleteSavedView = typeof Message.ClickedDeleteSavedView.Type

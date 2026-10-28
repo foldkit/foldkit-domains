@@ -14,3 +14,4 @@ export const Message = defineMessageUnion({
   UpdatedSavedViewName: { value: Schema.String },
   SubmittedSavedView: { filters: IssueFilters },
 })
+export type Message = typeof Message.Type

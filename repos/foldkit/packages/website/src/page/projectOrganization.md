@@ -45,7 +45,7 @@ Declare each Schema's decoded type immediately below it, using the same name and
 
 ::Snippet{name="schemaTypeAlias" label="Schema and decoded type"}
 
-Keep local Schema aliases inside the feature's implementation modules, so those modules do not import their own completed Block. A consumer can name a type derived from the completed child, such as `type SearchModel = typeof SearchBlock.Model.Type`, without importing its implementation. Keep feature barrels focused on the completed Block and intentional public domain contracts. Definition callbacks and Composition-owned handlers infer their parameters.
+Keep local Schema aliases inside the feature's implementation modules, so those modules do not import their own completed Block. A consumer can name a type derived from the completed child, such as `type SearchModel = typeof SearchBlock.Model.Type`, without importing its implementation, and use `SearchModel` in annotations. Keep feature barrels focused on the completed Block and intentional public domain contracts. Definition callbacks and Composition-owned handlers infer their parameters.
 
 ### Early Contracts and Local Effects
 
@@ -240,7 +240,7 @@ Parents can use the checked completed Block's Model directly; the feature barrel
 
 ::Snippet{name="parentSchemaGuardedModel" label="✅ Parent Schema through a checked Block boundary"}
 
-The recommended `foldkit/no-completed-block-model-in-schema` rule follows proven Foldkit assemblies, immutable aliases and nested Schema wrappers. It accepts the four actual helper imports with a matching value annotation or same-name empty interface, matching zero-argument producer and `Block.assemble` finisher. A cast, `satisfies`, helper-shaped name or unannotated producer is insufficient. Ordinary `.Model` access, decoders and `typeof ChildBlock.Model.Type` annotations remain allowed.
+The recommended `foldkit/no-completed-block-model-in-schema` rule follows proven Foldkit assemblies, immutable aliases and nested Schema wrappers. It accepts the four actual helper imports with a matching value annotation or same-name empty interface, matching zero-argument producer and `Block.assemble` finisher. A cast, `satisfies`, helper-shaped name or unannotated producer is insufficient. Ordinary `.Model` access, decoders and a named alias derived from `ChildBlock.Model` remain allowed.
 
 This is a performance guardrail. It does not replace compiler checking or establish a response-time bound. The lint exemption is deliberately narrower than TypeScript: helper type aliases and reexport barrels, imported producer functions, arbitrary factories and dynamic aliases are outside its recognized boundary. Import the helper directly from `foldkit` or `foldkit/block` and keep the producer beside the completed export. Published generic UI contracts remain separate from this ordinary source authoring pattern.
 

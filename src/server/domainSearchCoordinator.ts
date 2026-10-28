@@ -1,52 +1,37 @@
-import { Effect, Layer, ManagedRuntime } from 'effect'
+import { Effect, Layer } from 'effect'
 
-import type { DurableObjectState } from '@cloudflare/workers-types'
+import { DurableObjectState } from '@alchemy.run/cloudflare/Workers/DurableObjectState'
 
 import {
   type SearchEnvironment,
-  handleSearchRequest,
   makeCoordinatedSearchClientLayer,
-  respondToCancellation,
 } from './coordination'
+import { handleCoordinatorRequest } from './coordinatorRequest'
 import { DomainSearch, makeDomainSearchLayer } from './domainSearch'
 
-export class DomainSearchCoordinator {
-  private readonly runtime: ManagedRuntime.ManagedRuntime<DomainSearch, never>
+export const makeDomainSearchCoordinatorImplementation = (
+  environment: SearchEnvironment,
+) =>
+  Effect.gen(function* () {
+    const state = yield* DurableObjectState
 
-  constructor(state: DurableObjectState, environment: SearchEnvironment) {
-    this.runtime = ManagedRuntime.make(
-      makeDomainSearchLayer(state.storage).pipe(
-        Layer.provide(
-          makeCoordinatedSearchClientLayer(
-            environment.REGISTRAR_BUDGET,
-            () => 'vercel',
+    return yield* Effect.gen(function* () {
+      const search = yield* DomainSearch
+
+      return {
+        fetch: handleCoordinatorRequest(search.search, 'quotes'),
+        alarm: () => search.expireQuotes,
+      }
+    }).pipe(
+      Effect.provide(
+        makeDomainSearchLayer(state.raw.storage).pipe(
+          Layer.provide(
+            makeCoordinatedSearchClientLayer(
+              environment.REGISTRAR_BUDGET,
+              () => 'vercel',
+            ),
           ),
         ),
       ),
     )
-  }
-
-  fetch(request: Request): Promise<Response> {
-    return respondToCancellation(
-      this.runtime.runPromise(
-        handleSearchRequest(request, query =>
-          Effect.gen(function* () {
-            const search = yield* DomainSearch
-            return yield* search.search(query)
-          }),
-        ),
-        { signal: request.signal },
-      ),
-      request.signal,
-    )
-  }
-
-  alarm(): Promise<void> {
-    return this.runtime.runPromise(
-      Effect.gen(function* () {
-        const search = yield* DomainSearch
-        yield* search.expireQuotes
-      }),
-    )
-  }
-}
+  })

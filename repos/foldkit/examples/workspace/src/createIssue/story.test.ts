@@ -54,13 +54,13 @@ const statusSelection = (item: string) =>
     WorkspaceListboxBlock.Message.RequestedSelectItem({ item }),
   )
 
-const typedStatusSelection = (item: typeof IssueStatus.Type) =>
+const typedStatusSelection = (item: IssueStatus) =>
   toParentMessage(
     StatusListboxBinding,
     StatusListboxBlock.Message.RequestedSelectItem({ item }),
   )
 
-const prioritySelection = (item: typeof IssuePriority.Type) =>
+const prioritySelection = (item: IssuePriority) =>
   toParentMessage(
     PriorityListboxBinding,
     PriorityListboxBlock.Message.RequestedSelectItem({ item }),

@@ -10,3 +10,8 @@ export const Message = defineMessageUnion({
   ClickedNotificationReadState: { notificationId: Schema.String },
   ClickedNotification: { notificationId: Schema.String },
 })
+export type Message = typeof Message.Type
+export type InformedOfActivity = typeof Message.InformedOfActivity.Type
+export type ClickedMarkAllAsRead = typeof Message.ClickedMarkAllAsRead.Type
+export type ClickedNotificationReadState =
+  typeof Message.ClickedNotificationReadState.Type

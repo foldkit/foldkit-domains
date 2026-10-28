@@ -1,4 +1,5 @@
 import * as Alchemy from 'alchemy'
+import { Stage } from 'alchemy/Stage'
 import { Config, Effect, Option } from 'effect'
 
 import * as Cloudflare from '@alchemy.run/cloudflare'
@@ -23,6 +24,7 @@ export const Website = Cloudflare.Website.Foldkit(
       },
       dev: { host: '127.0.0.1', port: 5195, strictPort: true },
       env: {
+        COORDINATOR_STAGE: yield* Stage,
         DOMAIN_QUOTES: Cloudflare.DurableObject('DomainSearchCoordinator'),
         REGISTRAR_BUDGET: Cloudflare.DurableObject('RegistrarCoordinator'),
         REGISTRAR_REQUESTS_PER_SECOND: yield* Config.String(

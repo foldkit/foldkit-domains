@@ -17,7 +17,7 @@ import {
 } from './definition'
 import { OutMessage } from './outMessage'
 
-const changeStatusFilterStep = (value: typeof StatusFilterValue.Type) => {
+const changeStatusFilterStep = (value: StatusFilterValue) => {
   if (value === 'All') {
     return makeOutMessageStep(() =>
       OutMessage.ChangedStatusFilter({
@@ -42,7 +42,7 @@ const changeSortStep = (value: typeof IssueFilters.fields.sort.Type) =>
     ? makeOutMessageStep(() => OutMessage.ChangedSort({ sort: value }))
     : makeNoopStep()
 
-const changeGroupingStep = (value: typeof GroupBy.Type) =>
+const changeGroupingStep = (value: GroupBy) =>
   Schema.is(GroupBy)(value)
     ? makeOutMessageStep(() => OutMessage.ChangedGrouping({ groupBy: value }))
     : makeNoopStep()

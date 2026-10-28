@@ -54,3 +54,5 @@ export const check = () => icon([ih.path([ih.D('M20 6 9 17l-5-5')])])
 
 export const arrowUpRight = () =>
   icon([ih.path([ih.D('M7 7h10v10')]), ih.path([ih.D('M7 17 17 7')])])
+
+export const chevronDown = () => icon([ih.path([ih.D('m6 9 6 6 6-6')])])

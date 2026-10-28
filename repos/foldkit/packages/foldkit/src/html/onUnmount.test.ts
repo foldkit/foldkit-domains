@@ -50,6 +50,7 @@ const Message = defineMessageUnion({
   UnmountedNamed: { name: Schema.String },
   Mounted: {},
 })
+type Message = typeof Message.Type
 
 const createCapturingDispatch = () => {
   const dispatched: Array<unknown> = []

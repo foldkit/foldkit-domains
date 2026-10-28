@@ -19,8 +19,10 @@ import { Message } from './message'
 import { OutMessage } from './outMessage'
 import { update } from './update'
 
+type DragAndDropMessage = typeof DragAndDropBlock.Message.Type
+
 const boardInit = IssueBoardBlock.init()
-const dragMessage = (message: typeof DragAndDropBlock.Message.Type) =>
+const dragMessage = (message: DragAndDropMessage) =>
   toParentMessage(DragAndDropBinding, message)
 
 describe('Issue Board update', () => {

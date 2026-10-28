@@ -1,4 +1,4 @@
-import { Array, Match, Option } from 'effect'
+import { Array, Match, Option, String } from 'effect'
 import { Update, Url } from 'foldkit'
 import { UrlRequest } from 'foldkit/navigation'
 
@@ -11,12 +11,14 @@ import {
   NavigateInternal,
   RevealResultsListStart,
   ScrollPage,
+  ScrollPageToTop,
 } from './command'
 import {
   ApplicationComposition,
   CartDialogBinding,
   FiltersDialogBinding,
   ResultsListBinding,
+  TldDialogBinding,
 } from './composition'
 import {
   makeCommandsStep,
@@ -25,17 +27,19 @@ import {
   makeStep,
 } from './definition'
 import { Message } from './message'
-import { routeToQuery, urlToApplicationRoute } from './route'
+import { activeCart, updateActiveCart } from './model'
+import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
   clearSearchStep,
-  informResultsListStep,
-  loadRequiredQuotesStep,
+  loadQuotesForRangeStep,
+  makeChangeAvailabilityFilterStep,
   makeChangeSearchQueryStep,
-  makeRequestQuoteWindowStep,
+  makeChangeSortOrderStep,
+  makeChangeTldFilterStep,
+  makeRequestQuotesForRangeStep,
   makeSearchQueryStep,
   retrySearchStep,
   searchQueryStep,
-  startQuoteWindowStep,
 } from './steps/index'
 
 export const update = ApplicationComposition.makeUpdate({
@@ -50,7 +54,7 @@ export const update = ApplicationComposition.makeUpdate({
   })),
 
   RequestedQuotes: makeStep.fromMessage(({ offset, limit }) =>
-    makeRequestQuoteWindowStep({ offset, limit }),
+    makeRequestQuotesForRangeStep({ offset, limit }),
   ),
 
   SubmittedSearch: Update.combineSteps([
@@ -88,6 +92,11 @@ export const update = ApplicationComposition.makeUpdate({
     return Update.combineSteps([
       makeFieldsStep(() => ({ route: () => nextRoute })),
       isSearchRefreshNeeded ? searchQueryStep : makeNoopStep(),
+      isSearchRefreshNeeded &&
+      ApplicationRoute.isAnyOf(['Search'])(nextRoute) &&
+      String.isEmpty(routeToQuery(nextRoute))
+        ? makeCommandsStep(() => [ScrollPageToTop()])
+        : makeNoopStep(),
     ])
   }),
 
@@ -99,45 +108,41 @@ export const update = ApplicationComposition.makeUpdate({
   ),
 
   UpdatedTldFilter: makeStep.fromMessage(({ value }) =>
-    Update.combineSteps([
-      makeFieldsStep(() => ({ tldFilter: () => value })),
-      loadRequiredQuotesStep,
-      informResultsListStep,
-    ]),
+    makeChangeTldFilterStep(value),
   ),
 
   UpdatedAvailabilityFilter: makeStep.fromMessage(({ value }) =>
-    Update.combineSteps([
-      makeFieldsStep(() => ({ availabilityFilter: () => value })),
-      loadRequiredQuotesStep,
-      informResultsListStep,
-    ]),
+    makeChangeAvailabilityFilterStep(value),
   ),
 
   UpdatedSortOrder: makeStep.fromMessage(({ value }) =>
-    Update.combineSteps([
-      makeFieldsStep(() => ({ sortOrder: () => value })),
-      loadRequiredQuotesStep,
-      informResultsListStep,
-    ]),
+    makeChangeSortOrderStep(value),
   ),
 
   ClickedAddDomain: makeFieldsStep((model, { domain }) =>
     Domain.isAnyOf(['Available'])(domain) &&
-    !Array.some(model.cart, item => item.name === domain.name)
-      ? { cart: Array.append(domain) }
+    !Array.some(activeCart(model), item => item.name === domain.name)
+      ? { carts: () => updateActiveCart(model, Array.append(domain)) }
       : {},
   ),
 
-  ClickedRemoveDomain: makeFieldsStep.fromMessage(({ name }) => ({
-    cart: Array.filter(domain => domain.name !== name),
+  ClickedRemoveDomain: makeFieldsStep((model, { name }) => ({
+    carts: () =>
+      updateActiveCart(
+        model,
+        Array.filter(domain => domain.name !== name),
+      ),
   })),
 
   ClickedRemoveCartDomain: makeStep.fromMessage(
     ({ name }: typeof Message.ClickedRemoveCartDomain.Type) =>
       Update.combineSteps([
-        makeFieldsStep(() => ({
-          cart: Array.filter(domain => domain.name !== name),
+        makeFieldsStep(model => ({
+          carts: () =>
+            updateActiveCart(
+              model,
+              Array.filter(domain => domain.name !== name),
+            ),
         })),
         makeCommandsStep(() => [FocusCartCloseButton()]),
       ]),
@@ -147,7 +152,37 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedFilters: FiltersDialogBinding.requestOpen(),
 
-  CompletedDetermineSearchTime: startQuoteWindowStep,
+  ClickedTldFilter: Update.combineSteps([
+    makeFieldsStep(() => ({ tldSearchQuery: () => '' })),
+    TldDialogBinding.requestOpen(),
+  ]),
+
+  UpdatedTldSearch: makeFieldsStep.fromMessage(({ value }) => ({
+    tldSearchQuery: () => value,
+  })),
+
+  ClickedTldOption: makeStep.fromMessage(({ value }) =>
+    Update.combineSteps([
+      makeChangeTldFilterStep(value),
+      TldDialogBinding.requestClose(),
+    ]),
+  ),
+
+  ClickedAvailabilityOption: makeStep.fromMessage(({ value }) =>
+    Update.combineSteps([
+      makeChangeAvailabilityFilterStep(value),
+      FiltersDialogBinding.requestClose(),
+    ]),
+  ),
+
+  ClickedSortOption: makeStep.fromMessage(({ value }) =>
+    Update.combineSteps([
+      makeChangeSortOrderStep(value),
+      FiltersDialogBinding.requestClose(),
+    ]),
+  ),
+
+  CompletedReadSearchPlanningTime: loadQuotesForRangeStep,
 
   ClickedDomainsHome: makeNoopStep(),
   ClickedSkipToMain: makeNoopStep(),
@@ -157,8 +192,10 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedFocusSearchInput: makeNoopStep(),
   CompletedFocusCartButton: makeNoopStep(),
   CompletedFocusFiltersButton: makeNoopStep(),
+  CompletedFocusTldFilterButton: makeNoopStep(),
   CompletedFocusCartCloseButton: makeNoopStep(),
   CompletedScrollPage: makeNoopStep(),
+  CompletedScrollPageToTop: makeNoopStep(),
   CompletedRevealResultsListStart: makeNoopStep(),
   CompletedDismissSearchKeyboard: makeNoopStep(),
   CompletedReleaseEarlySearchListeners: makeNoopStep(),

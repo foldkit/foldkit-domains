@@ -3,6 +3,8 @@ import { Block, Update } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 const Model = Schema.Struct({ issueId: Schema.String, title: Schema.String })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({
   UpdatedTitle: { title: Schema.String },
   RequestedSaveTitle: { title: Schema.String },
@@ -10,7 +12,11 @@ const Message = defineMessageUnion({
   ClickedClose: { reason: Schema.String },
   CompletedSaveTitle: {},
 })
+type Message = typeof Message.Type
+
 const OutMessage = defineMessageUnion({ Closed: { reason: Schema.String } })
+type OutMessage = typeof OutMessage.Type
+
 const EditorDefinition = Block.makeDefinition('Editor', {
   Model,
   Message,

@@ -3,7 +3,7 @@ import { type Page, expect, test } from '@playwright/test'
 import type { FixtureConfig } from './fixture/config'
 import { ROW_COUNT, ROW_HEIGHT_PX, SHORT_ROW_COUNT } from './fixture/config'
 
-type Scenario = Pick<typeof FixtureConfig.Type, 'scrollMode' | 'layout'>
+type Scenario = Pick<FixtureConfig, 'scrollMode' | 'layout'>
 
 const scenarios: ReadonlyArray<Scenario> = [
   { scrollMode: 'Self', layout: 'Absolute' },

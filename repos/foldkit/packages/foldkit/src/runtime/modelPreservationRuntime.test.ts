@@ -36,6 +36,7 @@ describe('Runtime Model preservation', () => {
       date: Schema.Date,
       values: Schema.HashMap(Schema.String, Schema.Number),
     })
+    type Model = typeof Model.Type
     const Definition = Block.makeDefinition('DeclaredPreservation', {
       Model,
       Message: Schema.Never,
@@ -47,7 +48,7 @@ describe('Runtime Model preservation', () => {
         values: HashMap.make(['one', 1]),
       },
     }))
-    const renderedModels: Array<typeof Model.Type> = []
+    const renderedModels: Array<Model> = []
     const prepare = () =>
       Composition.prepareBlock({
         init: Composition.makeInit(() => init()),
@@ -123,16 +124,18 @@ describe('Runtime Model preservation', () => {
         maybeInspectedModel: Schema.Option(Schema.Unknown),
         count: Schema.Number,
       })
+      type Model = typeof Model.Type
       const Message = defineMessageUnion({
         ClickedUnsupported: {},
         ClickedSupported: {},
       })
+      type Message = typeof Message.Type
       const Definition = Block.makeDefinition('PreservedSnapshot', {
         Model,
         Message,
       })
       const Composition = Definition.makeComposition()
-      const renderedModels: Array<typeof Model.Type> = []
+      const renderedModels: Array<Model> = []
       const prepare = () =>
         Composition.prepareBlock({
           init: Composition.makeInit(() => ({

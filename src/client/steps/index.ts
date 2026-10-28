@@ -1,6 +1,11 @@
 export {
+  makeChangeTldFilterStep,
+  makeChangeAvailabilityFilterStep,
+  makeChangeSortOrderStep,
+} from './filters'
+export {
   loadRequiredQuotesStep,
-  makeRequestQuoteWindowStep,
+  makeRequestQuotesForRangeStep,
 } from './quoteLoading'
 export { informResultsListStep } from './resultsList'
 export {
@@ -8,6 +13,6 @@ export {
   makeChangeSearchQueryStep,
   retrySearchStep,
   searchQueryStep,
-  startQuoteWindowStep,
+  loadQuotesForRangeStep,
   makeSearchQueryStep,
 } from './search'

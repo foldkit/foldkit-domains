@@ -6,7 +6,7 @@ VirtualList renders large lists by mounting only items inside the viewport plus 
 
 VirtualList supports fixed, known-variable, and measured row heights. Logical scroll targets can address an index, stable item key, pixel offset, or the end. End following and stable-key anchoring cover chat, logs, and reverse infinite feeds while keeping DOM and visual row order aligned.
 
-Create a typed completed Block once at module scope with `VirtualList.create<Item>()`, then connect it in the parent.
+Create a typed completed Block once at module scope with `VirtualList.makeBlock<Item>()`, then connect it in the parent.
 
 :::Info{label="See it in an app"}
 Check out how VirtualList is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/ui/view/virtualList.ts).

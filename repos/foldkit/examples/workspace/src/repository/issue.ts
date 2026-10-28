@@ -27,9 +27,9 @@ import {
 } from './state'
 
 export const saveIssueInState = (
-  state: typeof RepositoryState.Type,
-  input: typeof SaveIssueInput.Type,
-): RepositoryTransition<typeof SavedIssue.Type> => {
+  state: RepositoryState,
+  input: SaveIssueInput,
+): RepositoryTransition<SavedIssue> => {
   const maybeIssue = findIssue(state, input.issueId)
 
   if (Option.isNone(maybeIssue)) {
@@ -93,9 +93,9 @@ export const saveIssueInState = (
 }
 
 export const createIssueInState = (
-  state: typeof RepositoryState.Type,
-  draft: typeof IssueDraft.Type,
-): RepositoryTransition<typeof Issue.Type> => {
+  state: RepositoryState,
+  draft: IssueDraft,
+): RepositoryTransition<Issue> => {
   if (!hasProject(state, draft.projectId)) {
     return [
       Result.fail(
@@ -128,10 +128,10 @@ export const createIssueInState = (
 }
 
 export const addCommentInState = (
-  state: typeof RepositoryState.Type,
-  input: typeof AddCommentInput.Type,
+  state: RepositoryState,
+  input: AddCommentInput,
   createdAt: string,
-): RepositoryTransition<typeof Comment.Type> => {
+): RepositoryTransition<Comment> => {
   const maybeIssue = findIssue(state, input.issueId)
 
   if (Option.isNone(maybeIssue)) {
@@ -170,9 +170,9 @@ export const addCommentInState = (
 }
 
 export const moveIssueInState = (
-  state: typeof RepositoryState.Type,
-  input: typeof MoveIssueInput.Type,
-): RepositoryTransition<typeof MovedIssue.Type> => {
+  state: RepositoryState,
+  input: MoveIssueInput,
+): RepositoryTransition<MovedIssue> => {
   const maybeIssue = findIssue(state, input.issueId)
 
   if (Option.isNone(maybeIssue)) {

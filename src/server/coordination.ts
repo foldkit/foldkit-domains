@@ -1,12 +1,13 @@
-import { Context, Effect, Layer, Schema } from 'effect'
+import { Cause, Context, Effect, Layer, Predicate, Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Domain, DomainLabel, QuoteWindow } from '../shared/domain'
+import { Domain, DomainCandidateRange, DomainLabel } from '../shared/domain'
 import { SearchError } from '../shared/domainsRpc'
+import { isSearchTimingEnabled, mergeSearchTimings } from './searchTiming'
 
 export const CoordinatedSearch = Schema.Struct({
   label: DomainLabel,
-  ...QuoteWindow.fields,
+  ...DomainCandidateRange.fields,
   client: Schema.String.check(Schema.isMaxLength(128)),
 })
 export type CoordinatedSearch = typeof CoordinatedSearch.Type
@@ -21,14 +22,22 @@ export interface SearchNamespace {
   getByName(name: string): { fetch(request: Request): Promise<Response> }
 }
 
-export interface SearchEnvironment {
-  readonly DOMAIN_QUOTES: SearchNamespace
-  readonly REGISTRAR_BUDGET: SearchNamespace
-  readonly VERCEL_API_TOKEN?: string
-  readonly REGISTRAR_REQUESTS_PER_SECOND?: string
-  readonly REGISTRAR_REQUESTS_PER_MINUTE?: string
-  readonly REGISTRAR_MAX_CONCURRENT?: string
-}
+const SearchNamespaceSchema = Schema.declare<SearchNamespace>(
+  (value): value is SearchNamespace =>
+    Predicate.isObject(value) &&
+    'getByName' in value &&
+    Predicate.isFunction(value.getByName),
+)
+
+export const SearchEnvironment = Schema.Struct({
+  DOMAIN_QUOTES: SearchNamespaceSchema,
+  REGISTRAR_BUDGET: SearchNamespaceSchema,
+  VERCEL_API_TOKEN: Schema.optional(Schema.String),
+  REGISTRAR_REQUESTS_PER_SECOND: Schema.optional(Schema.String),
+  REGISTRAR_REQUESTS_PER_MINUTE: Schema.optional(Schema.String),
+  REGISTRAR_MAX_CONCURRENT: Schema.optional(Schema.String),
+})
+export type SearchEnvironment = typeof SearchEnvironment.Type
 
 export class CoordinatedSearchClient extends Context.Service<
   CoordinatedSearchClient,
@@ -46,12 +55,16 @@ export const makeCoordinatedSearchClientLayer = (
   Layer.succeed(CoordinatedSearchClient, {
     search: query =>
       Effect.gen(function* () {
+        const isTimingEnabled = yield* isSearchTimingEnabled
         const outcome = yield* Effect.gen(function* () {
           const response = yield* Effect.tryPromise(signal =>
             namespace.getByName(queryToObjectName(query)).fetch(
               new Request('https://domains.internal/search', {
                 method: 'POST',
-                headers: { 'content-type': 'application/json' },
+                headers: {
+                  'content-type': 'application/json',
+                  ...(isTimingEnabled ? { 'x-domains-timing': '1' } : {}),
+                },
                 body: JSON.stringify(query),
                 signal,
               }),
@@ -62,6 +75,7 @@ export const makeCoordinatedSearchClientLayer = (
             return yield* Effect.fail(SearchError.Unavailable())
           }
 
+          yield* mergeSearchTimings(response.headers.get('server-timing'))
           const body = yield* Effect.tryPromise(() => response.json())
           return yield* Schema.decodeUnknownEffect(SearchOutcome)(body)
         }).pipe(Effect.catch(() => Effect.fail(SearchError.Unavailable())))
@@ -95,24 +109,17 @@ export const handleSearchRequest = <Requirements>(
     const outcome = yield* search(decoded.success).pipe(
       Effect.map(domains => SearchOutcome.Success({ domains })),
       Effect.catch(error => Effect.succeed(SearchOutcome.Failure({ error }))),
-      Effect.catchDefect(() =>
-        Effect.succeed(
-          SearchOutcome.Failure({ error: SearchError.Unavailable() }),
+      Effect.catchDefect(defect =>
+        Effect.logError(
+          'Coordinated domain search failed unexpectedly',
+          Cause.die(defect),
+        ).pipe(
+          Effect.as(
+            SearchOutcome.Failure({ error: SearchError.Unavailable() }),
+          ),
         ),
       ),
     )
 
     return Response.json(outcome)
-  })
-
-export const respondToCancellation = (
-  response: Promise<Response>,
-  signal: AbortSignal,
-) =>
-  response.catch(error => {
-    if (signal.aborted) {
-      return new Response(null, { status: 499 })
-    } else {
-      throw error
-    }
   })

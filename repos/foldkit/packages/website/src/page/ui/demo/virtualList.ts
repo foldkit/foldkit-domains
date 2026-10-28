@@ -29,6 +29,11 @@ import {
 } from './components'
 import { type Activity, ROW_COUNT } from './virtualListData'
 
+type ActivityVirtualListBlockModel = typeof ActivityVirtualListBlock.Model.Type
+type ChatVirtualListBlockModel = typeof ChatVirtualListBlock.Model.Type
+type HistoryModeRadioGroupBlockModel =
+  typeof HistoryModeRadioGroupBlock.Model.Type
+
 // SAMPLE DATA
 
 const actorNames = [
@@ -156,7 +161,7 @@ const headerClassName =
   'flex flex-wrap items-center justify-between gap-3 text-sm text-gray-700 dark:text-gray-400'
 
 export const view = (
-  model: typeof ActivityVirtualListBlock.Model.Type,
+  model: ActivityVirtualListBlockModel,
   h: UiViewBuilder,
 ) => {
   return [
@@ -287,7 +292,7 @@ const variableArtifactClassName =
   'mt-1 inline-flex w-fit rounded bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 font-mono text-[10px] text-gray-700 dark:text-gray-300'
 
 export const virtualListVariableDemo = (
-  model: typeof ActivityVirtualListBlock.Model.Type,
+  model: ActivityVirtualListBlockModel,
   h: UiViewBuilder,
 ) => {
   const variableTallRow = (row: Activity, summary: Summary) =>
@@ -402,7 +407,7 @@ const historyModeGroupClassName =
 const historyModeOptionClassName =
   'rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 outline-none transition-colors data-[checked]:bg-white data-[checked]:text-gray-900 data-[checked]:shadow-sm focus-visible:ring-2 focus-visible:ring-accent-600 dark:text-gray-300 dark:data-[checked]:bg-gray-950 dark:data-[checked]:text-white dark:focus-visible:ring-accent-400'
 
-const historyModes: ReadonlyArray<typeof VirtualListChatHistoryMode.Type> = [
+const historyModes: ReadonlyArray<VirtualListChatHistoryMode> = [
   'Infinite',
   'Finite',
 ]
@@ -417,7 +422,7 @@ const NARROW_INITIAL_MESSAGE_DETAIL_HEIGHT_PX = 62.5
 
 const estimateChatMessageHeightForWidth =
   ({ isNarrowContainer }: Readonly<{ isNarrowContainer: boolean }>) =>
-  (message: typeof VirtualListChatMessage.Type): number => {
+  (message: VirtualListChatMessage): number => {
     if (message.id < 0) {
       if (isNarrowContainer) {
         return message.isExpanded
@@ -452,13 +457,9 @@ const estimateWideChatMessageHeight = estimateChatMessageHeightForWidth({
   isNarrowContainer: false,
 })
 
-export const estimatedChatMessageHeight = (
-  model: typeof ChatVirtualListBlock.Model.Type,
-) =>
+export const estimatedChatMessageHeight = (model: ChatVirtualListBlockModel) =>
   Match.value(model.measurement).pipe(
-    Match.withReturnType<
-      (message: typeof VirtualListChatMessage.Type) => number
-    >(),
+    Match.withReturnType<(message: VirtualListChatMessage) => number>(),
     Match.tagsExhaustive({
       Unmeasured: () => estimateWideChatMessageHeight,
       Measured: ({ containerWidth }) =>
@@ -469,17 +470,14 @@ export const estimatedChatMessageHeight = (
   )
 
 export const chatHistoryRows = (
-  model: typeof ChatVirtualListBlock.Model.Type,
-): VirtualList.HistoryRows<typeof VirtualListChatMessage.Type> => ({
+  model: ChatVirtualListBlockModel,
+): VirtualList.HistoryRows<VirtualListChatMessage> => ({
   itemToKey: chatMessageKey,
   dynamicRowHeights: true,
   itemToEstimatedRowHeightPx: estimatedChatMessageHeight(model),
 })
 
-const chatMessageView = (
-  message: typeof VirtualListChatMessage.Type,
-  h: UiViewBuilder,
-) => {
+const chatMessageView = (message: VirtualListChatMessage, h: UiViewBuilder) => {
   const isSentMessage = message.id % 2 !== 0
 
   return h.div(
@@ -543,14 +541,14 @@ const chatHistoryStatus = (
 }
 
 export const virtualListChatDemo = (
-  model: typeof ChatVirtualListBlock.Model.Type,
-  messages: ReadonlyArray<typeof VirtualListChatMessage.Type>,
+  model: ChatVirtualListBlockModel,
+  messages: ReadonlyArray<VirtualListChatMessage>,
   h: UiViewBuilder,
   options: Readonly<{
-    historySource: typeof VirtualListChatHistorySource.Type
-    historyLoad: typeof VirtualListChatHistoryLoad.Type
+    historySource: VirtualListChatHistorySource
+    historyLoad: VirtualListChatHistoryLoad
     announcedOlderCount: number
-    historyModeGroup?: typeof HistoryModeRadioGroupBlock.Model.Type
+    historyModeGroup?: HistoryModeRadioGroupBlockModel
   }> = {
     historySource: VirtualListChatHistorySource.Unbounded(),
     historyLoad: VirtualListChatHistoryLoad.Idle(),

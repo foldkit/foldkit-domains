@@ -12,7 +12,6 @@ export const ScrollContainer = defineTaggedUnion({
   Ancestor: { selector: Schema.String },
   Window: {},
 })
-
 /** A VirtualList scroll-container selection. */
 export type ScrollContainer = typeof ScrollContainer.Type
 

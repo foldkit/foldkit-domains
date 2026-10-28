@@ -23,7 +23,7 @@ import {
 import { unsavedIssueDrafts } from '../selection'
 import { navigationLink } from './navigationLink'
 
-const maybeConfirmedWorkspace = (model: typeof Model.Type) =>
+const maybeConfirmedWorkspace = (model: Model) =>
   AsyncData.getData(model.workspaceAsyncData)
 
 const SIDEBAR_COLLECTION_CLASS =
@@ -34,10 +34,7 @@ const SAVED_VIEW_LINK_CLASS =
 
 const DRAFT_LINK_CLASS = 'block rounded-lg px-3 py-2'
 
-export const sidebarView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+export const sidebarView = (model: Model, h: ApplicationViewBuilder): Html => {
   const issueDrafts = unsavedIssueDrafts(model)
   const { route } = model
   const maybeCurrentProjectId = maybeProjectId(route)

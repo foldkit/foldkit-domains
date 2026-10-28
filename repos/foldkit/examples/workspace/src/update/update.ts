@@ -38,7 +38,7 @@ import {
 } from './issueDetails'
 import { applyMovedIssueStep, informBoardMoveFailureStep } from './issueMove'
 
-const applyWorkspaceSnapshotStep = (nextWorkspace: typeof Workspace.Type) =>
+const applyWorkspaceSnapshotStep = (nextWorkspace: Workspace) =>
   makeFieldsStep(() => ({
     workspaceAsyncData: workspaceAsyncData =>
       WorkspaceAsyncData.Success({

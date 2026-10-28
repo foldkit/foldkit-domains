@@ -13,17 +13,13 @@ import {
 } from './domain'
 
 const commentOrder = Order.combine(
-  Order.mapInput(
-    Option.makeOrder(DateTime.Order),
-    (comment: typeof Comment.Type) => DateTime.make(comment.createdAt),
+  Order.mapInput(Option.makeOrder(DateTime.Order), (comment: Comment) =>
+    DateTime.make(comment.createdAt),
   ),
-  Order.mapInput(Order.String, (comment: typeof Comment.Type) => comment.id),
+  Order.mapInput(Order.String, (comment: Comment) => comment.id),
 )
 
-export const mergeIssue = (
-  currentIssue: typeof Issue.Type,
-  incomingIssue: typeof Issue.Type,
-) => {
+export const mergeIssue = (currentIssue: Issue, incomingIssue: Issue) => {
   const latestIssue =
     incomingIssue.version > currentIssue.version ? incomingIssue : currentIssue
   const mergedComments = Array.dedupeWith(
@@ -43,7 +39,7 @@ export const mergeIssue = (
   })
 }
 
-export const draftFromIssue = (issue: typeof Issue.Type) =>
+export const draftFromIssue = (issue: Issue) =>
   IssueDraft.make({
     title: issue.title,
     description: issue.description,
@@ -55,8 +51,8 @@ export const draftFromIssue = (issue: typeof Issue.Type) =>
   })
 
 export const mergeIssues = (
-  currentIssues: ReadonlyArray<typeof Issue.Type>,
-  incomingIssues: ReadonlyArray<typeof Issue.Type>,
+  currentIssues: ReadonlyArray<Issue>,
+  incomingIssues: ReadonlyArray<Issue>,
 ) => [
   ...Array.map(incomingIssues, incomingIssue =>
     Option.match(
@@ -80,20 +76,17 @@ export const mergeIssues = (
   ),
 ]
 
-export const revisionFromIssue = (issue: typeof Issue.Type) =>
+export const revisionFromIssue = (issue: Issue) =>
   IssueRevision.make({ version: issue.version, fields: draftFromIssue(issue) })
 
-export const savedIssueFromIssue = (issue: typeof Issue.Type) =>
+export const savedIssueFromIssue = (issue: Issue) =>
   SavedIssue.make({
     issueId: issue.id,
     identifier: issue.identifier,
     revision: revisionFromIssue(issue),
   })
 
-export const applySavedIssue = (
-  workspace: typeof Workspace.Type,
-  savedIssue: typeof SavedIssue.Type,
-) =>
+export const applySavedIssue = (workspace: Workspace, savedIssue: SavedIssue) =>
   modifyFields(workspace, {
     issues: Array.map(issue =>
       issue.id === savedIssue.issueId &&
@@ -113,9 +106,9 @@ export const applySavedIssue = (
   })
 
 export const applyComment = (
-  workspace: typeof Workspace.Type,
+  workspace: Workspace,
   issueId: string,
-  comment: typeof Comment.Type,
+  comment: Comment,
 ) =>
   modifyFields(workspace, {
     issues: Array.map(issue =>
@@ -132,10 +125,7 @@ export const applyComment = (
     ),
   })
 
-export const applyMovedIssue = (
-  workspace: typeof Workspace.Type,
-  movedIssue: typeof MovedIssue.Type,
-) =>
+export const applyMovedIssue = (workspace: Workspace, movedIssue: MovedIssue) =>
   modifyFields(workspace, {
     issues: issues =>
       Option.match(

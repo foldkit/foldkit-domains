@@ -2,6 +2,7 @@ import { Array, Number, Option, Schema, String, pipe } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
 
 import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
+import type * as Listbox from '@foldkit/ui/listbox'
 
 import {
   Domain,
@@ -12,16 +13,23 @@ import {
 import {
   ApplicationComposition,
   type ApplicationViewBuilder,
+  AvailabilityListboxBinding,
   CART_DIALOG_ID,
   CartDialogBinding,
   FILTERS_DIALOG_ID,
   FiltersDialogBinding,
   ResultsListBinding,
+  SearchModeBinding,
+  SortListboxBinding,
+  TLD_DIALOG_ID,
+  TldDialogBinding,
+  TldListboxBinding,
 } from './composition'
 import {
   AvailabilityFilter,
   DomainListing,
   SortOrder,
+  TOP_RESULT_COUNT,
   TldFilter,
   formatPrice,
   formatRegistrationPrice,
@@ -31,7 +39,7 @@ import {
 } from './domain'
 import * as Icon from './icon'
 import { Message } from './message'
-import { Model } from './model'
+import { Model, activeCart } from './model'
 import {
   RESULTS_LIST_ID,
   RESULTS_OVERSCAN_GROUPS,
@@ -41,10 +49,10 @@ import {
 } from './resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
+import { SEARCH_MODE_CONTROL_ID } from './searchModeControl'
 import { SearchPresentation, searchPresentation } from './searchPresentation'
 import { visibleResultListings } from './visibleResultListings'
 
-const TOP_RESULT_COUNT = 4
 const PREVIEW_RESULT_COUNT = 36
 
 const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
@@ -97,6 +105,34 @@ const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
   )
 }
 
+const searchModeView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.block(
+    SearchModeBinding.embedView({
+      slotId: SEARCH_MODE_CONTROL_ID,
+      model: model.searchModeControl,
+      viewInputs: {
+        options: ['Demo', 'Live'],
+        selectedValue: Option.some(model.searchMode),
+        ariaLabel: 'Search data source',
+        orientation: 'Horizontal',
+        toView: ({ group, options }) =>
+          h.div(
+            [
+              ...group,
+              h.Class('search-mode'),
+              h.AriaDescribedBy('search-mode-description'),
+            ],
+            Array.map(options, option =>
+              h.button(
+                [...option.option, h.Class('search-mode-option')],
+                [h.span([...option.label], [option.value])],
+              ),
+            ),
+          ),
+      },
+    }),
+  )
+
 const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.header(
     [h.Class('header')],
@@ -138,19 +174,20 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
       h.div(
         [h.Class('ml-auto flex items-center gap-2 max-[700px]:gap-1.5')],
         [
+          searchModeView(model, h),
           h.button(
             [
               h.Id('cart-button'),
               h.Class('button cart-button'),
               h.OnClick(Message.ClickedCart()),
-              h.AriaLabel(`Cart, ${Array.length(model.cart)} domains`),
+              h.AriaLabel(`Cart, ${Array.length(activeCart(model))} domains`),
               h.AriaHasPopup('dialog'),
               h.AriaControls(CART_DIALOG_ID),
             ],
             [
               Icon.cart(),
               h.span([], ['Cart']),
-              Array.match(model.cart, {
+              Array.match(activeCart(model), {
                 onEmpty: () => h.empty,
                 onNonEmpty: cart =>
                   h.span(
@@ -181,7 +218,7 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
           h.AriaAtomic(true),
         ],
         [
-          Array.match(model.cart, {
+          Array.match(activeCart(model), {
             onEmpty: () => 'Your cart is empty.',
             onNonEmpty: cart =>
               `${Array.length(cart)} ${Array.length(cart) === 1 ? 'domain' : 'domains'} in your cart.`,
@@ -191,13 +228,13 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
     ],
   )
 
-const heroView = (h: ApplicationViewBuilder): Html =>
+const heroView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.section(
     [h.Class('hero'), h.AriaLabel('Find your domain')],
     [
       h.h1(
         [],
-        ['Find a domain for', h.br([]), h.span([], ['your next big idea.'])],
+        ['Find a domain for', h.br([]), h.span([], ['the next viral idea.'])],
       ),
       h.p(
         [],
@@ -209,17 +246,25 @@ const heroView = (h: ApplicationViewBuilder): Html =>
           ),
         ],
       ),
+      searchFormView(model, h),
       h.div([h.Class('hero-search-space')]),
+    ],
+  )
+
+const beginSearchView = (h: ApplicationViewBuilder): Html =>
+  h.section(
+    [h.Class('begin-search'), h.AriaLabel('Begin your search')],
+    [
       h.div(
-        [h.Class('suggestions')],
+        [h.Class('begin-search-copy')],
         [
-          h.span([], ['Try a name:']),
-          ...Array.map(['acme', 'your-next-idea', 'foldkit'], query =>
-            h.keyed('a')(
-              query,
-              [h.Href(searchHref(query))],
-              [query, Icon.arrowUpRight()],
-            ),
+          h.div([h.Class('begin-search-icon')], [Icon.search()]),
+          h.h2([], ['Begin your search']),
+          h.p(
+            [],
+            [
+              'Enter a domain name to find available domains for your next project.',
+            ],
           ),
         ],
       ),
@@ -231,7 +276,10 @@ const readyDomainActionView = (
   model: Model,
   h: ApplicationViewBuilder,
 ): Html => {
-  const isInCart = Array.some(model.cart, item => item.name === domain.name)
+  const isInCart = Array.some(
+    activeCart(model),
+    item => item.name === domain.name,
+  )
   return Domain.match(domain, {
     Unconfirmed: () =>
       h.div(
@@ -351,68 +399,150 @@ const domainRowView = (
     ],
   )
 
+const availabilityFilterLabels: Readonly<
+  globalThis.Record<AvailabilityFilter, string>
+> = {
+  All: 'Show All',
+  Available: 'Available',
+}
+
+const sortOrderLabels: Readonly<globalThis.Record<SortOrder, string>> = {
+  Relevance: 'Relevance',
+  Length: 'Length',
+  Alphabetical: 'Alphabetical',
+  PriceAscending: 'Price: Low to High',
+  PriceDescending: 'Price: High to Low',
+}
+
+const tldFilterLabel = (value: TldFilter) =>
+  value === 'All' ? 'All TLDs' : `.${String.toLowerCase(value)}`
+
+const FILTER_LISTBOX_ANCHOR: Listbox.AnchorConfig = {
+  placement: 'bottom-end',
+  portal: false,
+  gap: 6,
+  padding: 8,
+}
+
+const filterListboxInputs = <Value extends string>(
+  selectedValue: Value,
+  items: ReadonlyArray<Value>,
+  itemToLabel: (value: Value) => string,
+  ariaLabel: string,
+  h: ApplicationViewBuilder,
+  itemToSearchText: (value: Value) => string = itemToLabel,
+): Listbox.ViewInputs<Value, Value> => ({
+  items,
+  itemToValue: value => value,
+  itemToSearchText,
+  maybeSelectedValue: Option.some(selectedValue),
+  ariaLabel: `${ariaLabel}: ${itemToLabel(selectedValue)}`,
+  anchor: FILTER_LISTBOX_ANCHOR,
+  className: 'filter-listbox',
+  buttonClassName: 'filter-trigger',
+  itemsClassName: 'filter-options',
+  itemsAttributes: childAttributes([h.Tabindex(0)]),
+  backdropClassName: 'filter-backdrop',
+  buttonContent: h.span(
+    [h.Class('filter-trigger-content')],
+    [
+      h.span([h.Class('filter-trigger-label')], [itemToLabel(selectedValue)]),
+      Icon.chevronDown(),
+    ],
+  ),
+  itemToConfig: value => ({
+    className: 'filter-option',
+    content: h.span(
+      [h.Class('filter-option-content')],
+      [
+        h.span([h.Class('filter-option-check')], [Icon.check()]),
+        h.span([], [itemToLabel(value)]),
+      ],
+    ),
+  }),
+})
+
 const availabilityFilterView = (
   model: Model,
   h: ApplicationViewBuilder,
 ): Html =>
-  h.select(
-    [
-      h.Class('filter-select'),
-      h.AriaLabel('Filter availability'),
-      h.Value(model.availabilityFilter),
-      h.OnChange(value =>
-        Message.UpdatedAvailabilityFilter({
-          value: Schema.decodeUnknownSync(AvailabilityFilter)(value),
-        }),
+  h.block(
+    AvailabilityListboxBinding.embedView({
+      slotId: model.availabilityListbox.id,
+      model: model.availabilityListbox,
+      viewInputs: filterListboxInputs(
+        model.availabilityFilter,
+        AvailabilityFilter.literals,
+        value => availabilityFilterLabels[value],
+        'Filter availability',
+        h,
       ),
-    ],
-    [
-      h.option([h.Value('All')], ['Show All']),
-      h.option([h.Value('Available')], ['Available']),
-    ],
+    }),
   )
 
 const sortOrderView = (model: Model, h: ApplicationViewBuilder): Html =>
-  h.select(
-    [
-      h.Class('filter-select'),
-      h.AriaLabel('Sort results'),
-      h.Value(model.sortOrder),
-      h.OnChange(value =>
-        Message.UpdatedSortOrder({
-          value: Schema.decodeUnknownSync(SortOrder)(value),
-        }),
+  h.block(
+    SortListboxBinding.embedView({
+      slotId: model.sortListbox.id,
+      model: model.sortListbox,
+      viewInputs: filterListboxInputs(
+        model.sortOrder,
+        SortOrder.literals,
+        value => sortOrderLabels[value],
+        'Sort results',
+        h,
       ),
-    ],
-    [
-      h.option([h.Value('Relevance')], ['Relevance']),
-      h.option([h.Value('PriceAscending')], ['Price: Low to High']),
-      h.option([h.Value('PriceDescending')], ['Price: High to Low']),
-    ],
+    }),
   )
 
 const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('filters')],
     [
-      h.select(
+      h.div(
+        [h.Class('desktop-tld-filter')],
         [
-          h.Class('filter-select'),
-          h.AriaLabel('Filter by TLD'),
-          h.Value(model.tldFilter),
-          h.OnChange(value =>
-            Message.UpdatedTldFilter({
-              value: Schema.decodeUnknownSync(TldFilter)(value),
+          h.block(
+            TldListboxBinding.embedView({
+              slotId: model.tldListbox.id,
+              model: model.tldListbox,
+              viewInputs: filterListboxInputs(
+                model.tldFilter,
+                TldFilter.literals,
+                tldFilterLabel,
+                'Filter by TLD',
+                h,
+                value =>
+                  value === 'All'
+                    ? tldFilterLabel(value)
+                    : String.toLowerCase(value),
+              ),
             }),
           ),
         ],
-        Array.map(TldFilter.literals, value =>
-          h.keyed('option')(
-            value,
-            [h.Value(value)],
-            [value === 'All' ? 'All TLDs' : `.${String.toLowerCase(value)}`],
+      ),
+      h.button(
+        [
+          h.Id('mobile-tld-filter'),
+          h.Type('button'),
+          h.Class('filter-trigger mobile-tld-filter'),
+          h.AriaLabel(`Filter by TLD: ${tldFilterLabel(model.tldFilter)}`),
+          h.AriaHasPopup('dialog'),
+          h.AriaControls(TLD_DIALOG_ID),
+          h.OnClick(Message.ClickedTldFilter()),
+        ],
+        [
+          h.span(
+            [h.Class('filter-trigger-content')],
+            [
+              h.span(
+                [h.Class('filter-trigger-label')],
+                [tldFilterLabel(model.tldFilter)],
+              ),
+              Icon.chevronDown(),
+            ],
           ),
-        ),
+        ],
       ),
       h.div(
         [h.Class('desktop-filters')],
@@ -434,6 +564,129 @@ const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
     ],
   )
 
+const visibleTldFilters = (query: string): ReadonlyArray<TldFilter> => {
+  const search = pipe(
+    query,
+    String.trim,
+    String.toLowerCase,
+    String.replace(/^\./, ''),
+  )
+  const extensions = pipe(
+    TldFilter.literals,
+    Array.filter(value => value !== 'All'),
+    Array.sort(String.Order),
+  )
+
+  const filters: ReadonlyArray<TldFilter> = ['All', ...extensions]
+
+  return Array.filter(filters, value =>
+    pipe(tldFilterLabel(value), String.toLowerCase, String.includes(search)),
+  )
+}
+
+const tldDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.block(
+    TldDialogBinding.embedView({
+      slotId: model.tldDialog.id,
+      model: model.tldDialog,
+      viewInputs: {
+        hasDescription: false,
+        toView: render =>
+          h.dialog(
+            [...render.dialog, h.Class('dialog-overlay')],
+            render.isVisible
+              ? [
+                  h.div([
+                    ...render.backdrop,
+                    h.Class('dialog-backdrop filters-backdrop'),
+                    h.AriaHidden(true),
+                  ]),
+                  h.section(
+                    [...render.panel, h.Class('filters-panel tld-panel')],
+                    [
+                      h.h2(
+                        [...render.title, h.Class('sr-only')],
+                        ['Filter by TLD'],
+                      ),
+                      h.div(
+                        [h.Class('tld-search')],
+                        [
+                          Icon.search(),
+                          h.input([
+                            ...render.initialFocus,
+                            h.Type('search'),
+                            h.AriaLabel('Search TLDs'),
+                            h.Placeholder('Search TLDs...'),
+                            h.Autocomplete('off'),
+                            h.Value(model.tldSearchQuery),
+                            h.OnInput(value =>
+                              Message.UpdatedTldSearch({ value }),
+                            ),
+                          ]),
+                        ],
+                      ),
+                      h.div(
+                        [h.Class('tld-options')],
+                        Array.match(visibleTldFilters(model.tldSearchQuery), {
+                          onEmpty: () => [
+                            h.p(
+                              [h.Role('status'), h.Class('tld-no-results')],
+                              ['No TLDs found.'],
+                            ),
+                          ],
+                          onNonEmpty: values =>
+                            Array.map(values, value =>
+                              h.keyed('button')(
+                                value,
+                                [
+                                  h.Type('button'),
+                                  h.Class('filter-choice'),
+                                  h.AriaPressed(
+                                    value === model.tldFilter
+                                      ? 'true'
+                                      : 'false',
+                                  ),
+                                  h.OnClick(
+                                    Message.ClickedTldOption({ value }),
+                                  ),
+                                ],
+                                filterChoiceContent(tldFilterLabel(value), h),
+                              ),
+                            ),
+                        }),
+                      ),
+                      h.button(
+                        [
+                          ...render.closeButton,
+                          h.Class('filters-close'),
+                          h.AriaLabel('Close TLD filter'),
+                        ],
+                        [Icon.close()],
+                      ),
+                    ],
+                  ),
+                ]
+              : undefined,
+          ),
+      },
+    }),
+  )
+
+const MOBILE_SORT_ORDERS: ReadonlyArray<SortOrder> = [
+  'Relevance',
+  'Length',
+  'PriceAscending',
+  'Alphabetical',
+]
+
+const filterChoiceContent = (
+  label: string,
+  h: ApplicationViewBuilder,
+): ReadonlyArray<Html> => [
+  h.span([], [label]),
+  h.span([h.Class('filter-choice-check'), h.AriaHidden(true)], [Icon.check()]),
+]
+
 const filtersDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.block(
     FiltersDialogBinding.embedView({
@@ -448,41 +701,101 @@ const filtersDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
               ? [
                   h.div([
                     ...render.backdrop,
-                    h.Class('dialog-backdrop'),
+                    h.Class('dialog-backdrop filters-backdrop'),
                     h.AriaHidden(true),
                   ]),
                   h.section(
                     [...render.panel, h.Class('filters-panel')],
                     [
+                      h.h2(
+                        [...render.title, h.Class('sr-only')],
+                        ['Filters and sort'],
+                      ),
                       h.div(
-                        [h.Class('filters-panel-heading')],
                         [
-                          h.h2([...render.title], ['Filters and sort']),
-                          h.button(
+                          h.Role('group'),
+                          h.AriaLabelledBy('availability-filter-heading'),
+                        ],
+                        [
+                          h.h3(
                             [
-                              ...render.closeButton,
-                              ...render.initialFocus,
-                              h.Class('icon-button'),
-                              h.AriaLabel('Close filters and sort'),
+                              h.Id('availability-filter-heading'),
+                              h.Class('filter-group-label'),
                             ],
-                            [Icon.close()],
+                            ['Filter by'],
+                          ),
+                          ...Array.map(AvailabilityFilter.literals, value =>
+                            h.keyed('button')(
+                              value,
+                              [
+                                h.Type('button'),
+                                h.Class('filter-choice'),
+                                h.AriaPressed(
+                                  value === model.availabilityFilter
+                                    ? 'true'
+                                    : 'false',
+                                ),
+                                ...(value === model.availabilityFilter
+                                  ? render.initialFocus
+                                  : []),
+                                h.OnClick(
+                                  Message.ClickedAvailabilityOption({ value }),
+                                ),
+                              ],
+                              filterChoiceContent(
+                                availabilityFilterLabels[value],
+                                h,
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      h.label(
-                        [h.Class('filter-field')],
+                      h.hr([h.Class('filter-group-divider')]),
+                      h.div(
                         [
-                          h.span([], ['Availability']),
-                          availabilityFilterView(model, h),
+                          h.Role('group'),
+                          h.AriaLabelledBy('sort-order-heading'),
+                        ],
+                        [
+                          h.h3(
+                            [
+                              h.Id('sort-order-heading'),
+                              h.Class('filter-group-label'),
+                            ],
+                            ['Sort by'],
+                          ),
+                          ...Array.map(MOBILE_SORT_ORDERS, value =>
+                            h.keyed('button')(
+                              value,
+                              [
+                                h.Type('button'),
+                                h.Class('filter-choice'),
+                                h.AriaPressed(
+                                  value === model.sortOrder ||
+                                    (value === 'PriceAscending' &&
+                                      model.sortOrder === 'PriceDescending')
+                                    ? 'true'
+                                    : 'false',
+                                ),
+                                h.OnClick(Message.ClickedSortOption({ value })),
+                              ],
+                              filterChoiceContent(
+                                value === 'PriceAscending'
+                                  ? 'Price'
+                                  : sortOrderLabels[value],
+                                h,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
-                      h.label(
-                        [h.Class('filter-field')],
-                        [h.span([], ['Sort by']), sortOrderView(model, h)],
-                      ),
                       h.button(
-                        [...render.closeButton, h.Class('button filters-done')],
-                        ['Done'],
+                        [
+                          ...render.closeButton,
+                          h.Class('filters-close'),
+                          h.AriaLabel('Close filters and sort'),
+                        ],
+                        [Icon.close()],
                       ),
                     ],
                   ),
@@ -574,7 +887,16 @@ const resultsGridView = (
   h.div(
     [],
     [
-      h.h2([], ['Top Results']),
+      h.div(
+        [h.Class('top-results-heading')],
+        [
+          h.h2([], ['Top Results']),
+          h.span(
+            [h.Class('data-source-label')],
+            [model.searchMode === 'Demo' ? 'Sample data' : 'Live · Vercel'],
+          ),
+        ],
+      ),
       h.div(
         [h.Class('top-results')],
         pipe(
@@ -706,7 +1028,7 @@ const cartPanelView = (
   h: ApplicationViewBuilder,
 ): Html => {
   const total = pipe(
-    model.cart,
+    activeCart(model),
     Array.map(domain => domain.price),
     Number.sumAll,
   )
@@ -729,7 +1051,7 @@ const cartPanelView = (
           ),
         ],
       ),
-      Array.match(model.cart, {
+      Array.match(activeCart(model), {
         onEmpty: () =>
           h.p(
             [h.Class('empty-cart')],
@@ -781,7 +1103,9 @@ const cartPanelView = (
       h.p(
         [...render.description, h.Class('demo-note')],
         [
-          'Demo cart. Live registrar quotes may change; adding a domain does not reserve it. No purchases are made.',
+          model.searchMode === 'Demo'
+            ? 'Demo cart with sample prices and availability. No domains are reserved. No purchases are made.'
+            : 'Demo cart. Live registrar quotes may change; adding a domain does not reserve it. No purchases are made.',
         ],
       ),
     ],
@@ -813,12 +1137,19 @@ const cartView = (model: Model, h: ApplicationViewBuilder): Html =>
     }),
   )
 
-const footerView = (h: ApplicationViewBuilder): Html =>
+const footerView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.footer(
     [h.Class('footer')],
     [
       h.span([], ['A Foldkit example']),
-      h.span([], ['Live data from Vercel · Demo cart']),
+      h.span(
+        [],
+        [
+          model.searchMode === 'Demo'
+            ? 'Sample data · Demo cart'
+            : 'Live data from Vercel · Demo cart',
+        ],
+      ),
       h.a(
         [h.Href('https://github.com/foldkit/foldkit-domains')],
         ['View source', Icon.arrowUpRight()],
@@ -831,6 +1162,7 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
     [
       h.Id('domains-app'),
       h.Class('app'),
+      h.DataAttribute('search-mode', model.searchMode),
       h.DataAttribute(
         'search',
         String.isNonEmpty(routeToQuery(model.route)) ? 'active' : 'idle',
@@ -849,7 +1181,18 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
         ['Skip to main content'],
       ),
       headerView(model, h),
-      searchFormView(model, h),
+      h.p(
+        [
+          h.Id('search-mode-description'),
+          h.Class('sr-only'),
+          h.AriaLive('polite'),
+        ],
+        [
+          model.searchMode === 'Demo'
+            ? 'Demo mode uses sample prices and availability. No live domain checks are made.'
+            : 'Live mode checks prices and availability with Vercel. The cart is a demo.',
+        ],
+      ),
       h.main(
         [
           h.Id('main'),
@@ -858,13 +1201,15 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
         ],
         [
           h.h1([h.Class('search-page-heading')], ['Domain search']),
-          heroView(h),
+          heroView(model, h),
+          beginSearchView(h),
           resultsView(model, h),
         ],
       ),
-      footerView(h),
+      footerView(model, h),
       cartView(model, h),
       filtersDialogView(model, h),
+      tldDialogView(model, h),
     ],
   )
 

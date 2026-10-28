@@ -24,3 +24,7 @@ export const Message = defineMessageUnion({
     error: RepositoryError,
   },
 })
+export type Message = typeof Message.Type
+export type InformedOfIssueChange = typeof Message.InformedOfIssueChange.Type
+export type SucceededSaveIssue = typeof Message.SucceededSaveIssue.Type
+export type FailedSaveIssue = typeof Message.FailedSaveIssue.Type

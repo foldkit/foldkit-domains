@@ -117,6 +117,7 @@ const Message = defineMessageUnion({
   SucceededFetchWeather: { weather: Weather },
   FailedFetchWeather: { error: Schema.String },
 })
+type Message = typeof Message.Type
 ```
 
 ### Variables and Functions
@@ -241,6 +242,7 @@ Array.take(items, count)              // not .slice(0, n)
 
 ```ts
 const Model = Schema.Struct({ items: Schema.Array(Schema.String) })
+type Model = typeof Model.Type
 
 Array.isArrayEmpty(model.items)
 // Argument of type 'readonly string[]' is not assignable to
@@ -421,7 +423,7 @@ expect(formSubmit.commands ?? []).toHaveLength(1)
 
 When the operation name collides with the function, use a trailing underscore such as `init_`. Do not destructure or rename `model`, `commands`, or `outMessage` from an ordinary update-like result that already contains those fields. Dot access does not prevent someone from ignoring `outMessage`; it keeps the operation and all of its returned fields visible together. Name a child fold's `write` parameter after the next child Model, such as `nextSettings`. Pass optional Commands directly to APIs that accept them, including `Command.mapMessages`. Use `result.commands ?? []` only when the next operation requires a concrete array for spreading, concatenating, execution, or an assertion.
 
-Name each concrete typed authoring value for its stage: `ChildDefinition = Block.makeDefinition('Child', ...)`, `ApplicationDefinition = Block.makeDefinition('Application', ...)`, `ChildComposition`, and `ApplicationComposition`. The runtime Block ID stays `Child` or `Application`. Export ordinary completed values as `ChildBlock` and `ApplicationBlock`; a generic factory returns an exact completed Block that its caller names locally.
+Name each concrete typed authoring value for its stage: `ChildDefinition = Block.makeDefinition('Child', ...)`, `ApplicationDefinition = Block.makeDefinition('Application', ...)`, `ChildComposition`, and `ApplicationComposition`. The runtime Block ID stays `Child` or `Application`. Export ordinary completed values as `ChildBlock` and `ApplicationBlock`; a generic UI factory uses `makeBlock` and returns an exact completed Block that its caller names locally. Declare it once at module scope and bind the returned value into the parent.
 
 Keep the Definition binding only when code uses a Definition authoring member. When `makeComposition` would be its only use, inline the top-level factory call into the Composition declaration. For a split feature, move the contract imports and factory chain to `composition.ts` and remove the empty `definition.ts`. This keeps Definition, Composition, and assembly as distinct passive stages while creating the owner identity once at module evaluation.
 
@@ -563,7 +565,9 @@ const Timer = defineTaggedUnion({
   Idle: {},
   Paused: { remainingMs: Schema.Number },
 })
+type Timer = typeof Timer.Type
 const Message = defineMessageUnion({ ClickedSubmit: {} })
+type Message = typeof Message.Type
 
 // WRONG: empty object is redundant and non-idiomatic
 Timer.Work({})
@@ -601,10 +605,12 @@ const FetchState = defineTaggedUnion({
   Error: { error: Schema.String },
   Ok: { data: Data },
 })
+type FetchState = typeof FetchState.Type
 
 const Model = Schema.Struct({
   fetchState: FetchState,
 })
+type Model = typeof Model.Type
 ```
 
 `defineTaggedUnion` names each variant once. It returns a Schema and a namespace:
@@ -618,10 +624,12 @@ For **remote data**, don't write that union at all. `AsyncData` ships it, with t
 
 ```ts
 const DataAsyncData = AsyncData.Schema(Data, Schema.String)
+type DataAsyncData = typeof DataAsyncData.schema.Type
 
 const Model = Schema.Struct({
   dataAsyncData: DataAsyncData.schema,
 })
+type Model = typeof Model.Type
 ```
 
 `Idle | Loading | Refreshing | Failure | Stale | Success`. `Refreshing` holds the previous data during a reload so a refetch doesn't blank the screen; `Stale` holds previous data alongside the new error so a failed reload doesn't throw away what the user was reading. Hand-rolling the four-state version bakes both regressions in. Keep `defineTaggedUnion` for state that isn't remote data: form steps, editor modes, connection phases.
@@ -635,6 +643,7 @@ const ValidationState = defineTaggedUnion({
   Valid: {},
   Invalid: { error: Schema.String },
 })
+type ValidationState = typeof ValidationState.Type
 ```
 
 For multi-step flows:
@@ -645,6 +654,7 @@ const SignupStep = defineTaggedUnion({
   EnterPassword: { email: Schema.String, password: Schema.String },
   Confirming: { email: Schema.String },
 })
+type SignupStep = typeof SignupStep.Type
 ```
 
 Use `taggedStruct` when the variants cannot be declared together:

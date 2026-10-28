@@ -12,3 +12,4 @@ export const Model = Schema.Struct({
   sortListbox: SortListboxBlock.Model,
   groupListbox: GroupListboxBlock.Model,
 })
+export type Model = typeof Model.Type

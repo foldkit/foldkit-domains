@@ -15,3 +15,5 @@ export const Message = defineMessageUnion({
   SucceededCreateIssue: { issue: Issue },
   FailedCreateIssue: { error: Schema.String },
 })
+export type Message = typeof Message.Type
+export type UpdatedDescription = typeof Message.UpdatedDescription.Type

@@ -7,10 +7,12 @@ import { makeDefinition } from './define.js'
 import * as Block from './public.js'
 
 const Model = Schema.Struct({ count: Schema.Number })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedIncrement: { amount: Schema.Number },
   CompletedSave: {},
 })
+type Message = typeof Message.Type
 const Definition = makeDefinition('MessageStep', { Model, Message })
 const Composition = Definition.makeComposition()
 const Save = Definition.makeCommand('Save', {
@@ -83,6 +85,7 @@ it('accepts result-producing references and preserves declared OutMessages', () 
   const OutMessage = defineMessageUnion({
     ReportedAmount: { amount: Schema.Number },
   })
+  type OutMessage = typeof OutMessage.Type
   const ReportingDefinition = makeDefinition('MessageStepReporting', {
     Model,
     Message,
@@ -150,10 +153,12 @@ it('interprets registered child Steps and passive child initialization recipes',
     typeof prepare
   > = Block.assemble(prepare)
   const ParentModel = Schema.Struct({ child: ChildBlock.Model })
+  type ParentModel = typeof ParentModel.Type
   const ParentMessage = defineMessageUnion({
     RequestedIncrement: { amount: Schema.Number },
     RequestedReset: { count: Schema.Number },
   })
+  type ParentMessage = typeof ParentMessage.Type
   const ParentDefinition = makeDefinition('MessageStepParent', {
     Model: ParentModel,
     Message: ParentMessage,

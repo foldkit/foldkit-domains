@@ -41,7 +41,7 @@ const ROW_HEIGHT = 30
 type SceneViewOverrides = Readonly<{
   containerClassName?: string
   contentAlignment?: 'Start' | 'End'
-  accessibleSet?: typeof AccessibleSet.Type
+  accessibleSet?: AccessibleSet
 }> &
   RowHeightInputs<DemoItem>
 

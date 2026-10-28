@@ -52,7 +52,7 @@ test('serves an editable search field in static HTML', async ({ browser }) => {
     page.getByRole('searchbox', { name: 'Search domains' }),
   ).toBeVisible()
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-    'Find a domain foryour next big idea.',
+    'Find a domain forthe next viral idea.',
   )
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(1)
   await context.close()
@@ -354,23 +354,23 @@ test('searches, filters, sorts, and manages the cart', async ({
     'Not available',
   )
   await page.screenshot({ path: testInfo.outputPath('domains-desktop.png') })
-  await page.getByLabel('Filter availability').selectOption('Available')
+  await Page.chooseFilterOption(page, 'Filter availability', 'Available')
   await expect(page.locator('.result-count')).toHaveText(
     '554 domains · Registration prices in USD',
   )
   expect(
     await page.locator('#domain-results .domain-row').count(),
   ).toBeLessThan(60)
-  await page.getByLabel('Sort results').selectOption('PriceAscending')
+  await Page.chooseFilterOption(page, 'Sort results', 'Price: Low to High')
   await expect(
     page.locator('#domain-results .domain-row').first(),
   ).toContainText('$1.99')
-  await page.getByLabel('Filter by TLD').selectOption('Com')
+  await Page.chooseFilterOption(page, 'Filter by TLD', '.com')
   await expect(page.getByRole('status')).toContainText([
     'No domains match',
     '0 domains',
   ])
-  await page.getByLabel('Filter by TLD').selectOption('App')
+  await Page.chooseFilterOption(page, 'Filter by TLD', '.app')
   await page
     .locator('.all-results')
     .getByRole('button', { name: 'Add foldkit.app to cart' })
@@ -588,7 +588,7 @@ test('restores queries on reload and browser navigation and ignores superseded s
   page,
 }) => {
   await page.goto('/')
-  await page.getByRole('link', { name: 'acme', exact: true }).click()
+  await page.goto('/?q=acme')
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   await expect(input).toHaveValue('acme')
   await input.fill('first-query')
@@ -690,17 +690,18 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
   await page
     .getByRole('button', { name: 'Filters and sort', exact: true })
     .click()
-  await page
-    .getByRole('combobox', { name: 'Sort results' })
-    .selectOption('PriceAscending')
-  await page.getByRole('button', { name: 'Done', exact: true }).click()
+  const filtersDialog = page.getByRole('dialog', { name: 'Filters and sort' })
+  await filtersDialog
+    .getByRole('button', { name: 'Price', exact: true })
+    .click()
+  await expect(filtersDialog).toBeHidden()
   await expect
     .poll(async () => {
       await Page.scrollResultsToOffset(page, 0)
       return rows.first().textContent()
     })
     .toContain('fresh.space')
-  await page.getByLabel('Filter by TLD').selectOption('App')
+  await Page.chooseFilterOption(page, 'Filter by TLD', '.app')
   await expect(rows).toHaveCount(1)
   await expect(rows.first()).toContainText('fresh.app')
   await expect(rows.first()).toBeInViewport({ ratio: 1 })
@@ -760,10 +761,10 @@ test('backspacing to a loaded query restores quotes without waiting for debounce
   page,
 }) => {
   await page.clock.install()
-  const labels: Array<string> = []
-  await mockDomainSearch(page, label =>
+  const windows: Array<{ label: string; offset: number; limit: number }> = []
+  await mockDomainSearch(page, (label, window) =>
     Effect.sync(() => {
-      labels.push(label)
+      windows.push({ label, ...window })
       return makeDomainFixtures(label)
     }),
   )
@@ -772,11 +773,26 @@ test('backspacing to a loaded query restores quotes without waiting for debounce
   const card = page.locator('.domain-card').first()
   await expect(card).toContainText('devin.com')
   await expect(card).toContainText('$12.00')
+  await expect(
+    page.getByText('60 of 556 domains checked · Registration prices in USD', {
+      exact: true,
+    }),
+  ).toBeVisible()
 
   await input.fill('devins')
   await expect(card).toContainText('devins.com')
   await expect(card).toContainText('$12.00')
-  expect(labels).toEqual(['devin', 'devins'])
+  await expect(
+    page.getByText('60 of 556 domains checked · Registration prices in USD', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  expect(windows).toEqual([
+    { label: 'devin', offset: 0, limit: 4 },
+    { label: 'devin', offset: 4, limit: 56 },
+    { label: 'devins', offset: 0, limit: 4 },
+    { label: 'devins', offset: 4, limit: 56 },
+  ])
 
   const nowMillis = await page.evaluate(() => Date.now())
   await page.clock.pauseAt(nowMillis + 100)
@@ -788,15 +804,37 @@ test('backspacing to a loaded query restores quotes without waiting for debounce
   await expect(page).toHaveURL(/q=devin$/)
   await expect(card).toContainText('devin.com')
   await expect(card).toContainText('$12.00')
+  await expect(
+    page.getByText('60 of 556 domains checked · Registration prices in USD', {
+      exact: true,
+    }),
+  ).toBeVisible()
   await expect(card.locator('.skeleton-price')).toHaveCount(0)
-  expect(labels).toEqual(['devin', 'devins'])
+  expect(windows).toEqual([
+    { label: 'devin', offset: 0, limit: 4 },
+    { label: 'devin', offset: 4, limit: 56 },
+    { label: 'devins', offset: 0, limit: 4 },
+    { label: 'devins', offset: 4, limit: 56 },
+  ])
 
   await page.clock.runFor(61_000)
   await page.clock.resume()
   await input.fill('devins')
   await expect(card).toContainText('devins.com')
   await expect(card).toContainText('$12.00')
-  expect(labels).toEqual(['devin', 'devins', 'devins'])
+  await expect(
+    page.getByText('60 of 556 domains checked · Registration prices in USD', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  expect(windows).toEqual([
+    { label: 'devin', offset: 0, limit: 4 },
+    { label: 'devin', offset: 4, limit: 56 },
+    { label: 'devins', offset: 0, limit: 4 },
+    { label: 'devins', offset: 4, limit: 56 },
+    { label: 'devins', offset: 0, limit: 4 },
+    { label: 'devins', offset: 4, limit: 56 },
+  ])
 })
 
 test('recovers from a registrar rate limit through retry without showing stale quotes', async ({
@@ -819,7 +857,11 @@ test('recovers from a registrar rate limit through retry without showing stale q
       }
     }),
   )
-  await page.goto('/?q=retry-idea')
+  await page.goto('/')
+  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await page
+    .getByRole('searchbox', { name: 'Search domains' })
+    .fill('retry-idea')
   await expect(page.getByRole('alert')).toContainText(
     'The domain provider is busy. Please try again in 60 seconds.',
   )
@@ -864,7 +906,7 @@ test('shows multi-year registration and renewal quotes without treating an uncon
     /could not confirm/,
   )
   await expect(unconfirmed.getByRole('button')).toHaveCount(0)
-  await page.getByLabel('Filter by TLD').selectOption('Ai')
+  await Page.chooseFilterOption(page, 'Filter by TLD', '.ai')
   const quoted = page.locator('#domain-results .domain-row').first()
   await expect(quoted.locator('.price')).toHaveText('$160.00 / 2 years')
   await expect(quoted.locator('.price')).toHaveAttribute(
@@ -897,7 +939,10 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
   await page.goto('/?q=progressive')
   await expect(page.locator('.domain-card').first()).toContainText('$12.00')
   await page.waitForLoadState('networkidle')
-  expect(windows).toEqual([{ offset: 0, limit: 60 }])
+  expect(windows).toEqual([
+    { offset: 0, limit: 4 },
+    { offset: 4, limit: 56 },
+  ])
   const viewport = page.locator('#domain-results')
   await Page.scrollResultsToOffset(page, 1140)
   await expect(page.getByRole('alert')).toContainText(
@@ -905,7 +950,8 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
   )
   await expect(page.locator('.domain-card').first()).toContainText('$12.00')
   expect(windows).toEqual([
-    { offset: 0, limit: 60 },
+    { offset: 0, limit: 4 },
+    { offset: 4, limit: 56 },
     { offset: 60, limit: 60 },
   ])
   isLaterPageFailing = false
@@ -919,11 +965,12 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(viewport.locator('.skeleton-price')).toHaveCount(0)
   expect(windows).toEqual([
-    { offset: 0, limit: 60 },
+    { offset: 0, limit: 4 },
+    { offset: 4, limit: 56 },
     { offset: 60, limit: 60 },
     { offset: 60, limit: 60 },
   ])
-  await page.getByLabel('Sort results').selectOption('PriceAscending')
+  await Page.chooseFilterOption(page, 'Sort results', 'Price: Low to High')
   await expect
     .poll(() =>
       windows.some(window => window.offset === 0 && window.limit === 556),
@@ -961,6 +1008,9 @@ for (const width of [1440, 390]) {
       await page.goto('/?q=acme')
       const input = page.getByRole('searchbox', { name: 'Search domains' })
       await expect(page.locator('.domain-card .price').first()).toBeVisible()
+      await expect(page.locator('.result-count')).toHaveText(
+        '60 of 556 domains checked · Registration prices in USD',
+      )
       const badge = page.locator('.dt-badge')
       const panel = page.locator('.dt-panel')
       await expect(badge).toBeInViewport()
@@ -973,7 +1023,7 @@ for (const width of [1440, 390]) {
       await expect(panel).toContainText('while the app stays live.')
       const quoteMessages = panel
         .locator('.message-list')
-        .getByText('GotQuoteWindowsMessage', { exact: true })
+        .getByText('GotDomainsQueryMessage', { exact: true })
       const previousQuoteMessages = await quoteMessages.count()
       await quoteMessages.first().click()
       await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
@@ -983,7 +1033,10 @@ for (const width of [1440, 390]) {
         'devtools-search.com',
       )
       releaseQuotes()
-      await expect(quoteMessages).toHaveCount(previousQuoteMessages + 1)
+      await expect(page.locator('.result-count')).toHaveText(
+        '60 of 556 domains checked · Registration prices in USD',
+      )
+      await expect(quoteMessages).toHaveCount(previousQuoteMessages + 2)
       await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
       await expect(input).toHaveValue('devtools-search')
       await expect(page).toHaveURL(/q=devtools-search/)
@@ -1012,3 +1065,100 @@ for (const width of [1440, 390]) {
     }
   })
 }
+
+test('Demo and Live preserve the input and query while isolating cached quotes and carts', async ({
+  page,
+}) => {
+  const requests: Array<string> = []
+  await mockDomainSearch(page, (label, range, mode) => {
+    requests.push(`${mode}:${range.offset}`)
+    return Effect.succeed(
+      Array.map(makeDomainFixtures(label), domain =>
+        domain._tag === 'Available' && mode === 'Live'
+          ? Domain.Available({ ...domain, price: domain.price + 100 })
+          : domain,
+      ),
+    ).pipe(Effect.delay(mode === 'Live' ? '300 millis' : '0 millis'))
+  })
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto('/?q=acme')
+  const input = page.getByRole('searchbox', { name: 'Search domains' })
+  const inputNode = await input.elementHandle()
+  const topCard = page.locator('.domain-card').first()
+  await expect(
+    page.getByRole('radio', { name: 'Demo', exact: true }),
+  ).toBeChecked()
+  await expect(topCard.locator('.price')).toHaveText('$12.00')
+  await expect(page.locator('.data-source-label')).toHaveText('Sample data')
+  await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
+  await expect(page.getByRole('status').last()).toContainText('60 of 556')
+  const demoRequests = requests.filter(request =>
+    request.startsWith('Demo:'),
+  ).length
+  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await expect(topCard.locator('.price')).toBeHidden()
+  await expect(
+    page.getByRole('button', { name: 'Cart, 0 domains' }),
+  ).toBeVisible()
+  await expect(input).toHaveValue('acme')
+  await expect(page).toHaveURL(/\?q=acme$/)
+  expect(
+    await input.evaluate((node, original) => node === original, inputNode),
+  ).toBe(true)
+  await expect(topCard.locator('.price')).toHaveText('$112.00')
+  await expect(page.locator('.data-source-label')).toHaveText('Live · Vercel')
+  await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
+  await page.getByRole('radio', { name: 'Demo', exact: true }).click()
+  await expect(topCard.locator('.price')).toHaveText('$12.00')
+  await expect(
+    page.getByRole('button', { name: 'Cart, 1 domains' }),
+  ).toBeVisible()
+  expect(requests.filter(request => request.startsWith('Demo:'))).toHaveLength(
+    demoRequests,
+  )
+  await topCard
+    .getByRole('button', { name: 'Remove acme.com from cart' })
+    .click()
+  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await expect(topCard.locator('.price')).toHaveText('$112.00')
+  await expect(
+    page.getByRole('button', { name: 'Cart, 1 domains' }),
+  ).toBeVisible()
+})
+
+test('switching away from pending Live quotes leaves cached Demo results usable', async ({
+  page,
+}) => {
+  let liveRequests = 0
+  await mockDomainSearch(page, (label, _range, mode) => {
+    if (mode === 'Live') {
+      liveRequests += 1
+      return Effect.sleep('600 millis').pipe(
+        Effect.andThen(
+          Effect.fail(
+            SearchError.RateLimited({
+              source: 'Registrar',
+              retryAfterSeconds: 60,
+            }),
+          ),
+        ),
+      )
+    }
+    return Effect.succeed(makeDomainFixtures(label))
+  })
+  await page.goto('/?q=acme')
+  const price = page.locator('.domain-card .price').first()
+  await expect(price).toHaveText('$12.00')
+  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await expect.poll(() => liveRequests).toBe(1)
+  await page.getByRole('radio', { name: 'Demo', exact: true }).click()
+  await expect(price).toHaveText('$12.00')
+  await page.waitForTimeout(800)
+  await expect(price).toHaveText('$12.00')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await page.getByRole('searchbox', { name: 'Search domains' }).fill('another')
+  await expect(page.locator('.domain-card').first()).toContainText(
+    'another.com',
+  )
+  await expect(price).toHaveText('$12.00')
+})

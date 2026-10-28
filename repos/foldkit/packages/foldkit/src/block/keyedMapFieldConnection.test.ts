@@ -12,9 +12,11 @@ import {
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   UpdatedCount: { count: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const ChildComposition = makeDefinition('KeyedMapFieldChild', {
   Model: ChildModel,
@@ -41,10 +43,12 @@ const Wrapper = Schema.Struct({
   child: ChildModel,
   label: Schema.String,
 })
+type Wrapper = typeof Wrapper.Type
 const Pair = Schema.Struct({
   lower: ChildModel,
   upper: ChildModel,
 })
+type Pair = typeof Pair.Type
 const ParentModel = Schema.Struct({
   childrenById: Schema.Record(Schema.String, ChildModel),
   rowsById: Schema.Record(Schema.String, Wrapper),
@@ -52,6 +56,7 @@ const ParentModel = Schema.Struct({
   hashRowsById: Schema.HashMap(Schema.String, Wrapper),
   pairsById: Schema.Record(Schema.String, Pair),
 })
+type ParentModel = typeof ParentModel.Type
 const ParentDefinition = makeDefinition('KeyedMapFieldParent', {
   Model: ParentModel,
   Message: Schema.Never,
@@ -59,7 +64,7 @@ const ParentDefinition = makeDefinition('KeyedMapFieldParent', {
 type HashMapFieldIsExact = IsExactKeyedMapField<
   typeof ParentModel,
   'childrenByNumber',
-  typeof ChildModel.Type
+  ChildModel
 >
 expectTypeOf<HashMapFieldIsExact>().toEqualTypeOf<true>()
 type HashMapStorage = (typeof ParentModel.fields)['childrenByNumber']
@@ -235,9 +240,11 @@ it('keeps extracted map constructors passive and owned by their Definition', () 
 
 it('keeps a whole Record child Model in an ordinary direct Binding', () => {
   const FlagsModel = Schema.Record(Schema.String, Schema.Boolean)
+  type FlagsModel = typeof FlagsModel.Type
   const FlagsMessage = defineMessageUnion({
     InformedOfFlagChange: { name: Schema.String, isEnabled: Schema.Boolean },
   })
+  type FlagsMessage = typeof FlagsMessage.Type
   const FlagsComposition = makeDefinition('RecordFlags', {
     Model: FlagsModel,
     Message: FlagsMessage,
@@ -257,6 +264,7 @@ it('keeps a whole Record child Model in an ordinary direct Binding', () => {
     typeof prepare
   > = Block.assemble(prepare)
   const ParentMessage = defineMessageUnion({ UpdatedFlags: {} })
+  type ParentMessage = typeof ParentMessage.Type
   const ParentDefinition = makeDefinition('DirectRecordFlagsParent', {
     Model: Schema.Struct({ flags: FlagsBlock.Model }),
     Message: ParentMessage,
@@ -291,9 +299,11 @@ it('keeps a whole Record child Model in an ordinary direct Binding', () => {
 
 it('keeps a whole HashMap child Model in an ordinary direct Binding', () => {
   const FlagsModel = Schema.HashMap(Schema.String, Schema.Boolean)
+  type FlagsModel = typeof FlagsModel.Type
   const FlagsMessage = defineMessageUnion({
     InformedOfFlagChange: { name: Schema.String, isEnabled: Schema.Boolean },
   })
+  type FlagsMessage = typeof FlagsMessage.Type
   const FlagsComposition = makeDefinition('HashMapFlags', {
     Model: FlagsModel,
     Message: FlagsMessage,
@@ -315,6 +325,7 @@ it('keeps a whole HashMap child Model in an ordinary direct Binding', () => {
     typeof prepare
   > = Block.assemble(prepare)
   const ParentMessage = defineMessageUnion({ UpdatedFlags: {} })
+  type ParentMessage = typeof ParentMessage.Type
   const ParentDefinition = makeDefinition('DirectHashMapFlagsParent', {
     Model: Schema.Struct({ flags: FlagsBlock.Model }),
     Message: ParentMessage,
@@ -471,6 +482,7 @@ it('rejects non-finite numeric HashMap occurrence keys at runtime', () => {
   const BroadNumberParentModel = Schema.Struct({
     children: Schema.HashMap(Schema.Number, ChildModel),
   })
+  type BroadNumberParentModel = typeof BroadNumberParentModel.Type
   const adapter = normalizeKeyedMapFieldConfig({
     Model: BroadNumberParentModel,
     ChildModel,
@@ -548,6 +560,7 @@ it('rejects conflicting adapters and unsupported key and value Schemas at runtim
     neverMap: Schema.HashMap(Schema.Never, ChildModel),
     wrongValues: Schema.Record(Schema.String, Schema.String),
   })
+  type InvalidParentModel = typeof InvalidParentModel.Type
   const InvalidParentDefinition = makeDefinition('InvalidKeyedMapFieldParent', {
     Model: InvalidParentModel,
     Message: Schema.Never,

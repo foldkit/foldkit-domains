@@ -568,7 +568,7 @@ Pass the resulting compatible Step or Model-first handler directly to the update
 
 ::Snippet{name="blockMessageStepProducers" label="Composing Message-aware Steps"}
 
-All three helpers support `.fromMessage`. Payload-only producers receive the complete exact Message variant, and the returned handler still receives `(model, message)`. When extracting a Message-dependent producer outside a contextually typed record, give its parameter a precise variant contract such as `typeof Message.UpdatedTitle.Type`. Compatible function references remain callbacks. When constructing a different Message or OutMessage, map its payload explicitly instead of forwarding the incoming `_tag` through a constructor reference.
+All three helpers support `.fromMessage`. Payload-only producers receive the complete exact Message variant, and the returned handler still receives `(model, message)`. When extracting a Message-dependent producer outside a contextually typed record, give its parameter a named variant alias such as `UpdatedTitle`, declared beside the `Message` union. Compatible function references remain callbacks. When constructing a different Message or OutMessage, map its payload explicitly instead of forwarding the incoming `_tag` through a constructor reference.
 
 `FeatureDefinition.makeFieldsStep(producer)` applies the produced field transformers. A zero-argument or Model-only producer creates a reusable unary Step. Omit its Model parameter when the transformers need no other field.
 

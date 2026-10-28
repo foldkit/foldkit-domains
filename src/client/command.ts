@@ -2,7 +2,7 @@ import { Clock, Effect, Layer, Match, Schema } from 'effect'
 import { Dom } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
-import { QuoteWindow } from '../shared/domain'
+import { DomainCandidateRange } from '../shared/domain'
 import { ApplicationDefinition } from './definition'
 import { Message } from './message'
 import { PageScrollKey, RESULTS_LIST_ID } from './resultsList'
@@ -10,20 +10,20 @@ import { searchRouter } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
 import { subscriptions } from './subscription'
 
-export const DetermineSearchTime = ApplicationDefinition.makeCommand(
-  'DetermineSearchTime',
+export const ReadSearchPlanningTime = ApplicationDefinition.makeCommand(
+  'ReadSearchPlanningTime',
   {
     args: {
       searchGeneration: Schema.Number,
-      ...QuoteWindow.fields,
+      ...DomainCandidateRange.fields,
       isForced: Schema.Boolean,
     },
-    messages: [Message.CompletedDetermineSearchTime],
+    messages: [Message.CompletedReadSearchPlanningTime],
     handler: function* () {
       return args =>
         Effect.gen(function* () {
           const nowMillis = yield* Clock.currentTimeMillis
-          return Message.CompletedDetermineSearchTime({ ...args, nowMillis })
+          return Message.CompletedReadSearchPlanningTime({ ...args, nowMillis })
         })
     },
   },
@@ -108,6 +108,20 @@ export const FocusFiltersButton = ApplicationDefinition.makeCommand(
   },
 )
 
+export const FocusTldFilterButton = ApplicationDefinition.makeCommand(
+  'FocusTldFilterButton',
+  {
+    messages: [Message.CompletedFocusTldFilterButton],
+    handler: function* () {
+      return () =>
+        Dom.focus('#mobile-tld-filter', { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusTldFilterButton()),
+        )
+    },
+  },
+)
+
 export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
   'FocusCartCloseButton',
   {
@@ -138,6 +152,19 @@ export const RevealResultsListStart = ApplicationDefinition.makeCommand(
             results.scrollIntoView({ block: 'start', behavior: 'instant' })
           }
         }).pipe(Effect.as(Message.CompletedRevealResultsListStart()))
+    },
+  },
+)
+
+export const ScrollPageToTop = ApplicationDefinition.makeCommand(
+  'ScrollPageToTop',
+  {
+    messages: [Message.CompletedScrollPageToTop],
+    handler: function* () {
+      return () =>
+        Effect.sync(() => {
+          window.scrollTo({ top: 0, behavior: 'instant' })
+        }).pipe(Effect.as(Message.CompletedScrollPageToTop()))
     },
   },
 )
@@ -206,15 +233,17 @@ export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
 
 export const EffectsLayer = Layer.mergeAll(
   subscriptions.layer,
-  DetermineSearchTime.layer,
+  ReadSearchPlanningTime.layer,
   ReplaceSearchUrl.layer,
   NavigateInternal.layer,
   LoadExternal.layer,
   FocusSearchInput.layer,
   FocusCartButton.layer,
   FocusFiltersButton.layer,
+  FocusTldFilterButton.layer,
   FocusCartCloseButton.layer,
   ScrollPage.layer,
+  ScrollPageToTop.layer,
   RevealResultsListStart.layer,
   DismissSearchKeyboard.layer,
   ReleaseEarlySearchListeners.layer,

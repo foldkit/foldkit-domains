@@ -118,7 +118,7 @@ Foldkit ships accessible UI components that handle keyboard navigation, ARIA att
 import { Button, Combobox, Dialog, Input } from '@foldkit/ui'
 ```
 
-There is no `Ui` namespace on the `foldkit` package. Import the `Dialog` namespace from `@foldkit/ui`, create `const DialogBinding = ParentDefinition.makeBinding(Dialog.DialogBlock, ...)`, include it in the parent Composition's `bindings`, and render through `h.block(DialogBinding.embedView(...))`. Component subpaths such as `@foldkit/ui/dialog` expose the same completed Block and intentional domain exports. Generic component namespaces expose a `create` or `make` factory; name its exact completed result locally before binding it.
+There is no `Ui` namespace on the `foldkit` package. Import the `Dialog` namespace from `@foldkit/ui`, create `const DialogBinding = ParentDefinition.makeBinding(Dialog.DialogBlock, ...)`, include it in the parent Composition's `bindings`, and render through `h.block(DialogBinding.embedView(...))`. Component subpaths such as `@foldkit/ui/dialog` expose the same completed Block and intentional domain exports. Generic component namespaces expose a `makeBlock` factory; name its exact completed result locally before binding it.
 
 Before generating, check if any part of the app maps to a built-in component:
 
@@ -151,7 +151,7 @@ Before generating, check if any part of the app maps to a built-in component:
 
 The package is not one shape.
 
-**Stateful Blocks** carry their own Model, Message, update, and (mostly) OutMessage, and are embedded via `h.block`: `Menu`, `Listbox`, `Combobox`, `Calendar`, `DatePicker`, `Dialog`, `Popover`, `RadioGroup`, `Tabs`, `Tooltip`, `FileDrop`, `DragAndDrop`, `Slider`, `VirtualList`, plus `Toast` once built through `Toast.make(PayloadSchema)`.
+**Stateful Blocks** carry their own Model, Message, update, and (mostly) OutMessage, and are embedded via `h.block`: `Menu`, `Listbox`, `Combobox`, `Calendar`, `DatePicker`, `Dialog`, `Popover`, `RadioGroup`, `Tabs`, `Tooltip`, `FileDrop`, `DragAndDrop`, `Slider`, `VirtualList`, plus `Toast` once built through `Toast.makeBlock(PayloadSchema)`.
 
 **Stateless render helpers** have no Model at all. You call `view` directly with a ViewConfig and your own `h`, and store the value in your own Model: `Button`, `Input`, `Textarea`, `Select`, `Fieldset`, `Checkbox`, `Switch`, `Disclosure`, `Nav`.
 
@@ -188,7 +188,7 @@ If the app uses UI components, **always read the ui-showcase example first** to 
 - `${CLAUDE_SKILL_DIR}/../../examples/ui-showcase/src/ui/update.ts`: how component updates are delegated
 - `${CLAUDE_SKILL_DIR}/../../examples/ui-showcase/src/ui/block.ts`: completed `UiBlock` and local handler recipe
 - `${CLAUDE_SKILL_DIR}/../../examples/ui-showcase/src/ui/composition/composition.ts`: parent-owned component Binding policies and automatic lifecycle composition
-- `${CLAUDE_SKILL_DIR}/../../examples/ui-showcase/src/ui/toast.ts`: read when using `Toast`. `Toast.make(PayloadSchema)` returns a completed Block with its refined payload type, Subscriptions, and `EffectsLayer`
+- `${CLAUDE_SKILL_DIR}/../../examples/ui-showcase/src/ui/toast.ts`: read when using `Toast`. `Toast.makeBlock(PayloadSchema)` returns a completed Block with its refined payload type, Subscriptions, and `EffectsLayer`
 
 Directory names under `examples/ui-showcase/src/` have moved before. List the directory rather than trusting these paths blind.
 
@@ -691,7 +691,7 @@ For file uploads (resumes, images, attachments):
 
 - Use bidirectional parser: `defineRouteUnion()`, `string()`, `int()`, `literal()`, `slash()`, `Route.mapTo()`, `Route.oneOf()`
 - Declare every route in one `defineRouteUnion({ Home: {}, NewLink: {}, NotFound: { path: Schema.String } })` named `ApplicationRoute`. Keep each variant on that namespace: `ApplicationRoute.Home`. Do not destructure variants or repeat the old `HomeRoute` suffix.
-- When a Model or Schema accepts only part of `ApplicationRoute`, use `ApplicationRoute.subset(['Home', 'Person'])`. It includes only the tags named in the call. There is no `omit`, because an exclusion list would silently accept every Route added later. Declare `type ApplicationRoute = typeof ApplicationRoute.Type` directly below its Schema with no blank line. When an annotation needs one variant's type, name it beside the union, such as `type PersonRoute = typeof ApplicationRoute.Person.Type`.
+- When a Model or Schema accepts only part of `ApplicationRoute`, use `ApplicationRoute.subset(['Home', 'Person'])`. It includes only the tags named in the call. There is no `omit`, because an exclusion list would silently accept every Route added later. Declare `type ApplicationRoute = typeof ApplicationRoute.Type` directly below its Schema with no blank line. When an annotation needs one variant's type, name it beside the union, such as `type PersonRoute = typeof ApplicationRoute.Person.Type`, then use `PersonRoute` in annotations.
 - Build each route as a Router: `const homeRouter = pipe(Route.root, Route.mapTo(ApplicationRoute.Home))`. **Routers are callable**: `homeRouter()` returns `'/'`, `tagFilterRouter({ tag: 'foo' })` returns `'/tag/foo'`. This is the print side of the bidirectional parser.
 - **Never hand-construct paths with template strings.** `Href(homeRouter())` not `Href('/')`. `pushUrl(newLinkRouter())` not `pushUrl('/new')`. `Href(tagFilterRouter({ tag: tagName }))` not ``Href(`/tag/${encodeURIComponent(tagName)}`)``. The router handles encoding and keeps the URL shape in one place so a refactor changes one file, not every call site.
 - Render each route through its own view function; identity handles the switch, so route branches are never keyed. Key by entity id only when one shared view function renders different entities across route params (a detail page across slugs)

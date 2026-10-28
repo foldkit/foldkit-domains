@@ -13,7 +13,12 @@ const searchDomains = (baseURL: string | undefined, label: string) => {
   return Effect.scoped(
     Effect.gen(function* () {
       const client = yield* DomainsClient
-      return yield* client.SearchDomains({ label, offset: 0, limit: 60 })
+      return yield* client.SearchDomains({
+        mode: 'Live',
+        label,
+        offset: 0,
+        limit: 60,
+      })
     }),
   ).pipe(
     Effect.provide(makeDomainsClientLayer(`${baseURL}${DOMAINS_RPC_PATH}`)),
@@ -27,6 +32,7 @@ test('loads live registrar quotes and keeps a registered name out of the demo ca
   const errors: Array<string> = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
+  await page.getByRole('radio', { name: 'Live', exact: true }).click()
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   await expect(input).toBeEditable()
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
@@ -120,7 +126,11 @@ test.describe('live mobile scrolling', () => {
     page,
   }, testInfo) => {
     test.setTimeout(180_000)
-    await page.goto('/?q=devinjameson.com')
+    await page.goto('/')
+    await page.getByRole('radio', { name: 'Live', exact: true }).click()
+    await page
+      .getByRole('searchbox', { name: 'Search domains' })
+      .fill('devinjameson.com')
     await expect(page.locator('.result-count')).toContainText('60 of 556', {
       timeout: 25_000,
     })

@@ -11,13 +11,15 @@ import {
 import { HttpServerRequest } from 'effect/http'
 import { RateLimiter } from 'effect/persistence'
 
-import { QuoteWindow, domainTlds } from '../shared/domain'
+import { DomainCandidateRange, domainTlds } from '../shared/domain'
 import { DomainsRpcs, RateLimitSource, SearchError } from '../shared/domainsRpc'
+import { searchDemoDomains } from './demoSearch'
 import { Registrar, RegistrarError } from './registrar'
+import { recordSearchCacheResult, timeSearchPhase } from './searchTiming'
 
 const SearchQuery = Schema.Struct({
   label: Schema.String,
-  ...QuoteWindow.fields,
+  ...DomainCandidateRange.fields,
 })
 type SearchQuery = typeof SearchQuery.Type
 class SearchCacheKey extends Data.Class<SearchQuery> {}
@@ -34,7 +36,7 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
     const cache = yield* Cache.make({
       capacity: SEARCH_CACHE_CAPACITY,
       timeToLive: SEARCH_CACHE_TTL,
-      lookup: (query: Readonly<{ label: string }> & QuoteWindow) =>
+      lookup: (query: Readonly<{ label: string }> & DomainCandidateRange) =>
         registrar.search(query.label, query.offset, query.limit),
     })
 
@@ -65,15 +67,28 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
       )
 
     return {
-      SearchDomains: ({ label, offset = 0, limit = domainTlds.length }) =>
+      SearchDomains: ({
+        mode = 'Demo',
+        label,
+        offset = 0,
+        limit = domainTlds.length,
+      }) =>
         Effect.gen(function* () {
+          if (mode === 'Demo') {
+            return yield* searchDemoDomains(label, { offset, limit })
+          }
+
           const query = new SearchCacheKey({ label, offset, limit })
           // NOTE: Workers requests cannot await another request's pending I/O; cache completed quotes only.
-          const maybeCachedDomains = yield* Cache.getSuccess(cache, query)
+          const maybeCachedDomains = yield* Cache.getSuccess(cache, query).pipe(
+            timeSearchPhase('cache'),
+          )
 
           if (Option.isSome(maybeCachedDomains)) {
+            yield* recordSearchCacheResult('cache-hit')
             return maybeCachedDomains.value
           } else {
+            yield* recordSearchCacheResult('cache-miss')
             const maybeRequest = yield* Effect.serviceOption(
               HttpServerRequest.HttpServerRequest,
             )
@@ -116,7 +131,9 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
               ),
             )
 
-            yield* Cache.set(cache, query, domains)
+            yield* Cache.set(cache, query, domains).pipe(
+              timeSearchPhase('cache-write'),
+            )
 
             return domains
           }

@@ -57,6 +57,7 @@ const Measurement = defineTaggedUnion({
     containerHeight: Schema.Number,
   },
 })
+type Measurement = typeof Measurement.Type
 
 /** Alignment of a row within the viewport after a programmatic scroll. */
 export const ScrollAlignment = Schema.Literals([
@@ -65,7 +66,6 @@ export const ScrollAlignment = Schema.Literals([
   'End',
   'Nearest',
 ])
-
 export type ScrollAlignment = typeof ScrollAlignment.Type
 
 /** Logical destination for initial and programmatic scrolling. */
@@ -75,8 +75,10 @@ export const ScrollTarget = defineTaggedUnion({
   Offset: { offset: Schema.Number },
   End: {},
 })
-
 export type ScrollTarget = typeof ScrollTarget.Type
+type RowScrollTarget =
+  | typeof ScrollTarget.Index.Type
+  | typeof ScrollTarget.Key.Type
 
 const ViewportAnchor = defineTaggedUnion({
   Offset: { scrollTop: Schema.Number },
@@ -87,6 +89,9 @@ const ViewportAnchor = defineTaggedUnion({
   },
   End: {},
 })
+type ViewportAnchor = typeof ViewportAnchor.Type
+type RowViewportAnchor = typeof ViewportAnchor.Row.Type
+type SelfScrollContainer = typeof ScrollContainer.Self.Type
 
 /** Stable row observation captured from the live scroll container. */
 export const ObservedAnchor = defineTaggedUnion({
@@ -97,7 +102,6 @@ export const ObservedAnchor = defineTaggedUnion({
     viewportOffset: Schema.Number,
   },
 })
-
 export type ObservedAnchor = typeof ObservedAnchor.Type
 
 /** Public snapshot of a user or browser driven container scroll. */
@@ -107,7 +111,6 @@ export const ContainerScrollObservation = Schema.Struct({
   containerHeight: Schema.Number,
   anchor: ObservedAnchor,
 })
-
 export type ContainerScrollObservation = typeof ContainerScrollObservation.Type
 
 /** Outcome of applying a logical scroll request after the view commits. */
@@ -120,6 +123,7 @@ export const ApplyScrollOutcome = defineTaggedUnion({
   },
   Skipped: {},
 })
+export type ApplyScrollOutcome = typeof ApplyScrollOutcome.Type
 
 const ScrollRequest = defineTaggedUnion({
   Target: {
@@ -128,12 +132,14 @@ const ScrollRequest = defineTaggedUnion({
   },
   Anchor: { anchor: ViewportAnchor, baselineScrollTop: Schema.Number },
 })
+type ScrollRequest = typeof ScrollRequest.Type
 
 const ScrollObservationOrigin = defineTaggedUnion({
   Native: {},
   Applied: { version: Schema.Number },
   Layout: {},
 })
+type ScrollObservationOrigin = typeof ScrollObservationOrigin.Type
 
 const appliedScrolls = new WeakMap<
   HTMLElement,
@@ -144,23 +150,25 @@ const PendingScroll = defineTaggedUnion({
   Idle: {},
   Pending: { request: ScrollRequest, version: Schema.Number },
 })
+type PendingScroll = typeof PendingScroll.Type
 
 const InitialScroll = defineTaggedUnion({
   Applied: {},
   Pending: { target: ScrollTarget, alignment: ScrollAlignment },
 })
+type InitialScroll = typeof InitialScroll.Type
 
 const EndBehavior = defineTaggedUnion({
   PreserveAnchor: {},
   Follow: { thresholdPx: Schema.Number },
 })
+type EndBehavior = typeof EndBehavior.Type
 
 /** Whether the loaded history has another page before its first row. */
 export const HistoryPage = defineTaggedUnion({
   More: {},
   Complete: {},
 })
-
 export type HistoryPage = typeof HistoryPage.Type
 
 const HistoryState = defineTaggedUnion({
@@ -171,6 +179,7 @@ const HistoryState = defineTaggedUnion({
     page: HistoryPage,
   },
 })
+type HistoryState = typeof HistoryState.Type
 
 /** Schema for the virtual list's state. Tracks scroll position, container
  *  measurement, and any in-flight programmatic scroll. */
@@ -192,7 +201,6 @@ export const Model = Schema.Struct({
   pendingScroll: PendingScroll,
   pendingScrollVersion: Schema.Number,
 })
-
 export type Model = typeof Model.Type
 
 // MESSAGE
@@ -250,7 +258,6 @@ export const Message = defineMessageUnion({
     outcome: ApplyScrollOutcome,
   },
 })
-
 export type Message = typeof Message.Type
 
 // OUT MESSAGE
@@ -264,6 +271,7 @@ export const OutMessage = defineMessageUnion({
   },
   EndedContainerScroll: {},
 })
+export type OutMessage = typeof OutMessage.Type
 
 const VirtualListDefinition = Block.makeDefinition('VirtualList', {
   Model,
@@ -293,13 +301,11 @@ export type InitConfig = Readonly<{
       }>
     | Readonly<{
         history: Readonly<{ reservePx: number; prefetchViewports: number }>
-        scrollContainer?: typeof ScrollContainer.Self.Type
+        scrollContainer?: SelfScrollContainer
       }>
   )
 
-const initialScrollFromConfig = (
-  config: InitConfig,
-): typeof InitialScroll.Type => {
+const initialScrollFromConfig = (config: InitConfig): InitialScroll => {
   if (config.initialScroll !== undefined) {
     return InitialScroll.Pending({
       target: config.initialScroll.target,
@@ -428,7 +434,7 @@ const readScrollTop = (element: HTMLElement): number =>
 const scrollObservationOrigin = (
   element: HTMLElement,
   event: Event | undefined,
-): typeof ScrollObservationOrigin.Type => {
+): ScrollObservationOrigin => {
   const applied = appliedScrolls.get(element)
   if (event !== undefined) {
     appliedScrolls.delete(element)
@@ -464,7 +470,7 @@ const rowIndex = (element: HTMLElement): Option.Option<number> =>
     Option.flatMap(Number.parse),
   )
 
-const observedAnchor = (element: HTMLElement): typeof ObservedAnchor.Type => {
+const observedAnchor = (element: HTMLElement): ObservedAnchor => {
   const top = viewportTop(element)
   const viewportBottom = top + viewportHeight(element)
   const isAbsolute = listSurface(element).hasAttribute(
@@ -573,7 +579,7 @@ const rowOffsets = (container: HTMLElement, row: HTMLElement): RowOffsets => {
 
 const rowForTarget = (
   element: HTMLElement,
-  target: typeof ScrollTarget.Index.Type | typeof ScrollTarget.Key.Type,
+  target: RowScrollTarget,
 ): Option.Option<HTMLElement> =>
   ScrollTarget.matchOrElse(
     target,
@@ -586,7 +592,7 @@ const rowForTarget = (
 
 const scrollTopForRowTarget = (
   element: HTMLElement,
-  target: typeof ScrollTarget.Index.Type | typeof ScrollTarget.Key.Type,
+  target: RowScrollTarget,
   alignment: ScrollAlignment,
 ): Option.Option<number> =>
   Option.map(rowForTarget(element, target), row => {
@@ -625,7 +631,7 @@ const scrollTopForTarget = (
 
 const rowForAnchor = (
   element: HTMLElement,
-  anchor: typeof ViewportAnchor.Row.Type,
+  anchor: RowViewportAnchor,
 ): Option.Option<HTMLElement> =>
   Option.orElse(rowForKey(element, anchor.key), () =>
     rowForIndex(element, anchor.index),
@@ -633,7 +639,7 @@ const rowForAnchor = (
 
 const scrollTopForAnchor = (
   element: HTMLElement,
-  anchor: typeof ViewportAnchor.Type,
+  anchor: ViewportAnchor,
 ): Option.Option<number> =>
   ViewportAnchor.match<Option.Option<number>>(anchor, {
     Offset: ({ scrollTop }) => Option.some(scrollTop),
@@ -654,7 +660,7 @@ const scrollTopForAnchor = (
 
 const scrollTopForRequest = (
   element: HTMLElement,
-  request: typeof ScrollRequest.Type,
+  request: ScrollRequest,
 ): Option.Option<number> =>
   ScrollRequest.match<Option.Option<number>>(request, {
     Target: ({ target, alignment }) =>
@@ -770,7 +776,7 @@ export type ScrollToOptions = Readonly<{
   alignment?: ScrollAlignment
 }>
 
-const buildScrollRequestStep = (request: typeof ScrollRequest.Type) =>
+const buildScrollRequestStep = (request: ScrollRequest) =>
   VirtualListDefinition.makeStep(model => {
     const nextVersion = Number.increment(model.pendingScrollVersion)
     return {
@@ -791,10 +797,10 @@ const buildScrollRequestStep = (request: typeof ScrollRequest.Type) =>
     }
   })
 
-const currentScrollRequest = (model: Model): typeof ScrollRequest.Type =>
-  PendingScroll.match<typeof ScrollRequest.Type>(model.pendingScroll, {
+const currentScrollRequest = (model: Model): ScrollRequest =>
+  PendingScroll.match<ScrollRequest>(model.pendingScroll, {
     Idle: () =>
-      InitialScroll.match<typeof ScrollRequest.Type>(model.initialScroll, {
+      InitialScroll.match<ScrollRequest>(model.initialScroll, {
         Applied: () =>
           Option.getOrElse(model.maybeMeasurementTarget, () =>
             ScrollRequest.Anchor({
@@ -817,8 +823,8 @@ const anchorFromSnapshot = (
   scrollTop: number,
   scrollHeight: number,
   containerHeight: number,
-  anchor: typeof ObservedAnchor.Type,
-): typeof ViewportAnchor.Type => {
+  anchor: ObservedAnchor,
+): ViewportAnchor => {
   const distanceFromEnd =
     model.history._tag === 'Enabled'
       ? Math.max(0, -scrollTop)
@@ -832,7 +838,7 @@ const anchorFromSnapshot = (
     return ViewportAnchor.End()
   }
 
-  return ObservedAnchor.match<typeof ViewportAnchor.Type>(anchor, {
+  return ObservedAnchor.match<ViewportAnchor>(anchor, {
     None: () => ViewportAnchor.Offset({ scrollTop }),
     Row: ({ key, index, viewportOffset }) =>
       ViewportAnchor.Row({ key, index, viewportOffset }),
@@ -845,7 +851,7 @@ const applyScrollSnapshot = (
     scrollTop: number
     scrollHeight: number
     containerHeight: number
-    anchor: typeof ObservedAnchor.Type
+    anchor: ObservedAnchor
     layoutVersion?: number | undefined
   }>,
 ): Model =>
@@ -1128,7 +1134,6 @@ const lastOrZero = (values: ReadonlyArray<number>): number =>
 
 /** Alignment of content when its total height is shorter than the viewport. */
 export const ContentAlignment = Schema.Literals(['Start', 'End'])
-
 export type ContentAlignment = typeof ContentAlignment.Type
 
 /** Set size and row positions exposed to assistive technology for paged data. */
@@ -1137,7 +1142,6 @@ export const AccessibleSet = defineTaggedUnion({
   Unknown: {},
   Known: { size: Schema.Number, firstPosition: Schema.Number },
 })
-
 export type AccessibleSet = typeof AccessibleSet.Type
 
 type ListLayout = Readonly<{
@@ -1354,7 +1358,7 @@ const scrollTopForLayoutAnchor = <Item>(
   layout: ListLayout,
   items: ReadonlyArray<Item>,
   itemToKey: (item: Item, index: number) => string,
-  anchor: typeof ViewportAnchor.Type,
+  anchor: ViewportAnchor,
 ): number =>
   ViewportAnchor.match<number>(anchor, {
     Offset: ({ scrollTop }) => layoutScrollTop(model, layout, scrollTop),
@@ -2047,7 +2051,7 @@ export const update = VirtualListComposition.makeUpdate({
       Update.ReturnWithOutMessage<
         Model,
         Message,
-        typeof OutMessage.Type,
+        OutMessage,
         Effect.Services<ReturnType<typeof ApplyScroll>['effect']>
       >
     >(model.pendingScroll, {
@@ -2627,7 +2631,7 @@ export interface Completed<Item> extends Block.CompletedWithViewAndOutMessage<
  * Window scrolling; view inputs supply rows, stable keys and a spacer or
  * absolute layout. Construction installs no browser observers until mounted.
  */
-export const create = <Item>(): Completed<Item> => {
+export const makeBlock = <Item>(): Completed<Item> => {
   const { composition, implementation } = makeBlockParts<Item>()
 
   const prepare = () => composition.prepareBlock(implementation)

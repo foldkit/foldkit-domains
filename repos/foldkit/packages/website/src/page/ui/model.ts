@@ -124,3 +124,4 @@ export const Model = Schema.Struct({
   virtualListChatLoadedOlderCount: Schema.Number,
   virtualListChatAnnouncedOlderCount: Schema.Number,
 })
+export type Model = typeof Model.Type

@@ -8,10 +8,10 @@ import { makeFieldsStep, makeStep } from './definition'
 import { createEmptyGrid, isGridEmpty } from './grid'
 import { type PaletteIndex, type Tool } from './model'
 
-export const selectToolStep = (tool: typeof Tool.Type) =>
+export const selectToolStep = (tool: Tool) =>
   makeFieldsStep(() => ({ tool: () => tool }))
 
-export const selectColorStep = (colorIndex: typeof PaletteIndex.Type) =>
+export const selectColorStep = (colorIndex: PaletteIndex) =>
   makeStep(model => {
     const nextModel = modifyFields(model, {
       selectedColorIndex: () => colorIndex,

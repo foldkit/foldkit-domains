@@ -42,7 +42,7 @@ Then replace this file whole. Foldkit's conventions change with its APIs, and a 
 
 ## Project Conventions
 
-- Name a concrete typed Block authoring value `<BlockId>Definition`, such as `SearchDefinition = Block.makeDefinition('Search', ...)` and `ApplicationDefinition = Block.makeDefinition('Application', ...)`. Keep the runtime ID unchanged. Name the corresponding Composition `<BlockId>Composition` or `ApplicationComposition`. Export ordinary completed values as `SearchBlock` and `ApplicationBlock`; a generic factory returns an exact completed Block that its caller names locally.
+- Name a concrete typed Block authoring value `<BlockId>Definition`, such as `SearchDefinition = Block.makeDefinition('Search', ...)` and `ApplicationDefinition = Block.makeDefinition('Application', ...)`. Keep the runtime ID unchanged. Name the corresponding Composition `<BlockId>Composition` or `ApplicationComposition`. Export ordinary completed values as `SearchBlock` and `ApplicationBlock`; a generic UI factory uses `makeBlock` and returns an exact completed Block that its caller names locally. Declare it once at module scope, then bind that value into the parent.
 - Foldkit is tightly coupled to the Effect ecosystem. Do not suggest solutions outside of Effect-TS.
 - Model fields must be Schema types (the model is a schema). Plain TypeScript types are fine elsewhere (function return types, local variables, etc.).
 - Use full names like `Message` (not `Msg`), and `withReturnType` (not `as const` or type casting).

@@ -32,19 +32,24 @@ const Active = Schema.Struct({
   _tag: Schema.Literal('Active'),
   count: Schema.Number,
 })
+type Active = typeof Active.Type
 const Inactive = Schema.Struct({
   _tag: Schema.Literal('Inactive'),
   reason: Schema.String,
 })
+type Inactive = typeof Inactive.Type
 const ParentModel = Schema.Union([Active, Inactive])
+type ParentModel = typeof ParentModel.Type
 const ChildMessage = Message.defineMessageUnion({
   UpdatedCount: { count: Schema.Number },
   CompletedInitialization: { count: Schema.Number },
   RequestedNotify: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 const ChildOutMessage = Message.defineMessageUnion({
   NotifiedCount: { count: Schema.Number },
 })
+type ChildOutMessage = typeof ChildOutMessage.Type
 const ChildDefinition = Block.makeDefinition('VariantActive', {
   Model: Active,
   Message: ChildMessage,
@@ -127,6 +132,7 @@ const ParentMessage = Message.defineMessageUnion({
   RequestedSetCount: { count: Schema.Number },
   RequestedNotify: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const ParentDefinition = Block.makeDefinition('VariantParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -226,16 +232,14 @@ const settle = Effect.gen(function* () {
   }
 })
 const maybeSlowSubscriptionDependencies: Option.Option<
-  ResolvedSlowPhaseConfig<
-    SlowSubscriptionDependenciesContext<typeof ParentModel.Type>
-  >
+  ResolvedSlowPhaseConfig<SlowSubscriptionDependenciesContext<ParentModel>>
 > = Option.none()
 const withRuntime = <Provided>(
   block: Omit<BindableBlock, 'EffectsLayer'> &
     Readonly<{ EffectsLayer: Layer.Layer<Provided> }>,
-  model: typeof ParentModel.Type,
+  model: ParentModel,
   test: (
-    runtime: CompositionRuntime<typeof ParentModel.Type>,
+    runtime: CompositionRuntime<ParentModel>,
     root: ActiveInstance,
   ) => Effect.Effect<void>,
 ) =>
@@ -272,10 +276,8 @@ const childNode = (root: ActiveInstance, binding: object): ActiveInstance => {
   }
   return node
 }
-const toRootMessage = (
-  node: ActiveInstance,
-  message: typeof ChildMessage.Type,
-): unknown => Reflect.apply(Reflect.get(node, 'toRootMessage'), node, [message])
+const toRootMessage = (node: ActiveInstance, message: ChildMessage): unknown =>
+  Reflect.apply(Reflect.get(node, 'toRootMessage'), node, [message])
 
 it('replaces a switched variant with a new generation and rejects stale results', async () => {
   lifecycleEvents.length = 0
@@ -442,10 +444,12 @@ it('rejects erased ineligible Schemas and mixed configuration', () => {
     _tag: Schema.Literal('Active'),
     count: Schema.Number,
   })
+  type rebuilt = typeof rebuilt.Type
   const constrained = Schema.Struct({
     _tag: Schema.Literal('Active'),
     count: Schema.Number.check(Schema.isGreaterThan(0)),
   })
+  type constrained = typeof constrained.Type
   for (const [index, member] of [rebuilt, constrained].entries()) {
     const definition = Block.makeDefinition(`SameTypeDifferentSchema${index}`, {
       Model: Schema.Union([member, Inactive]),

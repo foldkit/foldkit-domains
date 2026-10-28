@@ -115,7 +115,7 @@ const foldIssueDetailOutMessage = makeOutMessageFold(IssueDetailBlock, {
 })
 
 const navigateIssueFiltersStep = (
-  change: (filters: typeof IssueFilters.Type) => typeof IssueFilters.Type,
+  change: (filters: IssueFilters) => IssueFilters,
 ) =>
   makeCommandsStep(model => [
     NavigateInternal({

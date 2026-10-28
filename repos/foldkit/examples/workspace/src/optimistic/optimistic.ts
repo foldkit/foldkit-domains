@@ -19,10 +19,11 @@ export const IssueMoveState = defineTaggedUnion({
     error: Schema.String,
   },
 })
+export type IssueMoveState = typeof IssueMoveState.Type
 
 export const workspaceWithPendingMove = (
-  workspace: typeof Workspace.Type,
-  issueMoveState: typeof IssueMoveState.Type,
+  workspace: Workspace,
+  issueMoveState: IssueMoveState,
 ) =>
   IssueMoveState.matchOrElse(
     issueMoveState,

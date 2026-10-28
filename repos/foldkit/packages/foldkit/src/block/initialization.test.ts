@@ -36,6 +36,7 @@ const ChildMessage = defineMessageUnion({
   CompletedInitialization: { count: Schema.Number },
   CompletedIncrement: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const Child = makeDefinition('InitializationChild', {
   Model: ChildModel,
@@ -338,6 +339,7 @@ it('skips an optional child and drops its init Commands after a Step removes it'
 
 it('preserves default and rest parameters for a graphless Composition', () => {
   const PlainModel = Schema.Struct({ count: Schema.Number })
+  type PlainModel = typeof PlainModel.Type
 
   const PlainComposition = makeDefinition('InitializationPlain', {
     Model: PlainModel,
@@ -379,6 +381,7 @@ it('preserves primitive and tagged union Models for graphless Compositions', () 
     Schema.TaggedStruct('SignedOut', {}),
     Schema.TaggedStruct('SignedIn', { username: Schema.String }),
   ])
+  type SessionModel = typeof SessionModel.Type
 
   const SessionComposition = makeDefinition('InitializationSession', {
     Model: SessionModel,
@@ -555,13 +558,14 @@ it('initializes a projected accessor child and verifies Schema reconstruction', 
     second: ChildModel,
     selected: Schema.Literal('Second'),
   })
+  type AccessorParentModel = typeof AccessorParentModel.Type
   const AccessorParent = makeDefinition('InitializationAccessorParent', {
     Model: AccessorParentModel,
     Message: Schema.Never,
   })
   const AccessorBinding = AccessorParent.makeBinding(ChildBlock, {
     placement: 'selectedChild',
-    read: (model: typeof AccessorParentModel.Type) => Option.some(model.second),
+    read: (model: AccessorParentModel) => Option.some(model.second),
     write: (model, nextSecond) =>
       modifyFields(model, { second: () => nextSecond }),
     init: {
@@ -591,13 +595,14 @@ it('rejects a projected field that the accessor does not select', () => {
     first: ChildModel,
     second: ChildModel,
   })
+  type AccessorParentModel = typeof AccessorParentModel.Type
   const AccessorParent = makeDefinition('InitializationInvalidAccessorParent', {
     Model: AccessorParentModel,
     Message: Schema.Never,
   })
   const InvalidAccessorBinding = AccessorParent.makeBinding(ChildBlock, {
     placement: 'invalidSelectedChild',
-    read: (model: typeof AccessorParentModel.Type) => Option.some(model.first),
+    read: (model: AccessorParentModel) => Option.some(model.first),
     write: (model, nextFirst) =>
       modifyFields(model, { first: () => nextFirst }),
     init: {
@@ -651,6 +656,7 @@ it('runs initialization callbacks and Steps under the exact registered operation
     first: ChildModel,
     second: ChildModel,
   })
+  type ProjectedParentModel = typeof ProjectedParentModel.Type
   const ProjectedParent = makeDefinition('InitializationProjectedGraphParent', {
     Model: ProjectedParentModel,
     Message: Schema.Never,
@@ -662,8 +668,7 @@ it('runs initialization callbacks and Steps under the exact registered operation
   })
   const ProjectedBinding = ProjectedParent.makeBinding(ChildBlock, {
     placement: 'projectedSecond',
-    read: (model: typeof ProjectedParentModel.Type) =>
-      Option.some(model.second),
+    read: (model: ProjectedParentModel) => Option.some(model.second),
     write: (model, nextSecond) =>
       modifyFields(model, { second: () => nextSecond }),
     init: {

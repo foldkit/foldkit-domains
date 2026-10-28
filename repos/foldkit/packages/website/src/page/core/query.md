@@ -184,7 +184,7 @@ Adding `args` makes `Query.define` return a KeyedQuery. Each distinct argument k
 - `PostDetailsBinding.requestRevalidation({ postId })(model)` changes a data-bearing entry to `Refreshing` and includes its fetch Command. An entry without data is unchanged.
 - `PostDetailsBinding.requestRevalidationOrLoad({ postId })(model)` chooses the loading or refreshing transition from that entry's current state.
 - `PostDetailsBinding.requestLoadIfStale({ postId }, nowMillis)(model)` reuses fresh data and otherwise loads or refreshes that entry.
-- `PostDetailsBinding.requestCancel({ postId })(model)` cancels only that entry's pending Fetch and leaves other keys unchanged.
+- `PostDetailsBinding.requestCancel({ postId })(model)` cancels only that entry's pending Fetch. Restoring a canceled refresh applies the settled-entry limit and may evict retained data; other pending keys are unaffected.
 
 The bound operations also have data-last forms for direct use as Steps in update. `postQuery.pendingArgs(model.postDetails)` returns detached snapshots of the arguments for currently pending entries. A parent can inspect those snapshots when it needs to cancel several requests, while choosing which requests matter remains application policy.
 

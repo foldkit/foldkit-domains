@@ -31,7 +31,7 @@ const initialFilters = IssueFilters.make({
   groupBy: 'None',
 })
 
-const sceneView = (filters: typeof IssueFilters.Type = initialFilters) =>
+const sceneView = (filters: IssueFilters = initialFilters) =>
   withViewInputs(view, {
     issues: Array.take(initialWorkspace.issues, 2),
     members: initialWorkspace.members,

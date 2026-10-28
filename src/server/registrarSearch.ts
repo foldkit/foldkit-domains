@@ -26,6 +26,7 @@ import {
   RegistrarError,
   RegistrarLayer,
 } from './registrar'
+import { timeSearchPhase } from './searchTiming'
 
 const MAX_QUEUED_BATCHES = 300
 const MAX_QUEUE_MILLISECONDS = 2000
@@ -94,6 +95,21 @@ export const makeRegistrarSearchLayer = (
   Layer.effect(
     RegistrarSearch,
     Effect.gen(function* () {
+      const registrar = yield* Registrar.pipe(
+        Effect.provide(
+          RegistrarLayer.pipe(
+            Layer.provide(FetchHttpClient.layer),
+            Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchRegistrar)),
+            Layer.provide(
+              Layer.succeed(HttpClient.TracerPropagationEnabled, false),
+            ),
+            Layer.provide(
+              ConfigProvider.layer(ConfigProvider.fromUnknown(environment)),
+            ),
+          ),
+        ),
+      )
+
       const requestsPerSecond = positiveInteger(
         environment.REGISTRAR_REQUESTS_PER_SECOND,
         10,
@@ -126,9 +142,10 @@ export const makeRegistrarSearchLayer = (
       const queuedRef = yield* Ref.make(HashSet.empty<symbol>())
       const budgetLock = yield* Semaphore.make(1)
       const concurrency = yield* Semaphore.make(maximumConcurrent)
-      const persistCurrentBudget = Effect.promise(() =>
-        storage.put('budget', Ref.getUnsafe(budgetRef)),
-      ).pipe(Effect.uninterruptible)
+      const persistCurrentBudget = Effect.gen(function* () {
+        const budget = yield* Ref.get(budgetRef)
+        yield* Effect.promise(() => storage.put('budget', budget))
+      }).pipe(Effect.uninterruptible, timeSearchPhase('budget-persist'))
 
       const reserveBudget = (
         client: string,
@@ -312,51 +329,30 @@ export const makeRegistrarSearchLayer = (
             const queueKey = yield* Effect.acquireRelease(joinQueue, key =>
               Ref.update(queuedRef, HashSet.remove(key)),
             )
-            yield* Effect.acquireRelease(
-              concurrency.take(1).pipe(
-                Effect.timeoutOrElse({
-                  duration: Duration.millis(MAX_QUEUE_MILLISECONDS),
-                  orElse: () => Effect.fail(applicationLimit()),
-                }),
-              ),
-              () => concurrency.release(1),
-              { interruptible: true },
-            )
-            yield* reserveBudget(client, deadlineMillis)
-            yield* Ref.update(queuedRef, HashSet.remove(queueKey))
+            yield* Effect.gen(function* () {
+              yield* Effect.acquireRelease(
+                concurrency.take(1).pipe(
+                  Effect.timeoutOrElse({
+                    duration: Duration.millis(MAX_QUEUE_MILLISECONDS),
+                    orElse: () => Effect.fail(applicationLimit()),
+                  }),
+                ),
+                () => concurrency.release(1),
+                { interruptible: true },
+              )
+              yield* reserveBudget(client, deadlineMillis)
+              yield* Ref.update(queuedRef, HashSet.remove(queueKey))
+            }).pipe(timeSearchPhase('queue'))
             return yield* batch.pipe(Effect.tapError(rememberCooldown))
           }),
         )
 
       return {
         search: (query: CoordinatedSearch) =>
-          Effect.gen(function* () {
-            const registrar = yield* Registrar
-            return yield* registrar.search(
-              query.label,
-              query.offset,
-              query.limit,
-            )
-          }).pipe(
-            Effect.provide(
-              RegistrarLayer.pipe(
-                Layer.provide(
-                  Layer.succeed(RegistrarAdmission, {
-                    run: batch => admit(query.client, batch),
-                  }),
-                ),
-                Layer.provide(FetchHttpClient.layer),
-                Layer.provide(
-                  Layer.succeed(FetchHttpClient.Fetch, fetchRegistrar),
-                ),
-                Layer.provide(
-                  Layer.succeed(HttpClient.TracerPropagationEnabled, false),
-                ),
-                Layer.provide(
-                  ConfigProvider.layer(ConfigProvider.fromUnknown(environment)),
-                ),
-              ),
-            ),
+          registrar.search(query.label, query.offset, query.limit).pipe(
+            Effect.provideService(RegistrarAdmission, {
+              run: batch => admit(query.client, batch),
+            }),
             Effect.mapError(
               RegistrarError.match<SearchError>({
                 RateLimited: ({ retryAfterSeconds }) =>

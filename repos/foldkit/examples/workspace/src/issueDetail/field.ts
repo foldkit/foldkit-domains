@@ -5,7 +5,9 @@ const AssigneeChoice = defineTaggedUnion({
   Unassigned: {},
   Assigned: { memberId: Schema.String },
 })
+type AssigneeChoice = typeof AssigneeChoice.Type
 const AssigneeChoiceJson = Schema.fromJsonString(AssigneeChoice)
+type AssigneeChoiceJson = typeof AssigneeChoiceJson.Type
 
 export const encodeAssigneeSelection = (maybeMemberId: Option.Option<string>) =>
   Schema.encodeSync(AssigneeChoiceJson)(

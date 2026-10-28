@@ -2,7 +2,7 @@ import { Array } from 'effect'
 import { Command } from 'foldkit/story'
 import { describe, expect, test } from 'vitest'
 
-import { DetermineSearchTime, ReleaseEarlySearchListeners } from './command'
+import { ReadSearchPlanningTime, ReleaseEarlySearchListeners } from './command'
 import { init } from './init'
 import { urlOrThrow } from './model.fixture'
 import { routeToQuery } from './route'
@@ -19,7 +19,7 @@ describe('startup', () => {
         {
           searchGeneration: 1,
           offset: 0,
-          limit: 60,
+          limit: 4,
           isForced: false,
         },
       ],
@@ -32,10 +32,12 @@ describe('startup', () => {
     },
     { path: '/?q=', query: '', presentationTag: 'Idle', clocks: [] },
   ])(
-    'initializes $path from the URL and clocks valid searches before loading quotes',
+    'initializes $path from the URL and clocks valid searches before loading domain results',
     ({ path, query, presentationTag, clocks }) => {
       const applicationInit = init(urlOrThrow(`http://localhost${path}`))
 
+      expect(applicationInit.model.searchMode).toBe('Demo')
+      expect(applicationInit.model.carts).toEqual({ Demo: [], Live: [] })
       expect(routeToQuery(applicationInit.model.route)).toBe(query)
       expect(searchPresentation(applicationInit.model)._tag).toBe(
         presentationTag,
@@ -44,7 +46,7 @@ describe('startup', () => {
         Array.getSomes(
           Array.map(
             applicationInit.commands ?? [],
-            Command.argsOf(DetermineSearchTime),
+            Command.argsOf(ReadSearchPlanningTime),
           ),
         ),
       ).toEqual(clocks)

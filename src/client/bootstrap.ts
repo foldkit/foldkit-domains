@@ -24,7 +24,14 @@ export const bootstrapSearchInput = ({
         .split(/[./]/)
         .at(0) ?? ''
 
+    const isReturningToEmpty =
+      !input.value && app.getAttribute('data-search') === 'active'
+
     app.setAttribute('data-search', input.value ? 'active' : 'idle')
+
+    if (isReturningToEmpty) {
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    }
 
     app.querySelectorAll('[data-domain-label]').forEach(labelElement => {
       labelElement.textContent = label

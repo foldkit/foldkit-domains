@@ -7,11 +7,11 @@ import * as VirtualList from '@foldkit/ui/virtualList'
 
 const Fruit = Schema.Literals(['Apple', 'Pear'])
 
-export const FruitCombobox = Combobox.create(Fruit)
-export const FruitMultiCombobox = Combobox.Multi.create(Fruit)
-export const FruitListbox = Listbox.create<typeof Fruit.Type>()
-export const FruitMultiListbox = Listbox.Multi.create<typeof Fruit.Type>()
-export const FruitVirtualList = VirtualList.create<typeof Fruit.Type>()
+export const FruitCombobox = Combobox.makeBlock(Fruit)
+export const FruitMultiCombobox = Combobox.Multi.makeBlock(Fruit)
+export const FruitListbox = Listbox.makeBlock<typeof Fruit.Type>()
+export const FruitMultiListbox = Listbox.Multi.makeBlock<typeof Fruit.Type>()
+export const FruitVirtualList = VirtualList.makeBlock<typeof Fruit.Type>()
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <

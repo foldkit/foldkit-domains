@@ -2,14 +2,14 @@ import { Array, Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
 import { NavigateInternal, ReplaceInternalUrl } from '../command'
-import type { Message } from '../message'
+import type { ClickedDeleteSavedView } from '../message'
 import type { Model } from '../model'
 import { ApplicationRoute, maybeIssueId, routeToPath } from '../route'
 import { appliedIssueFilters } from '../selection'
 
 export const handleClickedDeleteSavedView = (
-  model: typeof Model.Type,
-  { viewId }: typeof Message.ClickedDeleteSavedView.Type,
+  model: Model,
+  { viewId }: ClickedDeleteSavedView,
 ) => {
   const { route } = model
 

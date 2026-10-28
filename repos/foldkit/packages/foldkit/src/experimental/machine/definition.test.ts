@@ -27,6 +27,7 @@ const State = defineTaggedUnion({
   Done: { value: Schema.Number },
   Paused: {},
 })
+type State = typeof State.Type
 
 const Message = defineMessageUnion({
   ClickedStart: {},
@@ -36,11 +37,13 @@ const Message = defineMessageUnion({
   CompletedWork: {},
   ClickedOutside: {},
 })
+type Message = typeof Message.Type
 
 const ContextSchema = Schema.Struct({
   allow: Schema.Boolean,
   offset: Schema.Number,
 })
+type ContextSchema = typeof ContextSchema.Type
 type ContextValue = typeof ContextSchema.Type
 
 class WorkService extends Context.Service<
@@ -433,8 +436,7 @@ describe('Machine.makeDefinition', () => {
     )
     const commands = fold({
       machine,
-      read: (model: Readonly<{ state: typeof State.Type }>) =>
-        Option.some(model.state),
+      read: (model: Readonly<{ state: State }>) => Option.some(model.state),
       write: (model, state) => modifyFields(model, { state: () => state }),
     })(Message.ClickedShared())({ state: State.Idle({ value: 0 }) })
 
@@ -657,9 +659,9 @@ describe('Machine.makeDefinition', () => {
         },
       },
     })
-    type Parent = Readonly<{ state: typeof State.Type } & ContextValue>
+    type Parent = Readonly<{ state: State } & ContextValue>
     const read = vi.fn((model: Parent) => Option.some(model.state))
-    const write = vi.fn((model: Parent, state: typeof State.Type) =>
+    const write = vi.fn((model: Parent, state: State) =>
       modifyFields(model, { state: () => state }),
     )
     const readContext = vi.fn((model: Parent) => ({
@@ -673,10 +675,8 @@ describe('Machine.makeDefinition', () => {
     expect(result.model.state).toEqual(State.Ready({ value: 7 }))
     expect(readContext).toHaveBeenCalledTimes(1)
 
-    type MaybeParent = Readonly<{ state?: typeof State.Type } & ContextValue>
-    const absentRead = vi.fn((_: MaybeParent) =>
-      Option.none<typeof State.Type>(),
-    )
+    type MaybeParent = Readonly<{ state?: State } & ContextValue>
+    const absentRead = vi.fn((_: MaybeParent) => Option.none<State>())
     const absentWrite = vi.fn((model: MaybeParent) => model)
     const absentContext = vi.fn(() => {
       throw new Error('context should not be read')
@@ -700,9 +700,11 @@ describe('Machine.makeDefinition', () => {
       Waiting: {},
       Finished: {},
     })
+    type InnerState = typeof InnerState.Type
     const OuterState = defineTaggedUnion({
       Nested: { inner: InnerState },
     })
+    type OuterState = typeof OuterState.Type
     const InnerDefinition = makeDefinition({ State: InnerState, Message })
     const innerMachine = InnerDefinition.makeMachine({
       initial: InnerState.Waiting(),

@@ -4,3 +4,4 @@ import { defineMessageUnion } from 'foldkit/message'
 export const OutMessage = defineMessageUnion({
   SelectedIssue: { issueId: Schema.String },
 })
+export type OutMessage = typeof OutMessage.Type

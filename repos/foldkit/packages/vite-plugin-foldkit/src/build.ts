@@ -80,7 +80,6 @@ export const FoldkitBuildManifest = Schema.Struct({
   /** Every path this build generated a page for, in the order it generated. */
   prerendered: Schema.Array(Schema.String),
 })
-
 /**
  * The decoded shape of `foldkit.build.json`.
  *
@@ -102,7 +101,6 @@ export const FoldkitBuildMetadata = Schema.Struct({
   /** Portable data also written to `foldkit.build.json`. */
   manifest: FoldkitBuildManifest,
 })
-
 /** The serializable, frozen snapshot of a completed Foldkit build. */
 export type FoldkitBuildMetadata = typeof FoldkitBuildMetadata.Type
 

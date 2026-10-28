@@ -61,6 +61,7 @@ const UrlFromString = Schema.String.pipe(
     }),
   ),
 )
+type UrlFromString = typeof UrlFromString.Type
 
 /**
  * Parses a URL string into a `Url`, returning `Option.None` if invalid.

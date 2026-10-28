@@ -8,3 +8,4 @@ export const Message = defineMessageUnion({
   InformedOfIssueMove: { status: IssueStatus, insertionIndex: Schema.Number },
   InformedOfIssueMoveFailure: {},
 })
+export type Message = typeof Message.Type

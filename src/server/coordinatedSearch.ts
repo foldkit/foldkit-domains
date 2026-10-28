@@ -8,26 +8,41 @@ import {
   type SearchEnvironment,
   makeCoordinatedSearchClientLayer,
 } from './coordination'
+import { searchDemoDomains } from './demoSearch'
 
 export const makeCoordinatedSearchHandlersLayer = (
   environment: SearchEnvironment,
 ) =>
-  DomainsRpcs.toLayer({
-    SearchDomains: ({ label, offset = 0, limit = domainTlds.length }) =>
-      Effect.gen(function* () {
-        const search = yield* CoordinatedSearchClient
-        const maybeRequest = yield* Effect.serviceOption(
-          HttpServerRequest.HttpServerRequest,
-        )
+  DomainsRpcs.toLayer(
+    Effect.gen(function* () {
+      const search = yield* CoordinatedSearchClient
 
-        const client = Option.match(maybeRequest, {
-          onNone: () => 'local',
-          onSome: request => request.headers['cf-connecting-ip'] ?? 'local',
-        })
+      return {
+        SearchDomains: ({
+          mode = 'Demo',
+          label,
+          offset = 0,
+          limit = domainTlds.length,
+        }) =>
+          Effect.gen(function* () {
+            if (mode === 'Demo') {
+              return yield* searchDemoDomains(label, { offset, limit })
+            }
 
-        return yield* search.search({ label, offset, limit, client })
-      }),
-  }).pipe(
+            const maybeRequest = yield* Effect.serviceOption(
+              HttpServerRequest.HttpServerRequest,
+            )
+
+            const client = Option.match(maybeRequest, {
+              onNone: () => 'local',
+              onSome: request => request.headers['cf-connecting-ip'] ?? 'local',
+            })
+
+            return yield* search.search({ label, offset, limit, client })
+          }),
+      }
+    }),
+  ).pipe(
     Layer.provide(
       makeCoordinatedSearchClientLayer(
         environment.DOMAIN_QUOTES,

@@ -9,8 +9,8 @@ import { ApplicationRoute, boardRouter, routeToPath } from '../route'
 import { navigationLink } from './navigationLink'
 
 export const projectTabs = (
-  project: typeof Project.Type,
-  route: typeof ApplicationRoute.Type,
+  project: Project,
+  route: ApplicationRoute,
   h: ApplicationViewBuilder,
 ): Html => {
   const projectPageRoutes = {
@@ -39,8 +39,8 @@ export const projectTabs = (
 }
 
 export const projectOverview = (
-  project: typeof Project.Type,
-  workspace: typeof Workspace.Type,
+  project: Project,
+  workspace: Workspace,
   h: ApplicationViewBuilder,
 ): Html => {
   const projectIssues = Array.filter(

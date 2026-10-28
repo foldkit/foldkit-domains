@@ -4,45 +4,50 @@ import { Command, type StorySimulation, message, steps } from 'foldkit/story'
 import { VirtualList } from '@foldkit/ui'
 
 import { Domain } from '../../shared/domain'
-import { DetermineSearchTime, ReplaceSearchUrl } from '../command'
+import { SearchMode } from '../../shared/searchMode'
+import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
+import {
+  DomainsQuery,
+  DomainsQueryArgs,
+  DomainsQueryFailure,
+} from '../domainsQuery'
 import { Message } from '../message'
 import { urlOrThrow } from '../model.fixture'
-import { QuoteFailure, QuoteWindowArgs, QuoteWindows } from '../quoteWindows'
 import { ResultsListBlock } from '../resultsList'
 import { searchHref } from '../route'
 
-export const quoteRequestKey = (args: QuoteWindowArgs) => {
-  const request = QuoteWindows.requestRevalidationOrLoad(
-    QuoteWindows.init().model,
+export const domainsRequestKey = (args: DomainsQueryArgs) => {
+  const request = DomainsQuery.requestRevalidationOrLoad(
+    DomainsQuery.init().model,
     args,
   )
 
   return Option.getOrThrow(
     Array.head(
       Array.getSomes(
-        Array.map(request.commands ?? [], Command.argsOf(QuoteWindows.Fetch)),
+        Array.map(request.commands ?? [], Command.argsOf(DomainsQuery.Fetch)),
       ),
     ),
   ).requestKey
 }
 
-export const quoteFetch = (args: QuoteWindowArgs, generation: number) =>
-  QuoteWindows.Fetch({
+export const makeDomainsFetch = (args: DomainsQueryArgs, generation: number) =>
+  DomainsQuery.Fetch({
     args,
     generation,
-    requestKey: quoteRequestKey(args),
+    requestKey: domainsRequestKey(args),
   })
 
 export const resolveSearchTime = (
   searchGeneration: number,
   nowMillis: number,
   offset = 0,
-  limit = 60,
+  limit = 4,
   isForced = false,
 ) =>
   Command.resolve(
-    DetermineSearchTime({ searchGeneration, offset, limit, isForced }),
-    Message.CompletedDetermineSearchTime({
+    ReadSearchPlanningTime({ searchGeneration, offset, limit, isForced }),
+    Message.CompletedReadSearchPlanningTime({
       searchGeneration,
       nowMillis,
       offset,
@@ -72,50 +77,67 @@ export const changeSearchQuery = (
     resolveSearchTime(searchGeneration, nowMillis),
   )
 
-export const resolveQuoteSuccess = (
-  args: QuoteWindowArgs,
+export const resolveDomainsSuccess = (
+  args: DomainsQueryArgs,
   generation: number,
   domains: ReadonlyArray<Domain>,
   completedAtMillis = 0,
 ) =>
   Command.resolve(
-    quoteFetch(args, generation),
-    QuoteWindows.Message.CompletedFetch({
+    makeDomainsFetch(args, generation),
+    DomainsQuery.Message.CompletedFetch({
       args,
       generation,
-      requestKey: quoteRequestKey(args),
+      requestKey: domainsRequestKey(args),
       result: Result.succeed(domains),
       completedAtMillis,
     }),
   )
 
-export const resolveQuoteFailure = (
-  args: QuoteWindowArgs,
+export const resolveRemainingFirstPageDomains = (
+  label: string,
+  searchGeneration: number,
   generation: number,
-  failure: QuoteFailure,
+  domains: ReadonlyArray<Domain>,
+  nowMillis = 0,
+) =>
+  steps(
+    resolveSearchTime(searchGeneration, nowMillis, 4, 56),
+    resolveDomainsSuccess(
+      { mode: SearchMode.make('Demo'), label, offset: 4, limit: 56 },
+      generation,
+      domains,
+      nowMillis,
+    ),
+  )
+
+export const resolveDomainsFailure = (
+  args: DomainsQueryArgs,
+  generation: number,
+  failure: DomainsQueryFailure,
   completedAtMillis = 0,
 ) =>
   Command.resolve(
-    quoteFetch(args, generation),
-    QuoteWindows.Message.CompletedFetch({
+    makeDomainsFetch(args, generation),
+    DomainsQuery.Message.CompletedFetch({
       args,
       generation,
-      requestKey: quoteRequestKey(args),
+      requestKey: domainsRequestKey(args),
       result: Result.fail(failure),
       completedAtMillis,
     }),
   )
 
-export const resolveQuoteCancellation = (
-  args: QuoteWindowArgs,
+export const resolveDomainsCancellation = (
+  args: DomainsQueryArgs,
   generation: number,
 ) =>
   Command.resolve(
-    QuoteWindows.Fetch.Interrupt(
-      { requestKey: quoteRequestKey(args), generation },
-      () => QuoteWindows.Message.CompletedCancelFetch(),
+    DomainsQuery.Fetch.Interrupt(
+      { requestKey: domainsRequestKey(args), generation },
+      () => DomainsQuery.Message.CompletedCancelFetch(),
     ),
-    QuoteWindows.Message.CompletedCancelFetch(),
+    DomainsQuery.Message.CompletedCancelFetch(),
   )
 
 export const resolveResultsListScrolls = <Model, Message, OutMessage>(

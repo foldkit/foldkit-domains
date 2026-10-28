@@ -12,9 +12,11 @@ import {
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   CompletedRead: { value: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 const Child = makeDefinition('InitializedChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -48,12 +50,14 @@ const child: Block.FromAssemblyWithoutViewOrOutMessage<
 const ParentModel = Schema.Struct({
   items: Schema.Array(Schema.Struct({ id: Schema.String, child: ChildModel })),
 })
+type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({
   CompletedRecord: {},
   RequestedCreateChild: {},
   RequestedCreateKeyedChild: { label: Schema.String },
   RequestedCreateIncompleteKeyedChild: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('InitializationParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -168,14 +172,14 @@ describe('connected initialization', () => {
   })
 
   it.each([
-    ['missing occurrence', (_child: typeof ChildModel.Type) => ({ items: [] })],
+    ['missing occurrence', (_child: ChildModel) => ({ items: [] })],
     [
       'wrong occurrence key',
-      (child: typeof ChildModel.Type) => ({ items: [{ id: 'other', child }] }),
+      (child: ChildModel) => ({ items: [{ id: 'other', child }] }),
     ],
     [
       'duplicate occurrence key',
-      (child: typeof ChildModel.Type) => ({
+      (child: ChildModel) => ({
         items: [
           { id: 'first', child },
           { id: 'first', child },
@@ -184,7 +188,7 @@ describe('connected initialization', () => {
     ],
     [
       'discarded child state',
-      (_child: typeof ChildModel.Type) => ({
+      (_child: ChildModel) => ({
         items: [{ id: 'first', child: { count: 99 } }],
       }),
     ],
@@ -310,7 +314,7 @@ describe('connected initialization', () => {
             {
               key,
               args: [4],
-              toParentModel: (child: typeof ChildModel.Type) => ({
+              toParentModel: (child: ChildModel) => ({
                 items: [{ id: 'first', child }],
               }),
             },
@@ -350,7 +354,7 @@ describe('connected initialization', () => {
       ItemsBinding.init({
         key: 'first',
         args: [4],
-        toParentModel: (): typeof ParentModel.Type => {
+        toParentModel: (): ParentModel => {
           throw failure
         },
       }),
@@ -379,10 +383,12 @@ const DirectModel = Schema.Struct({
   child: Schema.Option(ChildModel),
   label: Schema.String,
 })
+type DirectModel = typeof DirectModel.Type
 const DirectMessage = defineMessageUnion({
   RequestedCreateChild: { label: Schema.String },
   RequestedCreateIncompleteChild: {},
 })
+type DirectMessage = typeof DirectMessage.Type
 const Direct = makeDefinition('DirectInitializationParent', {
   Model: DirectModel,
   Message: DirectMessage,
@@ -404,7 +410,7 @@ const createIncompleteDirectChildStep = Direct.makeStep(
     Reflect.apply(DirectBinding.init, undefined, [
       {
         args: [5],
-        toParentModel: (child: typeof ChildModel.Type) => ({
+        toParentModel: (child: ChildModel) => ({
           child: Option.some(child),
         }),
       },
@@ -531,10 +537,12 @@ const SequencedParentModel = Schema.Struct({
   second: Schema.Option(ChildModel),
   didSecondSeeFirst: Schema.Boolean,
 })
+type SequencedParentModel = typeof SequencedParentModel.Type
 const SequencedParentMessage = defineMessageUnion({
   RequestedOpen: {},
   CompletedRecord: {},
 })
+type SequencedParentMessage = typeof SequencedParentMessage.Type
 const SequencedParent = makeDefinition('SequencedInitializationParent', {
   Model: SequencedParentModel,
   Message: SequencedParentMessage,
@@ -646,6 +654,7 @@ const CompleteKeyedModel = Schema.Struct({
   items: Schema.Array(Schema.Struct({ id: Schema.String, child: ChildModel })),
   label: Schema.String,
 })
+type CompleteKeyedModel = typeof CompleteKeyedModel.Type
 const CompleteKeyed = makeDefinition('CompleteKeyedInitializationParent', {
   Model: CompleteKeyedModel,
   Message: ParentMessage,
@@ -674,7 +683,7 @@ const createIncompleteKeyedChildStep = CompleteKeyed.makeStep(
       {
         key: 'first',
         args: [6],
-        toParentModel: (child: typeof ChildModel.Type) => ({
+        toParentModel: (child: ChildModel) => ({
           items: [{ id: 'first', child }],
         }),
       },

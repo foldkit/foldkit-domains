@@ -26,7 +26,6 @@ export const Message = defineMessageUnion({
   ScrolledTo: { offset: Schema.Number },
   Ticked: {},
 })
-
 export type Message = typeof Message.Type
 
 // MOUNT

@@ -15,6 +15,7 @@ export const CreateState = defineTaggedUnion({
   Creating: {},
   Failed: { error: Schema.String },
 })
+export type CreateState = typeof CreateState.Type
 
 export const Model = Schema.Struct({
   title: Schema.String,
@@ -28,3 +29,4 @@ export const Model = Schema.Struct({
   statusListbox: StatusListboxBlock.Model,
   priorityListbox: PriorityListboxBlock.Model,
 })
+export type Model = typeof Model.Type

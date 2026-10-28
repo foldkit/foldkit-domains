@@ -11,8 +11,8 @@ const ROW_CLASS =
   'grid w-full grid-cols-[4.5rem_minmax(0,1fr)_1.75rem] items-center gap-x-3 gap-y-2 px-4 py-4 text-left text-sm font-medium @lg:grid-cols-[4.5rem_6.5rem_minmax(0,1fr)_1.75rem] @lg:px-5 @3xl:grid-cols-[4.5rem_6.5rem_minmax(0,1fr)_4rem_1.75rem]'
 
 const issueRow = (
-  issue: typeof Issue.Type,
-  viewInputs: typeof ViewInputs.Type,
+  issue: Issue,
+  viewInputs: ViewInputs,
   h: IssueListViewBuilder,
 ): Html => {
   const maybeAssignee = Option.flatMap(issue.maybeAssigneeId, memberId =>
@@ -119,8 +119,8 @@ const issueRow = (
 const issueGroupView = (
   id: string,
   title: string,
-  issues: ReadonlyArray<typeof Issue.Type>,
-  viewInputs: typeof ViewInputs.Type,
+  issues: ReadonlyArray<Issue>,
+  viewInputs: ViewInputs,
   h: IssueListViewBuilder,
 ): Html =>
   Array.isReadonlyArrayEmpty(issues)
@@ -144,9 +144,9 @@ const issueGroupView = (
       )
 
 export const issueGroupsView = (
-  issues: ReadonlyArray<typeof Issue.Type>,
-  filters: typeof IssueFilters.Type,
-  viewInputs: typeof ViewInputs.Type,
+  issues: ReadonlyArray<Issue>,
+  filters: IssueFilters,
+  viewInputs: ViewInputs,
   h: IssueListViewBuilder,
 ): Html =>
   Match.value(filters.groupBy).pipe(

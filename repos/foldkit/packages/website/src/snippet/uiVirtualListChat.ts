@@ -7,18 +7,24 @@ import { modifyFields } from 'foldkit/struct'
 import { VirtualList } from '@foldkit/ui'
 
 const ChatMessage = Schema.Struct({ id: Schema.String, body: Schema.String })
+type ChatMessage = typeof ChatMessage.Type
+
 const HistoryResponse = Schema.Struct({
   messages: Schema.Array(ChatMessage),
   hasMore: Schema.Boolean,
 })
+type HistoryResponse = typeof HistoryResponse.Type
+
 const HistoryLoad = defineTaggedUnion({
   Idle: {},
   Loading: {},
   Failed: {},
   Complete: {},
 })
-const MessageListBlock = VirtualList.create<typeof ChatMessage.Type>()
-const historyRows: VirtualList.HistoryRows<typeof ChatMessage.Type> = {
+type HistoryLoad = typeof HistoryLoad.Type
+
+const MessageListBlock = VirtualList.makeBlock<ChatMessage>()
+const historyRows: VirtualList.HistoryRows<ChatMessage> = {
   itemToKey: message => message.id,
   dynamicRowHeights: true,
   itemToEstimatedRowHeightPx: message => (message.body.length > 120 ? 96 : 64),
@@ -29,12 +35,16 @@ const Model = Schema.Struct({
   messageList: MessageListBlock.Model,
   historyLoad: HistoryLoad,
 })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({
   ReceivedMessage: { message: ChatMessage },
   ClickedRetryHistory: {},
   SucceededFetchHistory: { response: HistoryResponse },
   FailedFetchHistory: {},
 })
+type Message = typeof Message.Type
+
 const MessageListExampleDefinition = Block.makeDefinition(
   'MessageListExample',
   {
@@ -119,7 +129,7 @@ const MessageListExampleComposition =
     bindings: [MessageListBinding],
   })
 const init = MessageListExampleComposition.makeInit(
-  (initialMessages: ReadonlyArray<typeof ChatMessage.Type>) => ({
+  (initialMessages: ReadonlyArray<ChatMessage>) => ({
     model: { messages: initialMessages, historyLoad: HistoryLoad.Idle() },
   }),
 )

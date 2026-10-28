@@ -6,6 +6,23 @@ Include Machine, Query/KeyedQuery and VirtualList in the next preview update,
 PR release notes and announcement handoff. The user has superseded the earlier
 instruction to omit VirtualList from the PR description and next X post.
 
+The next preview also standardizes generic UI Block factories as `makeBlock`.
+Selection components and VirtualList replace `create`; Toast replaces `make`.
+Type parameters and Schema arguments remain unchanged. Include this required
+rename in the upgrade instructions for affected consumers.
+
+Effect peers accept the tested `4.0.0 || 4.0.6` versions, covered by packed
+consumer compatibility checks. Unverified releases are excluded; development
+and application pins are unchanged.
+The Node adapter also pins platform-node-shared 4.0.0 to preserve the Effect
+floor. [Platform constraints and evidence](effect-peer-compatibility-20261028.md).
+
+Active source, examples, scaffold templates and guidance now use same-named
+decoded type aliases immediately after their Schemas. This is an authoring
+convention, not a required consumer API migration. Schema arguments retain
+`typeof Foo`, and generic or recursive contracts retain their precise types.
+[Repo-wide adoption and verification](schema-type-alias-adoption-20261028.md).
+
 Machine's Schema-bound Definition and checked completion test authoring
 consistency with Blocks. Query/KeyedQuery lifecycle capabilities and VirtualList
 history, external scroll ownership and layouts are additional features carried

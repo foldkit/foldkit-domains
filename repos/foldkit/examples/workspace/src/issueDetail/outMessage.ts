@@ -9,3 +9,4 @@ export const OutMessage = defineMessageUnion({
   ReceivedIssue: { issue: Issue },
   Closed: {},
 })
+export type OutMessage = typeof OutMessage.Type

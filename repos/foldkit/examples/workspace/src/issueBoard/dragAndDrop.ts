@@ -7,7 +7,7 @@ const CONTAINER_PREFIX = 'workspace-status:'
 
 export const draggableId = (issueId: string) => `${DRAGGABLE_PREFIX}${issueId}`
 
-export const containerId = (status: typeof IssueStatus.Type) =>
+export const containerId = (status: IssueStatus) =>
   `${CONTAINER_PREFIX}${status}`
 
 export const maybeIssueIdFromDraggableId = (itemId: string) => {

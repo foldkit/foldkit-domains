@@ -17,10 +17,11 @@ import {
   Domain,
   DomainName,
   DomainQuote,
-  domainNames,
+  domainCandidates,
   domainTlds,
 } from '../shared/domain'
 import { registrarResponseToRetryAfterSeconds } from './retryAfter'
+import { timeSearchPhase } from './searchTiming'
 
 const REGISTRAR_SEARCH_URL =
   'https://api.vercel.com/v1/registrar/domains/search'
@@ -80,7 +81,6 @@ export const RegistrarLayer = Layer.effect(
   Registrar,
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
-    const maybeAdmission = yield* Effect.serviceOption(RegistrarAdmission)
     const maybeAccessToken = yield* Config.Redacted('VERCEL_API_TOKEN').pipe(
       Config.option,
       Effect.orDie,
@@ -178,6 +178,7 @@ export const RegistrarLayer = Layer.effect(
           }
         })
       }).pipe(
+        timeSearchPhase('provider'),
         Effect.catch(error =>
           Effect.fail(
             Schema.is(RegistrarError)(error)
@@ -189,20 +190,24 @@ export const RegistrarLayer = Layer.effect(
 
     return {
       search: (label: string, offset = 0, limit = domainTlds.length) =>
-        Effect.forEach(
-          Array.chunksOf(
-            Array.take(Array.drop(domainNames(label), offset), limit),
-            REGISTRAR_BATCH_SIZE,
-          ),
-          candidates => {
-            const batch = searchBatch(candidates)
-            return Option.match(maybeAdmission, {
-              onNone: () => batch,
-              onSome: admission => admission.run(batch),
-            })
-          },
-          { concurrency: SEARCH_BATCH_CONCURRENCY },
-        ).pipe(
+        Effect.gen(function* () {
+          const maybeAdmission = yield* Effect.serviceOption(RegistrarAdmission)
+
+          return yield* Effect.forEach(
+            Array.chunksOf(
+              Array.take(Array.drop(domainCandidates(label), offset), limit),
+              REGISTRAR_BATCH_SIZE,
+            ),
+            candidates => {
+              const batch = searchBatch(candidates)
+              return Option.match(maybeAdmission, {
+                onNone: () => batch,
+                onSome: admission => admission.run(batch),
+              })
+            },
+            { concurrency: SEARCH_BATCH_CONCURRENCY },
+          )
+        }).pipe(
           Effect.map(Array.flatten),
           Effect.timeout(REGISTRAR_TIMEOUT),
           Effect.catchTag('TimeoutError', () =>

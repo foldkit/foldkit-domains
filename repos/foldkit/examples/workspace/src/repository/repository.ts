@@ -40,32 +40,26 @@ const DEFAULT_LATENCY_MS = 250
 export class WorkspaceRepository extends Context.Service<
   WorkspaceRepository,
   Readonly<{
-    load: Effect.Effect<typeof Workspace.Type, typeof RepositoryError.Type>
+    load: Effect.Effect<Workspace, RepositoryError>
     saveIssue: (
-      input: typeof SaveIssueInput.Type,
-    ) => Effect.Effect<typeof SavedIssue.Type, typeof RepositoryError.Type>
-    createIssue: (
-      draft: typeof IssueDraft.Type,
-    ) => Effect.Effect<typeof Issue.Type, typeof RepositoryError.Type>
+      input: SaveIssueInput,
+    ) => Effect.Effect<SavedIssue, RepositoryError>
+    createIssue: (draft: IssueDraft) => Effect.Effect<Issue, RepositoryError>
     addComment: (
-      input: typeof AddCommentInput.Type,
-    ) => Effect.Effect<typeof Comment.Type, typeof RepositoryError.Type>
+      input: AddCommentInput,
+    ) => Effect.Effect<Comment, RepositoryError>
     moveIssue: (
-      input: typeof MoveIssueInput.Type,
-    ) => Effect.Effect<typeof MovedIssue.Type, typeof RepositoryError.Type>
-    saveProject: (
-      project: typeof Project.Type,
-    ) => Effect.Effect<typeof Project.Type, typeof RepositoryError.Type>
-    failNext: (
-      operation: typeof RepositoryOperation.Type,
-    ) => Effect.Effect<void>
+      input: MoveIssueInput,
+    ) => Effect.Effect<MovedIssue, RepositoryError>
+    saveProject: (project: Project) => Effect.Effect<Project, RepositoryError>
+    failNext: (operation: RepositoryOperation) => Effect.Effect<void>
   }>
 >()('workspace/WorkspaceRepository') {}
 
 const consumeFailure = (
-  pendingFailures: ReadonlyArray<typeof RepositoryOperation.Type>,
-  operation: typeof RepositoryOperation.Type,
-): Readonly<[boolean, ReadonlyArray<typeof RepositoryOperation.Type>]> => {
+  pendingFailures: ReadonlyArray<RepositoryOperation>,
+  operation: RepositoryOperation,
+): Readonly<[boolean, ReadonlyArray<RepositoryOperation>]> => {
   const maybeFailureIndex = Array.findFirstIndex(
     pendingFailures,
     failure => failure === operation,
@@ -80,8 +74,8 @@ const consumeFailure = (
 const makeWorkspaceRepository = (
   options: Readonly<{
     latency?: number
-    initialWorkspace?: typeof Workspace.Type
-    failNext?: ReadonlyArray<typeof RepositoryOperation.Type>
+    initialWorkspace?: Workspace
+    failNext?: ReadonlyArray<RepositoryOperation>
   }>,
 ) =>
   Effect.gen(function* () {
@@ -89,12 +83,12 @@ const makeWorkspaceRepository = (
       makeRepositoryState(options.initialWorkspace ?? initialWorkspace),
     )
     const pendingFailuresRef = yield* Ref.make<
-      ReadonlyArray<typeof RepositoryOperation.Type>
+      ReadonlyArray<RepositoryOperation>
     >(options.failNext ?? [])
     const clock = yield* Clock.Clock
     const latencyMs = options.latency ?? DEFAULT_LATENCY_MS
 
-    const checkAvailability = (operation: typeof RepositoryOperation.Type) =>
+    const checkAvailability = (operation: RepositoryOperation) =>
       Effect.gen(function* () {
         yield* Effect.sleep(latencyMs)
 
@@ -120,7 +114,7 @@ const makeWorkspaceRepository = (
       return (yield* Ref.get(stateRef)).workspace
     })
 
-    const saveIssue = (input: typeof SaveIssueInput.Type) =>
+    const saveIssue = (input: SaveIssueInput) =>
       Effect.gen(function* () {
         yield* checkAvailability('Save')
 
@@ -131,7 +125,7 @@ const makeWorkspaceRepository = (
         return yield* Effect.fromResult(saveResult)
       })
 
-    const createIssue = (draft: typeof IssueDraft.Type) =>
+    const createIssue = (draft: IssueDraft) =>
       Effect.gen(function* () {
         yield* checkAvailability('Create')
 
@@ -142,7 +136,7 @@ const makeWorkspaceRepository = (
         return yield* Effect.fromResult(creationResult)
       })
 
-    const addComment = (input: typeof AddCommentInput.Type) =>
+    const addComment = (input: AddCommentInput) =>
       Effect.gen(function* () {
         yield* checkAvailability('Comment')
 
@@ -156,7 +150,7 @@ const makeWorkspaceRepository = (
         return yield* Effect.fromResult(commentResult)
       })
 
-    const moveIssue = (input: typeof MoveIssueInput.Type) =>
+    const moveIssue = (input: MoveIssueInput) =>
       Effect.gen(function* () {
         yield* checkAvailability('Move')
 
@@ -167,7 +161,7 @@ const makeWorkspaceRepository = (
         return yield* Effect.fromResult(moveResult)
       })
 
-    const saveProject = (project: typeof Project.Type) =>
+    const saveProject = (project: Project) =>
       Effect.gen(function* () {
         yield* checkAvailability('Project')
 
@@ -185,7 +179,7 @@ const makeWorkspaceRepository = (
       addComment,
       moveIssue,
       saveProject,
-      failNext: (operation: typeof RepositoryOperation.Type) =>
+      failNext: (operation: RepositoryOperation) =>
         Ref.update(pendingFailuresRef, Array.append(operation)),
     }
   })
@@ -193,8 +187,8 @@ const makeWorkspaceRepository = (
 export const makeWorkspaceRepositoryLayer = (
   options: Readonly<{
     latency?: number
-    initialWorkspace?: typeof Workspace.Type
-    failNext?: ReadonlyArray<typeof RepositoryOperation.Type>
+    initialWorkspace?: Workspace
+    failNext?: ReadonlyArray<RepositoryOperation>
   }> = {},
 ) => Layer.effect(WorkspaceRepository, makeWorkspaceRepository(options))
 

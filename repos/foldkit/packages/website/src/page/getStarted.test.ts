@@ -11,6 +11,7 @@ import getStartedSource from './getStarted.md?raw'
 const FoldkitPackageJson = Schema.Struct({
   peerDependencies: Schema.Struct({ effect: Schema.String }),
 })
+type FoldkitPackageJson = typeof FoldkitPackageJson.Type
 
 const { peerDependencies } = Schema.decodeUnknownSync(FoldkitPackageJson)(
   JSON.parse(foldkitPackageJson),

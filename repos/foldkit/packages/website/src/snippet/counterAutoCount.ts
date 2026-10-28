@@ -7,11 +7,13 @@ const Message = defineMessageUnion({
   ToggledAutoCounting: {},
   Ticked: {},
 })
+type Message = typeof Message.Type
 
 const Model = Schema.Struct({
   count: Schema.Number,
   isAutoCounting: Schema.Boolean,
 })
+type Model = typeof Model.Type
 
 export const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,

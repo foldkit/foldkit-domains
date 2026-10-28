@@ -21,7 +21,7 @@ const searchDomains = (baseURL: string | undefined, label: string) => {
   return Effect.scoped(
     Effect.gen(function* () {
       const client = yield* DomainsClient
-      return yield* client.SearchDomains({ label })
+      return yield* client.SearchDomains({ mode: 'Live', label })
     }),
   ).pipe(
     Effect.provide(makeDomainsClientLayer(`${baseURL}/rpc`)),

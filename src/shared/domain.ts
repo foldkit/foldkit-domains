@@ -57,7 +57,7 @@ export const domainTlds = Array.appendAll(
   Array.filter(supportedTlds, tld => !Array.contains(featuredTlds, tld)),
 )
 
-export const QuoteWindow = Schema.Struct({
+export const DomainCandidateRange = Schema.Struct({
   offset: Schema.Int.check(
     Schema.isBetween({ minimum: 0, maximum: domainTlds.length - 1 }),
   ),
@@ -65,14 +65,14 @@ export const QuoteWindow = Schema.Struct({
     Schema.isBetween({ minimum: 1, maximum: domainTlds.length }),
   ),
 })
-export type QuoteWindow = typeof QuoteWindow.Type
+export type DomainCandidateRange = typeof DomainCandidateRange.Type
 
 export const DomainLabel = Schema.String.check(
   Schema.isPattern(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/),
 )
 export type DomainLabel = typeof DomainLabel.Type
 
-export const domainNames = (label: string) =>
+export const domainCandidates = (label: string) =>
   Array.map(domainTlds, tld =>
     DomainName.make({ name: `${label}.${tld}`, tld }),
   )

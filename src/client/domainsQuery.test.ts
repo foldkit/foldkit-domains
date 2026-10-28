@@ -13,19 +13,20 @@ import { TestClock } from 'effect/testing'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { DomainsRpcRoutes } from '../server/rpc'
-import { Domain, QuoteWindow, domainTlds } from '../shared/domain'
+import { Domain, DomainCandidateRange, domainTlds } from '../shared/domain'
 import { DomainsRpcs, SearchError } from '../shared/domainsRpc'
+import { SearchMode } from '../shared/searchMode'
 import {
-  QuoteFailure,
-  QuoteWindowArgs,
-  QuoteWindows,
-  fetchQuoteWindow,
-} from './quoteWindows'
+  DomainsQuery,
+  DomainsQueryArgs,
+  DomainsQueryFailure,
+  fetchDomains,
+} from './domainsQuery'
 import { makeDomainsClientLayer } from './rpc'
 import { SearchCooldown } from './searchCooldown'
-import { quoteFetch, quoteRequestKey } from './story/test'
+import { domainsRequestKey, makeDomainsFetch } from './story/test'
 
-const quotedDomain = Domain.Available({
+const availableDomain = Domain.Available({
   name: 'acme.dev',
   tld: 'dev',
   price: 13,
@@ -33,7 +34,12 @@ const quotedDomain = Domain.Available({
   years: 1,
   isPremium: false,
 })
-const args = QuoteWindowArgs.make({ label: 'acme', offset: 0, limit: 60 })
+const args = DomainsQueryArgs.make({
+  mode: SearchMode.make('Demo'),
+  label: 'acme',
+  offset: 0,
+  limit: 60,
+})
 const disposals: Array<() => Promise<void>> = []
 
 const clientLayer = (fetch: typeof globalThis.fetch) =>
@@ -42,12 +48,12 @@ const clientLayer = (fetch: typeof globalThis.fetch) =>
   )
 
 const queryLayer = (fetch: typeof globalThis.fetch) =>
-  QuoteWindows.EffectsLayer.pipe(Layer.provide(clientLayer(fetch)))
+  DomainsQuery.EffectsLayer.pipe(Layer.provide(clientLayer(fetch)))
 
 const rpcTransport = (
   search: (
     label: string,
-    window: QuoteWindow,
+    range: DomainCandidateRange,
   ) => Effect.Effect<ReadonlyArray<Domain>, SearchError>,
   context = Context.empty(),
 ): typeof fetch => {
@@ -70,20 +76,20 @@ afterEach(async () => {
   await Promise.all(disposals.splice(0).map(dispose => dispose()))
 })
 
-describe('quote window fetching', () => {
+describe('fetching domain results for candidate ranges', () => {
   test('the Query wires a debounced lookup to its originating request', async () => {
     let calls = 0
-    const transport = rpcTransport((label, window) => {
+    const transport = rpcTransport((label, range) => {
       calls += 1
       expect(label).toBe('acme')
-      expect(window).toEqual({ offset: 0, limit: 60 })
-      return Effect.succeed([quotedDomain])
+      expect(range).toEqual({ offset: 0, limit: 60 })
+      return Effect.succeed([availableDomain])
     })
     const completed = await Effect.runPromise(
       Effect.gen(function* () {
-        const fetch = yield* Effect.forkChild(quoteFetch(args, 42).effect)
+        const fetch = yield* Effect.forkChild(makeDomainsFetch(args, 42).effect)
 
-        yield* TestClock.adjust('349 millis')
+        yield* TestClock.adjust('149 millis')
         expect(calls).toBe(0)
 
         yield* TestClock.adjust('1 millis')
@@ -93,14 +99,53 @@ describe('quote window fetching', () => {
 
     expect(calls).toBe(1)
     expect(completed).toEqual(
-      QuoteWindows.Message.CompletedFetch({
+      DomainsQuery.Message.CompletedFetch({
         args,
         generation: 42,
-        requestKey: quoteRequestKey(args),
-        result: Result.succeed([quotedDomain]),
-        completedAtMillis: 350,
+        requestKey: domainsRequestKey(args),
+        result: Result.succeed([availableDomain]),
+        completedAtMillis: 150,
       }),
     )
+  })
+
+  test('changing a query during debounce cancels the lookup before any RPC', async () => {
+    let calls = 0
+    const transport = rpcTransport(() => {
+      calls += 1
+      return Effect.succeed([availableDomain])
+    })
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const fetch = yield* Effect.forkChild(fetchDomains(args))
+
+        yield* TestClock.adjust('149 millis')
+        yield* Fiber.interrupt(fetch)
+        yield* TestClock.adjust('1 second')
+      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
+    )
+
+    expect(calls).toBe(0)
+  })
+
+  test('progressive ranges reach the RPC without an input debounce', async () => {
+    let calls = 0
+    const transport = rpcTransport((_label, range) => {
+      calls += 1
+      expect(range).toEqual({ offset: 4, limit: 56 })
+      return Effect.succeed([availableDomain])
+    })
+    const domains = await Effect.runPromise(
+      fetchDomains({
+        mode: SearchMode.make('Demo'),
+        label: 'acme',
+        offset: 4,
+        limit: 56,
+      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
+    )
+
+    expect(calls).toBe(1)
+    expect(domains).toEqual([availableDomain])
   })
 
   test.each([
@@ -110,12 +155,12 @@ describe('quote window fetching', () => {
         source: 'Client',
         retryAfterSeconds: 30,
       }),
-      expected: QuoteFailure.make({
+      expected: DomainsQueryFailure.make({
         error: 'Too many searches. Please try again in 30 seconds.',
         maybeSearchCooldown: Option.some(
           SearchCooldown.make({
             source: 'Client',
-            expiresAtMillis: 30_350,
+            expiresAtMillis: 30_150,
           }),
         ),
       }),
@@ -126,12 +171,12 @@ describe('quote window fetching', () => {
         source: 'Application',
         retryAfterSeconds: 1,
       }),
-      expected: QuoteFailure.make({
+      expected: DomainsQueryFailure.make({
         error: 'Search is busy. Please try again in 1 second.',
         maybeSearchCooldown: Option.some(
           SearchCooldown.make({
             source: 'Application',
-            expiresAtMillis: 1350,
+            expiresAtMillis: 1150,
           }),
         ),
       }),
@@ -142,12 +187,12 @@ describe('quote window fetching', () => {
         source: 'Registrar',
         retryAfterSeconds: 60,
       }),
-      expected: QuoteFailure.make({
+      expected: DomainsQueryFailure.make({
         error: 'The domain provider is busy. Please try again in 60 seconds.',
         maybeSearchCooldown: Option.some(
           SearchCooldown.make({
             source: 'Registrar',
-            expiresAtMillis: 60_350,
+            expiresAtMillis: 60_150,
           }),
         ),
       }),
@@ -155,48 +200,48 @@ describe('quote window fetching', () => {
     {
       failure: 'unavailable registrar',
       error: SearchError.Unavailable(),
-      expected: QuoteFailure.make({
+      expected: DomainsQueryFailure.make({
         error: 'Could not check availability and prices. Please try again.',
         maybeSearchCooldown: Option.none(),
       }),
     },
   ])(
-    'maps a $failure into a quote failure and cooldown deadline',
+    'maps a $failure into a domain search failure and cooldown deadline',
     async ({ error, expected }) => {
       const transport = rpcTransport(() => Effect.fail(error))
-      const quoteWindowResult = await Effect.runPromise(
+      const domainsResult = await Effect.runPromise(
         Effect.gen(function* () {
           const fetch = yield* Effect.forkChild(
-            fetchQuoteWindow(args).pipe(Effect.result),
+            fetchDomains(args).pipe(Effect.result),
           )
 
-          yield* TestClock.adjust('350 millis')
+          yield* TestClock.adjust('150 millis')
           return yield* Fiber.join(fetch)
         }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
       )
 
-      expect(quoteWindowResult).toEqual(Result.fail(expected))
+      expect(domainsResult).toEqual(Result.fail(expected))
     },
   )
 
-  test('turns a remote defect into a retriable quote failure', async () => {
+  test('turns a remote defect into a retriable domain search failure', async () => {
     const transport = rpcTransport(() =>
       Effect.die(new Error('unexpected provider defect')),
     )
-    const quoteWindowResult = await Effect.runPromise(
+    const domainsResult = await Effect.runPromise(
       Effect.gen(function* () {
         const fetch = yield* Effect.forkChild(
-          fetchQuoteWindow(args).pipe(Effect.result),
+          fetchDomains(args).pipe(Effect.result),
         )
 
-        yield* TestClock.adjust('350 millis')
+        yield* TestClock.adjust('150 millis')
         return yield* Fiber.join(fetch)
       }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
     )
 
-    expect(quoteWindowResult).toEqual(
+    expect(domainsResult).toEqual(
       Result.fail(
-        QuoteFailure.make({
+        DomainsQueryFailure.make({
           error: 'Could not search domains. Please try again.',
           maybeSearchCooldown: Option.none(),
         }),
@@ -222,22 +267,22 @@ describe('quote window fetching', () => {
         )
         markStarted()
       })
-    const quoteWindowResult = await Effect.runPromise(
+    const domainsResult = await Effect.runPromise(
       Effect.gen(function* () {
         const fetch = yield* Effect.forkChild(
-          fetchQuoteWindow(args).pipe(Effect.result),
+          fetchDomains(args).pipe(Effect.result),
         )
 
-        yield* TestClock.adjust('350 millis')
+        yield* TestClock.adjust('150 millis')
         yield* Effect.promise(() => started)
-        yield* TestClock.adjust('19650 millis')
+        yield* TestClock.adjust('19850 millis')
         return yield* Fiber.join(fetch)
       }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
     )
 
-    expect(quoteWindowResult).toEqual(
+    expect(domainsResult).toEqual(
       Result.fail(
-        QuoteFailure.make({
+        DomainsQueryFailure.make({
           error: 'Could not search domains. Please try again.',
           maybeSearchCooldown: Option.none(),
         }),
@@ -246,7 +291,7 @@ describe('quote window fetching', () => {
     expect(isAborted).toBe(true)
   })
 
-  test('interrupting a quote lookup aborts the RPC without returning a result', async () => {
+  test('interrupting a domain lookup aborts the RPC without returning a result', async () => {
     let isAborted = false
     let markStarted = () => {}
     const started = new Promise<void>(resolve => {
@@ -267,10 +312,10 @@ describe('quote window fetching', () => {
     const exit = await Effect.runPromise(
       Effect.gen(function* () {
         const fetch = yield* Effect.forkChild(
-          fetchQuoteWindow(args).pipe(Effect.result),
+          fetchDomains(args).pipe(Effect.result),
         )
 
-        yield* TestClock.adjust('350 millis')
+        yield* TestClock.adjust('150 millis')
         yield* Effect.promise(() => started)
         yield* Fiber.interrupt(fetch)
         return yield* Fiber.await(fetch)

@@ -15,10 +15,10 @@ import { type ApplicationRoute } from './route'
 
 const MAX_LOGGED_TRANSITIONS = 20
 
-export type AppTransition = Transition.Transition<typeof ApplicationRoute.Type>
+export type AppTransition = Transition.Transition<ApplicationRoute>
 
 const nextSequenceNumber = (
-  transitionLog: ReadonlyArray<typeof LoggedTransition.Type>,
+  transitionLog: ReadonlyArray<LoggedTransition>,
 ): number =>
   Option.match(Array.head(transitionLog), {
     onNone: () => 1,

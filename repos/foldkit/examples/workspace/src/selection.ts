@@ -11,17 +11,17 @@ import {
   maybeRouteFilters,
 } from './route'
 
-export const visibleWorkspaceAsyncData = (model: typeof Model.Type) =>
+export const visibleWorkspaceAsyncData = (model: Model) =>
   AsyncData.map(model.workspaceAsyncData, workspace =>
     workspaceWithPendingMove(workspace, model.issueMoveState),
   )
 
-export const maybeActiveIssueDetail = (model: typeof Model.Type) =>
+export const maybeActiveIssueDetail = (model: Model) =>
   Option.flatMap(maybeIssueId(model.route), issueId =>
     Record.get(model.issueDetails, issueId),
   )
 
-export const maybeActiveIssueBoard = (model: typeof Model.Type) => {
+export const maybeActiveIssueBoard = (model: Model) => {
   const { route } = model
 
   return ApplicationRoute.guards.Board(route)
@@ -29,7 +29,7 @@ export const maybeActiveIssueBoard = (model: typeof Model.Type) => {
     : Option.none()
 }
 
-export const unsavedIssueDrafts = (model: typeof Model.Type) =>
+export const unsavedIssueDrafts = (model: Model) =>
   pipe(
     model.issueDetails,
     Record.values,
@@ -37,7 +37,7 @@ export const unsavedIssueDrafts = (model: typeof Model.Type) =>
     Array.getSomes,
   )
 
-export const appliedIssueFilters = (model: typeof Model.Type) => {
+export const appliedIssueFilters = (model: Model) => {
   const { route } = model
 
   return Option.getOrElse(maybeRouteFilters(route), () => {

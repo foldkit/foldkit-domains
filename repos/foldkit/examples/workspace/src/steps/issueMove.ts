@@ -9,8 +9,8 @@ import { type Issue, type IssueStatus } from '../domain'
 import { IssueMoveState } from '../optimistic'
 
 const beginIssueMoveStep = (
-  issue: typeof Issue.Type,
-  status: typeof IssueStatus.Type,
+  issue: Issue,
+  status: IssueStatus,
   insertionIndex: number,
 ) =>
   makeStep(model => ({
@@ -35,7 +35,7 @@ const beginIssueMoveStep = (
 
 export const requestIssueMoveStep = (
   issueId: string,
-  status: typeof IssueStatus.Type,
+  status: IssueStatus,
   insertionIndex: number,
 ) =>
   makeStep(model => {

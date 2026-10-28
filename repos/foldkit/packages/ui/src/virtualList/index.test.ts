@@ -18,8 +18,8 @@ import {
   ScrollTarget,
   type ScrollToOptions,
   block,
-  create,
   init,
+  makeBlock,
   scrollTo,
   scrollToEnd,
   scrollToIndex,
@@ -30,7 +30,7 @@ import {
 
 const defaultInit = (): Model => init({ id: 'test', rowHeightPx: 30 }).model
 
-const HistoryBlock = create<HistoryItem>()
+const HistoryBlock = makeBlock<HistoryItem>()
 const informItemsChanged = block.operations.informItemsChanged
 
 type HistoryItem = Readonly<{ key: string; estimatedHeightPx: number }>

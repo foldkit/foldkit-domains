@@ -32,8 +32,9 @@ const ViewInputs = Schema.Struct({
   issueHrefs: Schema.Record(Schema.String, Schema.String),
   isSaving: Schema.optionalKey(Schema.Boolean),
 })
+type ViewInputs = typeof ViewInputs.Type
 
-const STATUSES: ReadonlyArray<typeof IssueStatus.Type> = [
+const STATUSES: ReadonlyArray<IssueStatus> = [
   'Backlog',
   'Todo',
   'InProgress',
@@ -53,7 +54,7 @@ const DRAG_HANDLE_CLASS =
 const COLUMN_CLASS = 'min-w-0 rounded-xl border p-3'
 
 const issueTitle = (
-  issue: typeof Issue.Type,
+  issue: Issue,
   maybeHref: Option.Option<string>,
   isDisabled: boolean,
   h: IssueBoardViewBuilder,
@@ -83,10 +84,7 @@ const issueTitle = (
   })
 }
 
-const maybeDraggedIssue = (
-  model: typeof Model.Type,
-  viewInputs: typeof ViewInputs.Type,
-) =>
+const maybeDraggedIssue = (model: Model, viewInputs: ViewInputs) =>
   pipe(
     maybeDraggedItemId(model.dragAndDrop),
     Option.flatMap(maybeIssueIdFromDraggableId),
@@ -96,11 +94,11 @@ const maybeDraggedIssue = (
   )
 
 const issueCard = (
-  model: typeof Model.Type,
-  issue: typeof Issue.Type,
-  status: typeof IssueStatus.Type,
+  model: Model,
+  issue: Issue,
+  status: IssueStatus,
   index: number,
-  viewInputs: typeof ViewInputs.Type,
+  viewInputs: ViewInputs,
   dragAndDropRenderInfo: RenderInfo,
   h: IssueBoardViewBuilder,
 ): Html => {
@@ -182,10 +180,10 @@ const issueCard = (
 }
 
 const columnCards = (
-  model: typeof Model.Type,
-  status: typeof IssueStatus.Type,
-  issues: ReadonlyArray<typeof Issue.Type>,
-  viewInputs: typeof ViewInputs.Type,
+  model: Model,
+  status: IssueStatus,
+  issues: ReadonlyArray<Issue>,
+  viewInputs: ViewInputs,
   dragAndDropRenderInfo: RenderInfo,
   h: IssueBoardViewBuilder,
 ): ReadonlyArray<Html> => {
@@ -269,9 +267,9 @@ const columnCards = (
 }
 
 const column = (
-  model: typeof Model.Type,
-  status: typeof IssueStatus.Type,
-  viewInputs: typeof ViewInputs.Type,
+  model: Model,
+  status: IssueStatus,
+  viewInputs: ViewInputs,
   dragAndDropRenderInfo: RenderInfo,
   h: IssueBoardViewBuilder,
 ): Html => {
@@ -383,8 +381,8 @@ const column = (
 }
 
 const ghost = (
-  model: typeof Model.Type,
-  viewInputs: typeof ViewInputs.Type,
+  model: Model,
+  viewInputs: ViewInputs,
   h: IssueBoardViewBuilder,
 ): Html =>
   Option.match(
@@ -414,58 +412,60 @@ const ghost = (
     },
   )
 
-export const view = IssueBoardComposition.makeView.withInputs<
-  typeof ViewInputs.Type
->((model, viewInputs, h) =>
-  h.section(
-    [h.Class('w-full min-w-0 bg-white p-5 lg:p-8'), h.AriaLabel('Issue board')],
-    [
-      h.p(
-        [
-          h.Id(INSTRUCTIONS_ID),
-          h.Class(
-            'mb-5 max-w-4xl text-xs font-medium leading-6 text-slate-500',
-          ),
-        ],
-        [
-          'Drag a handle to move an issue. With a handle focused, press Space to pick up, arrows to reorder, Tab to change status, and Space to drop.',
-        ],
-      ),
-      h.block(
-        DragAndDropBinding.embedView({
-          slotId: model.dragAndDrop.id,
-          model: model.dragAndDrop,
-          viewInputs: {
-            toView: dragAndDropRenderInfo =>
-              h.div(
-                [],
-                [
-                  h.div(
-                    [
-                      h.Class(
-                        'grid auto-cols-[minmax(15rem,1fr)] grid-flow-col items-start gap-4 overflow-x-auto pb-4',
-                      ),
-                    ],
-                    Array.map(STATUSES, status =>
-                      column(
-                        model,
-                        status,
-                        viewInputs,
-                        dragAndDropRenderInfo,
-                        h,
+export const view = IssueBoardComposition.makeView.withInputs<ViewInputs>(
+  (model, viewInputs, h) =>
+    h.section(
+      [
+        h.Class('w-full min-w-0 bg-white p-5 lg:p-8'),
+        h.AriaLabel('Issue board'),
+      ],
+      [
+        h.p(
+          [
+            h.Id(INSTRUCTIONS_ID),
+            h.Class(
+              'mb-5 max-w-4xl text-xs font-medium leading-6 text-slate-500',
+            ),
+          ],
+          [
+            'Drag a handle to move an issue. With a handle focused, press Space to pick up, arrows to reorder, Tab to change status, and Space to drop.',
+          ],
+        ),
+        h.block(
+          DragAndDropBinding.embedView({
+            slotId: model.dragAndDrop.id,
+            model: model.dragAndDrop,
+            viewInputs: {
+              toView: dragAndDropRenderInfo =>
+                h.div(
+                  [],
+                  [
+                    h.div(
+                      [
+                        h.Class(
+                          'grid auto-cols-[minmax(15rem,1fr)] grid-flow-col items-start gap-4 overflow-x-auto pb-4',
+                        ),
+                      ],
+                      Array.map(STATUSES, status =>
+                        column(
+                          model,
+                          status,
+                          viewInputs,
+                          dragAndDropRenderInfo,
+                          h,
+                        ),
                       ),
                     ),
-                  ),
-                  ghost(model, viewInputs, h),
-                ],
-              ),
-          },
-        }),
-      ),
-      h.p(
-        [h.Class('sr-only'), h.Role('status'), h.AriaLive('polite')],
-        [model.announcement],
-      ),
-    ],
-  ),
+                    ghost(model, viewInputs, h),
+                  ],
+                ),
+            },
+          }),
+        ),
+        h.p(
+          [h.Class('sr-only'), h.Role('status'), h.AriaLive('polite')],
+          [model.announcement],
+        ),
+      ],
+    ),
 )

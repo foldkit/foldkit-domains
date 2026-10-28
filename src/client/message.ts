@@ -3,7 +3,7 @@ import { defineMessageUnion } from 'foldkit/message'
 import { UrlRequest } from 'foldkit/navigation'
 import { Url } from 'foldkit/url'
 
-import { Domain, QuoteWindow } from '../shared/domain'
+import { Domain, DomainCandidateRange } from '../shared/domain'
 import { AvailabilityFilter, SortOrder, TldFilter } from './domain'
 import { ResultsListScrollKey } from './resultsList'
 
@@ -11,7 +11,7 @@ export const Message = defineMessageUnion({
   UpdatedSearch: { value: Schema.String },
   SubmittedSearch: {},
   RequestedSearch: {},
-  RequestedQuotes: QuoteWindow.fields,
+  RequestedQuotes: DomainCandidateRange.fields,
   ReachedSearchCooldownExpiry: { nowMillis: Schema.Number },
   PressedEscape: {},
   FocusedResultsList: {},
@@ -29,11 +29,16 @@ export const Message = defineMessageUnion({
   ClickedRemoveCartDomain: { name: Schema.String },
   ClickedCart: {},
   ClickedFilters: {},
+  ClickedTldFilter: {},
+  UpdatedTldSearch: { value: Schema.String },
+  ClickedTldOption: { value: TldFilter },
+  ClickedAvailabilityOption: { value: AvailabilityFilter },
+  ClickedSortOption: { value: SortOrder },
   ClickedRetrySearch: {},
-  CompletedDetermineSearchTime: {
+  CompletedReadSearchPlanningTime: {
     searchGeneration: Schema.Number,
     nowMillis: Schema.Number,
-    ...QuoteWindow.fields,
+    ...DomainCandidateRange.fields,
     isForced: Schema.Boolean,
   },
 
@@ -43,8 +48,10 @@ export const Message = defineMessageUnion({
   CompletedFocusSearchInput: {},
   CompletedFocusCartButton: {},
   CompletedFocusFiltersButton: {},
+  CompletedFocusTldFilterButton: {},
   CompletedFocusCartCloseButton: {},
   CompletedScrollPage: {},
+  CompletedScrollPageToTop: {},
   CompletedRevealResultsListStart: {},
   CompletedDismissSearchKeyboard: {},
   CompletedReleaseEarlySearchListeners: {},

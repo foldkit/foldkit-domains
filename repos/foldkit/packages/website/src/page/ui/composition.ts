@@ -40,13 +40,13 @@ export {
 } from './virtualListChat'
 
 const reorderColumns = (
-  columns: ReadonlyArray<typeof DemoColumn.Type>,
+  columns: ReadonlyArray<DemoColumn>,
   itemId: string,
   fromContainerId: string,
   toContainerId: string,
   toIndex: number,
-): ReadonlyArray<typeof DemoColumn.Type> => {
-  const maybeCard: Option.Option<typeof DemoCard.Type> = pipe(
+): ReadonlyArray<DemoColumn> => {
+  const maybeCard: Option.Option<DemoCard> = pipe(
     columns,
     Array.findFirst(({ id }) => id === fromContainerId),
     Option.flatMap(column =>
@@ -79,7 +79,7 @@ const reorderColumns = (
 }
 
 const findDragAndDropDemoCardLabel = (
-  columns: ReadonlyArray<typeof DemoColumn.Type>,
+  columns: ReadonlyArray<DemoColumn>,
   itemId: string,
 ): string =>
   pipe(
@@ -93,7 +93,7 @@ const findDragAndDropDemoCardLabel = (
   )
 
 const findDragAndDropDemoColumnLabel = (
-  columns: ReadonlyArray<typeof DemoColumn.Type>,
+  columns: ReadonlyArray<DemoColumn>,
   containerId: string,
 ): string =>
   pipe(
@@ -116,6 +116,7 @@ const DragAndDropDemoAnnouncement = defineTaggedUnion({
   },
   Cancelled: {},
 })
+type DragAndDropDemoAnnouncement = typeof DragAndDropDemoAnnouncement.Type
 
 const dragAndDropDemoAnnouncementToText = DragAndDropDemoAnnouncement.match({
   PickedUp: ({ label }) =>

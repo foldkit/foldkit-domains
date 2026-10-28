@@ -5,28 +5,36 @@ import { describe, expect, test } from 'vitest'
 
 import { Domain } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
+import { SearchMode } from '../../shared/searchMode'
 import {
   FocusSearchInput,
   LoadExternal,
   NavigateInternal,
   ReplaceSearchUrl,
+  ScrollPageToTop,
 } from '../command'
+import { DomainsQuery } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, readyModel, urlOrThrow } from '../model.fixture'
-import { QuoteWindows } from '../quoteWindows'
 import { ApplicationRoute, routeToQuery, searchHref } from '../route'
 import { SearchPresentation, searchPresentation } from '../searchPresentation'
 import { update } from '../update'
 import {
-  quoteFetch,
-  resolveQuoteCancellation,
-  resolveQuoteSuccess,
+  makeDomainsFetch,
+  resolveDomainsCancellation,
+  resolveDomainsSuccess,
+  resolveRemainingFirstPageDomains,
   resolveResultsListScrolls,
   resolveSearchTime,
 } from './test'
 
-test('typing synchronizes the URL before the route starts its quote request', () => {
-  const args = { label: 'fresh', offset: 0, limit: 60 }
+test('typing synchronizes the URL before the route starts its domain request', () => {
+  const args = {
+    mode: SearchMode.make('Demo'),
+    label: 'fresh',
+    offset: 0,
+    limit: 4,
+  }
 
   story(
     update,
@@ -53,16 +61,23 @@ test('typing synchronizes the URL before the route starts its quote request', ()
       expect(searchPresentation(model)).toEqual(SearchPresentation.Loading())
     }),
     resolveSearchTime(2, 100),
-    Command.expectHas(quoteFetch(args, 1)),
-    resolveQuoteSuccess(
+    Command.expectHas(makeDomainsFetch(args, 1)),
+    resolveDomainsSuccess(
       args,
       1,
-      Array.take(makeDomainFixtures('fresh'), 60),
+      Array.take(makeDomainFixtures('fresh'), 4),
       120,
     ),
     model(model => {
       expect(searchPresentation(model)._tag).toBe('Ready')
     }),
+    resolveRemainingFirstPageDomains(
+      'fresh',
+      2,
+      2,
+      Array.take(Array.drop(makeDomainFixtures('fresh'), 4), 56),
+      120,
+    ),
     resolveResultsListScrolls,
     Command.expectNone(),
   )
@@ -74,7 +89,7 @@ describe('domain validation', () => {
     { query: 'a', label: 'a' },
     { query: 'a'.repeat(63), label: 'a'.repeat(63) },
   ])('searches the normalized label for $query', ({ query, label }) => {
-    const args = { label, offset: 0, limit: 60 }
+    const args = { mode: SearchMode.make('Demo'), label, offset: 0, limit: 4 }
 
     story(
       update,
@@ -85,12 +100,18 @@ describe('domain validation', () => {
         }),
       ),
       resolveSearchTime(1, 0),
-      Command.expectHas(quoteFetch(args, 1)),
-      resolveQuoteSuccess(args, 1, Array.take(makeDomainFixtures(label), 60)),
+      Command.expectHas(makeDomainsFetch(args, 1)),
+      resolveDomainsSuccess(args, 1, Array.take(makeDomainFixtures(label), 4)),
       model(model => {
         expect(routeToQuery(model.route)).toBe(query)
         expect(searchPresentation(model)._tag).toBe('Ready')
       }),
+      resolveRemainingFirstPageDomains(
+        label,
+        1,
+        2,
+        Array.take(Array.drop(makeDomainFixtures(label), 4), 56),
+      ),
       resolveResultsListScrolls,
       Command.expectNone(),
     )
@@ -103,7 +124,7 @@ describe('domain validation', () => {
     'under_score',
     'a'.repeat(64),
     '   ',
-  ])('rejects %j without scheduling quote work', query => {
+  ])('rejects %j without scheduling domain lookups', query => {
     story(
       update,
       given(emptyModel),
@@ -127,7 +148,12 @@ describe('domain validation', () => {
 })
 
 test('an unchanged input keeps its active Query request', () => {
-  const args = { label: 'acme', offset: 0, limit: 60 }
+  const args = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 4,
+  }
 
   story(
     update,
@@ -136,7 +162,7 @@ test('an unchanged input keeps its active Query request', () => {
       Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
     ),
     resolveSearchTime(1, 0),
-    Command.expectHas(quoteFetch(args, 1)),
+    Command.expectHas(makeDomainsFetch(args, 1)),
     message(Message.UpdatedSearch({ value: 'acme' })),
     Command.resolve(
       ReplaceSearchUrl({ q: Option.some('acme') }),
@@ -144,12 +170,19 @@ test('an unchanged input keeps its active Query request', () => {
     ),
     model(model => {
       expect(model.searchGeneration).toBe(1)
-      expect(QuoteWindows.pendingArgs(model.quoteWindows)).toEqual([args])
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([args])
     }),
-    resolveQuoteSuccess(
+    resolveDomainsSuccess(
       args,
       1,
-      Array.take(makeDomainFixtures('acme'), 60),
+      Array.take(makeDomainFixtures('acme'), 4),
+      10,
+    ),
+    resolveRemainingFirstPageDomains(
+      'acme',
+      1,
+      2,
+      Array.take(Array.drop(makeDomainFixtures('acme'), 4), 56),
       10,
     ),
     resolveResultsListScrolls,
@@ -157,8 +190,13 @@ test('an unchanged input keeps its active Query request', () => {
   )
 })
 
-test('a planning Clock from the previous route cannot start quote work', () => {
-  const otherArgs = { label: 'other', offset: 0, limit: 60 }
+test('a planning Clock from the previous route cannot start domain lookups', () => {
+  const otherArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'other',
+    offset: 0,
+    limit: 4,
+  }
 
   story(
     update,
@@ -171,15 +209,22 @@ test('a planning Clock from the previous route cannot start quote work', () => {
     ),
     resolveSearchTime(1, 10),
     model(model => {
-      expect(QuoteWindows.pendingArgs(model.quoteWindows)).toEqual([])
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
       expect(routeToQuery(model.route)).toBe('other')
     }),
     resolveSearchTime(2, 20),
-    Command.expectHas(quoteFetch(otherArgs, 1)),
-    resolveQuoteSuccess(
+    Command.expectHas(makeDomainsFetch(otherArgs, 1)),
+    resolveDomainsSuccess(
       otherArgs,
       1,
-      Array.take(makeDomainFixtures('other'), 60),
+      Array.take(makeDomainFixtures('other'), 4),
+      30,
+    ),
+    resolveRemainingFirstPageDomains(
+      'other',
+      2,
+      2,
+      Array.take(Array.drop(makeDomainFixtures('other'), 4), 56),
       30,
     ),
     resolveResultsListScrolls,
@@ -188,7 +233,12 @@ test('a planning Clock from the previous route cannot start quote work', () => {
 })
 
 test('leaving search cancels its pending Query key', () => {
-  const args = { label: 'acme', offset: 0, limit: 60 }
+  const args = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 4,
+  }
 
   story(
     update,
@@ -197,7 +247,7 @@ test('leaving search cancels its pending Query key', () => {
       Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
     ),
     resolveSearchTime(1, 0),
-    Command.expectHas(quoteFetch(args, 1)),
+    Command.expectHas(makeDomainsFetch(args, 1)),
     message(
       Message.ChangedUrl({ url: urlOrThrow('http://localhost/missing') }),
     ),
@@ -206,15 +256,15 @@ test('leaving search cancels its pending Query key', () => {
         ApplicationRoute.NotFound({ path: '/missing' }),
       )
       expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
-      expect(QuoteWindows.pendingArgs(model.quoteWindows)).toEqual([])
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
-    resolveQuoteCancellation(args, 1),
+    resolveDomainsCancellation(args, 1),
     resolveResultsListScrolls,
     Command.expectNone(),
   )
 })
 
-test('clearing the input returns to the idle route and restores input focus', () => {
+test('clearing the input returns to the idle route, restores focus, and scrolls to the top', () => {
   story(
     update,
     given(readyModel('acme')),
@@ -225,10 +275,31 @@ test('clearing the input returns to the idle route and restores input focus', ()
     ),
     Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
     message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
+    Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
     model(model => {
       expect(model.route).toEqual(ApplicationRoute.Search({ q: Option.none() }))
       expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
     }),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('backspacing to an empty query scrolls to the top after the route changes', () => {
+  story(
+    update,
+    given(readyModel('a')),
+    message(Message.UpdatedSearch({ value: '' })),
+    Command.expectExact(ReplaceSearchUrl({ q: Option.none() })),
+    Command.resolve(
+      ReplaceSearchUrl({ q: Option.none() }),
+      Message.CompletedReplaceSearchUrl(),
+    ),
+    message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+    }),
+    Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
     resolveResultsListScrolls,
     Command.expectNone(),
   )
@@ -247,7 +318,7 @@ test('unrelated URL changes do not restart a settled search', () => {
     ),
     model(model => {
       expect(model.searchGeneration).toBe(initialModel.searchGeneration)
-      expect(model.quoteWindows).toBe(initialModel.quoteWindows)
+      expect(model.domainsQuery).toBe(initialModel.domainsQuery)
       expect(searchPresentation(model)).toEqual(
         searchPresentation(initialModel),
       )
@@ -306,12 +377,12 @@ test('cart additions are unique and require confirmed availability', () => {
     message(Message.ClickedAddDomain({ domain: unconfirmedDomain })),
     message(Message.ClickedRemoveDomain({ name: 'missing.com' })),
     model(model => {
-      expect(model.cart).toEqual([domain])
+      expect(model.carts.Demo).toEqual([domain])
     }),
     message(Message.ClickedRemoveDomain({ name: domain.name })),
     message(Message.ClickedRemoveDomain({ name: domain.name })),
     model(model => {
-      expect(model.cart).toEqual([])
+      expect(model.carts.Demo).toEqual([])
     }),
     Command.expectNone(),
   )

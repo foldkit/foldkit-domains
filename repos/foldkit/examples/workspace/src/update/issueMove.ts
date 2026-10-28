@@ -5,7 +5,7 @@ import { IssueBoardBinding } from '../composition'
 import { makeFieldsStep, makeStep } from '../definition'
 import { type MovedIssue, applyMovedIssue } from '../domain'
 
-export const applyMovedIssueStep = (movedIssue: typeof MovedIssue.Type) =>
+export const applyMovedIssueStep = (movedIssue: MovedIssue) =>
   makeFieldsStep(() => ({
     workspaceAsyncData: AsyncData.map(workspace =>
       applyMovedIssue(workspace, movedIssue),

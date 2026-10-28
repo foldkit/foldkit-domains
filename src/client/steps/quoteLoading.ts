@@ -2,15 +2,19 @@ import { Array, Option, Record, pipe } from 'effect'
 import { AsyncData } from 'foldkit'
 
 import {
-  QuoteWindow,
+  DomainCandidateRange,
   domainTlds,
   queryToMaybeDomainLabel,
 } from '../../shared/domain'
-import { DetermineSearchTime } from '../command'
-import { makeStep } from '../definition'
-import { DomainListing, tldToMaybeQuoteWindow } from '../domain'
+import { ReadSearchPlanningTime } from '../command'
+import { makeFieldsStep, makeStep } from '../definition'
+import {
+  DomainListing,
+  isCompleteCatalogRequired,
+  tldToMaybeDomainCandidateRange,
+} from '../domain'
+import { DomainsQuery, DomainsQueryArgs } from '../domainsQuery'
 import { Model } from '../model'
-import { QuoteWindows } from '../quoteWindows'
 import {
   DomainListingGroup,
   RESULTS_GROUP_HEIGHT_PX,
@@ -23,14 +27,46 @@ import { routeToQuery } from '../route'
 import { searchPresentation } from '../searchPresentation'
 import { visibleResultListings } from '../visibleResultListings'
 
-export const makeRequestQuoteWindowStep = (
-  { offset, limit }: QuoteWindow,
+export const makeTrackDomainCandidateRangeStep = (
+  range: DomainCandidateRange,
+  nowMillis: number,
+  isBlocked: boolean,
+) =>
+  makeFieldsStep(() => ({
+    searchPlanningTimeMillis: () => nowMillis,
+    domainCandidateRanges: ranges =>
+      Array.some(
+        ranges,
+        existing =>
+          existing.offset === range.offset && existing.limit === range.limit,
+      )
+        ? ranges
+        : Array.append(ranges, range),
+    maybeBlockedDomainCandidateRange: () =>
+      isBlocked ? Option.some(range) : Option.none(),
+  }))
+
+export const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
+  makeFieldsStep(model =>
+    args.offset === 0 &&
+    args.limit === domainTlds.length &&
+    AsyncData.isSuccess(DomainsQuery.read(model.domainsQuery, args))
+      ? {
+          domainCandidateRanges: () => [
+            { offset: args.offset, limit: args.limit },
+          ],
+        }
+      : {},
+  )
+
+export const makeRequestQuotesForRangeStep = (
+  { offset, limit }: DomainCandidateRange,
   isForced = false,
 ) =>
   makeStep(model => ({
     model,
     commands: [
-      DetermineSearchTime({
+      ReadSearchPlanningTime({
         searchGeneration: model.searchGeneration,
         offset,
         limit,
@@ -39,8 +75,8 @@ export const makeRequestQuoteWindowStep = (
     ],
   }))
 
-type QuoteWindowRequestReturn = ReturnType<
-  ReturnType<typeof makeRequestQuoteWindowStep>
+type RequestQuotesForRangeReturn = ReturnType<
+  ReturnType<typeof makeRequestQuotesForRangeStep>
 >
 
 const findFirstPendingListingForViewport = (
@@ -90,7 +126,7 @@ const findFirstPendingListingForViewport = (
   )
 }
 
-const loadRequiredQuotes = (model: Model): QuoteWindowRequestReturn => {
+const loadRequiredQuotes = (model: Model): RequestQuotesForRangeReturn => {
   const search = searchPresentation(model)
 
   if (search._tag !== 'Ready' || search.quoteRequest._tag === 'Loading') {
@@ -103,15 +139,13 @@ const loadRequiredQuotes = (model: Model): QuoteWindowRequestReturn => {
     return { model }
   }
 
-  const isCompleteCatalogRequired =
-    model.sortOrder !== 'Relevance' || model.availabilityFilter !== 'All'
-
-  if (isCompleteCatalogRequired) {
-    const isCatalogFailed = Option.exists(
+  if (isCompleteCatalogRequired(model.availabilityFilter, model.sortOrder)) {
+    const hasCompleteCatalogRequestFailed = Option.exists(
       queryToMaybeDomainLabel(routeToQuery(model.route)),
       label =>
         AsyncData.hasError(
-          QuoteWindows.read(model.quoteWindows, {
+          DomainsQuery.read(model.domainsQuery, {
+            mode: model.searchMode,
             label,
             offset: 0,
             limit: domainTlds.length,
@@ -120,35 +154,36 @@ const loadRequiredQuotes = (model: Model): QuoteWindowRequestReturn => {
     )
 
     if (
-      isCatalogFailed ||
+      hasCompleteCatalogRequestFailed ||
       Option.exists(
-        model.maybeBlockedQuoteWindow,
-        window => window.offset === 0 && window.limit === domainTlds.length,
+        model.maybeBlockedDomainCandidateRange,
+        range => range.offset === 0 && range.limit === domainTlds.length,
       )
     ) {
       return { model }
     }
 
-    return makeRequestQuoteWindowStep({ offset: 0, limit: domainTlds.length })(
-      model,
-    )
+    return makeRequestQuotesForRangeStep({
+      offset: 0,
+      limit: domainTlds.length,
+    })(model)
   }
 
   if (search.quoteRequest._tag === 'Failed') {
     return { model }
   }
 
-  const maybeQuoteWindow = pipe(
+  const maybeDomainCandidateRange = pipe(
     model,
     visibleResultListings,
     groupDomainListings,
     groups => findFirstPendingListingForViewport(groups, model.resultsList),
-    Option.flatMap(listing => tldToMaybeQuoteWindow(listing.tld)),
+    Option.flatMap(listing => tldToMaybeDomainCandidateRange(listing.tld)),
   )
 
-  return Option.match(maybeQuoteWindow, {
+  return Option.match(maybeDomainCandidateRange, {
     onNone: () => ({ model }),
-    onSome: window => makeRequestQuoteWindowStep(window)(model),
+    onSome: range => makeRequestQuotesForRangeStep(range)(model),
   })
 }
 

@@ -25,17 +25,17 @@ import {
   selectToolStep,
 } from './steps'
 
-const applyEraser = (model: typeof Model.Type, x: number, y: number) => {
+const applyEraser = (model: Model, x: number, y: number) => {
   const positions = getMirroredPositions(x, y, model.gridSize, model.mirrorMode)
   return erasePixels(model.grid, positions)
 }
 
-const applyBrush = (model: typeof Model.Type, x: number, y: number) => {
+const applyBrush = (model: Model, x: number, y: number) => {
   const positions = getMirroredPositions(x, y, model.gridSize, model.mirrorMode)
   return setPixels(model.grid, positions, model.selectedColorIndex)
 }
 
-const applyFill = (model: typeof Model.Type, x: number, y: number) => {
+const applyFill = (model: Model, x: number, y: number) => {
   const positions = getMirroredPositions(x, y, model.gridSize, 'None')
   return Array.reduce(positions, model.grid, (currentGrid, [fillX, fillY]) =>
     floodFill(currentGrid, fillX, fillY, model.selectedColorIndex),

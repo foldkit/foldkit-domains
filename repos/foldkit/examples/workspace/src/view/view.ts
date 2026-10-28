@@ -41,12 +41,12 @@ import { projectOverview, projectTabs } from './project'
 import { workspaceSettings } from './settings'
 import { sidebarView } from './sidebar'
 
-const maybeVisibleWorkspace = (model: typeof Model.Type) =>
+const maybeVisibleWorkspace = (model: Model) =>
   AsyncData.getData(visibleWorkspaceAsyncData(model))
 
 const memberControl = (
-  model: typeof Model.Type,
-  workspace: typeof Workspace.Type,
+  model: Model,
+  workspace: Workspace,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -84,10 +84,7 @@ const memberControl = (
     ],
   )
 
-const pageTitle = (
-  model: typeof Model.Type,
-  workspace: typeof Workspace.Type,
-): string => {
+const pageTitle = (model: Model, workspace: Workspace): string => {
   const { route } = model
   const projectTitle = (projectId: string) =>
     Option.match(
@@ -121,9 +118,9 @@ const pageTitle = (
 }
 
 const issueListView = (
-  model: typeof Model.Type,
-  workspace: typeof Workspace.Type,
-  issues: ReadonlyArray<typeof Issue.Type>,
+  model: Model,
+  workspace: Workspace,
+  issues: ReadonlyArray<Issue>,
   h: ApplicationViewBuilder,
 ): Html =>
   h.block(
@@ -162,15 +159,15 @@ const missingPage = (
   )
 
 const routeContent = (
-  model: typeof Model.Type,
-  workspace: typeof Workspace.Type,
+  model: Model,
+  workspace: Workspace,
   h: ApplicationViewBuilder,
 ): Html => {
   const { route } = model
 
   const projectContent = (
     projectId: string,
-    toView: (project: typeof Project.Type) => Html,
+    toView: (project: Project) => Html,
   ) =>
     Option.match(
       Array.findFirst(workspace.projects, project => project.id === projectId),
@@ -296,10 +293,7 @@ const routeContent = (
   })
 }
 
-const issueMoveFeedback = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+const issueMoveFeedback = (model: Model, h: ApplicationViewBuilder): Html => {
   const failure = (error: string) =>
     h.div(
       [
@@ -334,8 +328,8 @@ const issueMoveFeedback = (
 }
 
 const workspaceView = (
-  model: typeof Model.Type,
-  workspace: typeof Workspace.Type,
+  model: Model,
+  workspace: Workspace,
   h: ApplicationViewBuilder,
 ): Html => {
   const { route } = model
@@ -464,10 +458,7 @@ const workspaceView = (
   )
 }
 
-const overlaysView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+const overlaysView = (model: Model, h: ApplicationViewBuilder): Html => {
   const paletteInputs = Option.match(maybeVisibleWorkspace(model), {
     onNone: () => ({ issues: [], projects: [] }),
     onSome: workspace => ({
@@ -501,7 +492,7 @@ const overlaysView = (
   )
 }
 
-const documentTitle = (model: typeof Model.Type): string =>
+const documentTitle = (model: Model): string =>
   Option.match(maybeVisibleWorkspace(model), {
     onNone: () => 'Northstar | Foldkit workspace',
     onSome: workspace => {

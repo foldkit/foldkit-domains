@@ -10,41 +10,48 @@ const makeListboxOption = <Value extends string>(value: Schema.Schema<Value>) =>
 
 export const ListboxOption = makeListboxOption(Schema.String)
 export const StatusListboxOption = makeListboxOption(IssueStatus)
+export type StatusListboxOption = typeof StatusListboxOption.Type
 export const PriorityListboxOption = makeListboxOption(IssuePriority)
+export type PriorityListboxOption = typeof PriorityListboxOption.Type
 export const SortListboxOption = makeListboxOption(IssueFilters.fields.sort)
+export type SortListboxOption = typeof SortListboxOption.Type
 export const GroupListboxOption = makeListboxOption(GroupBy)
+export type GroupListboxOption = typeof GroupListboxOption.Type
 export const StatusFilterValue = Schema.Literals([
   'All',
   ...IssueStatus.literals,
 ])
+export type StatusFilterValue = typeof StatusFilterValue.Type
 
 export const StatusFilterListboxOption = makeListboxOption(StatusFilterValue)
+export type StatusFilterListboxOption = typeof StatusFilterListboxOption.Type
 
-export const WorkspaceListboxBlock = Listbox.create<typeof ListboxOption.Type>()
+export const WorkspaceListboxBlock =
+  Listbox.makeBlock<typeof ListboxOption.Type>()
 
-export const StatusListboxBlock = Listbox.create<
-  typeof StatusListboxOption.Type,
-  typeof IssueStatus.Type
+export const StatusListboxBlock = Listbox.makeBlock<
+  StatusListboxOption,
+  IssueStatus
 >()
 
-export const PriorityListboxBlock = Listbox.create<
-  typeof PriorityListboxOption.Type,
-  typeof IssuePriority.Type
+export const PriorityListboxBlock = Listbox.makeBlock<
+  PriorityListboxOption,
+  IssuePriority
 >()
 
-export const SortListboxBlock = Listbox.create<
-  typeof SortListboxOption.Type,
+export const SortListboxBlock = Listbox.makeBlock<
+  SortListboxOption,
   typeof IssueFilters.fields.sort.Type
 >()
 
-export const GroupListboxBlock = Listbox.create<
-  typeof GroupListboxOption.Type,
-  typeof GroupBy.Type
+export const GroupListboxBlock = Listbox.makeBlock<
+  GroupListboxOption,
+  GroupBy
 >()
 
-export const StatusFilterListboxBlock = Listbox.create<
-  typeof StatusFilterListboxOption.Type,
-  typeof StatusFilterValue.Type
+export const StatusFilterListboxBlock = Listbox.makeBlock<
+  StatusFilterListboxOption,
+  StatusFilterValue
 >()
 
 const ListboxConfig = Schema.Struct({
@@ -54,6 +61,7 @@ const ListboxConfig = Schema.Struct({
   isCompact: Schema.optionalKey(Schema.Boolean),
   ariaLabel: Schema.optionalKey(Schema.String),
 })
+type ListboxConfig = typeof ListboxConfig.Type
 
 type ListboxOption<Value extends string> = Omit<
   typeof ListboxOption.Type,
@@ -62,7 +70,7 @@ type ListboxOption<Value extends string> = Omit<
   Readonly<{ value: Value }>
 
 type ListboxViewConfig<Value extends string> = Omit<
-  typeof ListboxConfig.Type,
+  ListboxConfig,
   'value' | 'options'
 > &
   Readonly<{
@@ -86,7 +94,7 @@ export const listboxViewInputs = <const Value extends string>({
 > => ({
   items: options,
   itemToValue,
-  itemToSearchText: (option: typeof ListboxOption.Type) => option.label,
+  itemToSearchText: (option: ListboxOption<Value>) => option.label,
   maybeSelectedValue: Option.some(value),
   isDisabled,
   ...(ariaLabel === undefined ? {} : { ariaLabel }),
@@ -131,7 +139,7 @@ export const listboxViewInputs = <const Value extends string>({
       ),
     ],
   ),
-  itemToConfig: (option: typeof ListboxOption.Type) => ({
+  itemToConfig: (option: ListboxOption<Value>) => ({
     className: 'group listbox-option',
     content: ih.div(
       [ih.Class('flex w-full min-w-0 items-center justify-between gap-3')],

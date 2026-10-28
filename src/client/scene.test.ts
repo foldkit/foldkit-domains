@@ -5,7 +5,6 @@ import {
   Navigation,
   type SceneSimulation,
   all,
-  change,
   click,
   expect,
   expectAll,
@@ -27,26 +26,41 @@ import {
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Dialog, DialogBlock, VirtualList } from '@foldkit/ui'
-
-import { Domain, domainNames, domainTlds } from '../shared/domain'
-import { makeDomainFixtures } from '../shared/domain.fixture'
 import {
-  DetermineSearchTime,
+  Animation,
+  Dialog,
+  DialogBlock,
+  Listbox,
+  RadioGroup,
+  VirtualList,
+} from '@foldkit/ui'
+
+import { Domain, domainCandidates, domainTlds } from '../shared/domain'
+import { makeDomainFixtures } from '../shared/domain.fixture'
+import { SearchMode } from '../shared/searchMode'
+import {
   DismissSearchKeyboard,
   FocusCartButton,
   FocusCartCloseButton,
   FocusFiltersButton,
   FocusSearchInput,
+  FocusTldFilterButton,
+  ReadSearchPlanningTime,
   ReplaceSearchUrl,
   ScrollPage,
 } from './command'
-import { CART_DIALOG_ID, FILTERS_DIALOG_ID } from './composition'
+import { CART_DIALOG_ID, FILTERS_DIALOG_ID, TLD_DIALOG_ID } from './composition'
+import { QUOTE_PAGE_SIZE, TOP_RESULT_COUNT } from './domain'
+import { DomainsQuery, DomainsQueryFailure } from './domainsQuery'
+import { SortListboxBlock, TldListboxBlock } from './filterListboxes'
 import { Message } from './message'
-import { emptyModel, readyModel, withQuotedWindow } from './model.fixture'
-import { QuoteFailure, QuoteWindows } from './quoteWindows'
+import { emptyModel, readyModel, withDomainsForRange } from './model.fixture'
 import { PageScrollKey, RESULTS_LIST_ID, ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
+import {
+  SEARCH_MODE_CONTROL_ID,
+  SearchModeControlBlock,
+} from './searchModeControl'
 import { update } from './update'
 import { view } from './view'
 
@@ -54,6 +68,104 @@ const domainResults = role('region', { name: 'Domain results' })
 const allDomainResults = role('list', { name: 'All domain results' })
 const domainResultItems = filter(all.role('listitem'), { hasNot: role('list') })
 const firstDomainResult = within(allDomainResults, first(domainResultItems))
+
+const openFilterListbox = (
+  name: string,
+  id: string,
+  listboxMessage: typeof TldListboxBlock.Message,
+) => [
+  click(
+    within(
+      selector(`#${id}-button`),
+      role('button', { name: new RegExp(`^${name}`) }),
+    ),
+  ),
+  Command.resolve(
+    Listbox.test.FocusListboxItems({ id }),
+    listboxMessage.CompletedFocusListboxItems(),
+  ),
+  Mount.resolve(
+    Listbox.test.AnchorListbox,
+    listboxMessage.CompletedAnchorListbox(),
+  ),
+  Mount.resolve(
+    Listbox.test.PortalListboxBackdrop,
+    listboxMessage.CompletedPortalListboxBackdrop(),
+  ),
+]
+
+const closeFilterListbox = (
+  id: string,
+  listboxMessage: typeof TldListboxBlock.Message,
+) => [
+  Command.resolve(
+    Listbox.test.FocusListboxButton({ id }),
+    listboxMessage.CompletedFocusListboxButton(),
+  ),
+  Mount.expectEnded(
+    Listbox.test.AnchorListbox,
+    Listbox.test.PortalListboxBackdrop,
+  ),
+]
+
+const selectFilterOption = (
+  name: string,
+  option: string,
+  id: string,
+  listboxMessage: typeof TldListboxBlock.Message,
+) => [
+  ...openFilterListbox(name, id, listboxMessage),
+  click(role('option', { name: option })),
+  ...closeFilterListbox(id, listboxMessage),
+]
+
+const acknowledgeTldSheetOpen = (generation: number) => [
+  Command.resolve(
+    Dialog.test.ShowDialog,
+    DialogBlock.Message.SucceededShowDialog(),
+  ),
+  Mount.resolve(
+    Dialog.test.AcquireResources({
+      id: TLD_DIALOG_ID,
+      focusSelector: Dialog.initialFocusMarkerSelector,
+    }),
+    DialogBlock.Message.SucceededAcquireResources(),
+  ),
+  Command.resolveAll(
+    [
+      Animation.test.WaitForPaint,
+      Animation.AnimationBlock.Message.CompletedWaitForPaint({ generation }),
+    ],
+    [
+      Animation.test.WaitForPaint,
+      Animation.AnimationBlock.Message.CompletedWaitForPaint({ generation }),
+    ],
+    [
+      Animation.test.WaitForAnimationSettled,
+      Animation.AnimationBlock.Message.EndedAnimation({ generation }),
+    ],
+  ),
+]
+
+const acknowledgeTldSheetClose = (generation: number) => [
+  Command.resolve(
+    Animation.test.WaitForPaint,
+    Animation.AnimationBlock.Message.CompletedWaitForPaint({ generation }),
+  ),
+  Command.resolve(
+    Animation.test.WaitForAnimationSettled,
+    Animation.AnimationBlock.Message.EndedAnimation({ generation }),
+  ),
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
+  Command.resolve(
+    FocusTldFilterButton,
+    Message.CompletedFocusTldFilterButton(),
+  ),
+  Mount.expectEnded(Dialog.test.AcquireResources),
+]
 
 const resolveResultsListScrolls = <Model, Message, OutMessage>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
@@ -72,28 +184,28 @@ const resolveResultsListScrolls = <Model, Message, OutMessage>(
     }),
   )
 
-const resolveSearchTime =
+const resolveSearchPlanningTime =
   (nowMillis = 0) =>
   <Model, Message_, OutMessage>(
     simulation: SceneSimulation<Model, Message_, OutMessage>,
   ): SceneSimulation<Model, Message_, OutMessage> =>
     Array.reduce(simulation.commands, simulation, (current, command) =>
-      Option.match(Command.argsOf(DetermineSearchTime)(command), {
+      Option.match(Command.argsOf(ReadSearchPlanningTime)(command), {
         onNone: () => current,
         onSome: args =>
           Command.resolve(
-            DetermineSearchTime(args),
-            Message.CompletedDetermineSearchTime({ ...args, nowMillis }),
+            ReadSearchPlanningTime(args),
+            Message.CompletedReadSearchPlanningTime({ ...args, nowMillis }),
           )(current),
       }),
     )
 
-const resolveQuotes =
+const resolveDomains =
   (
     domainLabel: string,
-    result: Result.Result<ReadonlyArray<Domain>, QuoteFailure>,
+    result: Result.Result<ReadonlyArray<Domain>, DomainsQueryFailure>,
     offset = 0,
-    limit = 60,
+    limit = TOP_RESULT_COUNT,
   ) =>
   <Model, Message_, OutMessage>(
     simulation: SceneSimulation<Model, Message_, OutMessage>,
@@ -101,7 +213,7 @@ const resolveQuotes =
     const args = Option.getOrThrow(
       Array.findFirst(
         Array.getSomes(
-          Array.map(simulation.commands, Command.argsOf(QuoteWindows.Fetch)),
+          Array.map(simulation.commands, Command.argsOf(DomainsQuery.Fetch)),
         ),
         fetch =>
           fetch.args.label === domainLabel &&
@@ -111,14 +223,26 @@ const resolveQuotes =
     )
 
     return Command.resolve(
-      QuoteWindows.Fetch(args),
-      QuoteWindows.Message.CompletedFetch({
+      DomainsQuery.Fetch(args),
+      DomainsQuery.Message.CompletedFetch({
         ...args,
         result,
         completedAtMillis: 0,
       }),
     )(simulation)
   }
+
+const resolveRemainingFirstPageDomains = resolveDomains(
+  'acme',
+  Result.succeed(
+    Array.take(
+      Array.drop(makeDomainFixtures('acme'), TOP_RESULT_COUNT),
+      QUOTE_PAGE_SIZE - TOP_RESULT_COUNT,
+    ),
+  ),
+  TOP_RESULT_COUNT,
+  QUOTE_PAGE_SIZE - TOP_RESULT_COUNT,
+)
 
 const measureResultsList = Mount.resolve(
   VirtualList.test.ObserveVirtualList({
@@ -142,7 +266,7 @@ describe('domain search', () => {
     )
   })
 
-  test('typing renders quotes only after URL delivery and fetch completion', () => {
+  test('typing makes Top Results usable before the remaining domain checks complete', () => {
     scene(
       { update, view, routing: { onUrlChange: Message.ChangedUrl } },
       given(emptyModel),
@@ -153,25 +277,40 @@ describe('domain search', () => {
       ]),
       Command.expectNone(),
       Navigation.changedUrl('/?q=acme'),
-      Command.expectHas(
-        DetermineSearchTime({
-          searchGeneration: 2,
-          offset: 0,
-          limit: 60,
-          isForced: false,
-        }),
-      ),
-      resolveSearchTime(),
+      Command.expectHas(ReadSearchPlanningTime),
+      resolveSearchPlanningTime(),
       measureResultsList,
       inside(domainResults, expect(text(/\$/)).toBeAbsent()),
-      resolveQuotes(
+      resolveDomains(
         'acme',
-        Result.succeed(Array.take(makeDomainFixtures('acme'), 60)),
+        Result.succeed(
+          Array.take(makeDomainFixtures('acme'), TOP_RESULT_COUNT),
+        ),
       ),
       resolveResultsListScrolls,
       expect(label('Search domains')).toHaveValue('acme'),
       inside(allDomainResults, expect(text('acme.com')).toExist()),
       inside(firstDomainResult, expect(text('$12.00')).toExist()),
+      Command.expectHas(ReadSearchPlanningTime),
+      resolveSearchPlanningTime(1),
+      resolveResultsListScrolls,
+      Command.keepPending(DomainsQuery.Fetch),
+      inside(
+        first(all.role('article')),
+        expect(text('$12.00')).toExist(),
+        expect(role('button', { name: 'Add acme.com to cart' })).toExist(),
+        click(role('button', { name: 'Add acme.com to cart' })),
+      ),
+      expect(role('button', { name: 'Cart, 1 domains' })).toExist(),
+      expect(
+        text('4 of 556 domains checked · Registration prices in USD'),
+      ).toExist(),
+      inside(allDomainResults, expect(text('$80.00')).toBeAbsent()),
+      inside(firstDomainResult, expect(text('$12.00')).toExist()),
+      resolveRemainingFirstPageDomains,
+      resolveResultsListScrolls,
+      inside(first(all.role('article')), expect(text('$12.00')).toExist()),
+      inside(allDomainResults, expect(text('$80.00')).toExist()),
       expect(
         text('60 of 556 domains checked · Registration prices in USD'),
       ).toExist(),
@@ -194,7 +333,7 @@ describe('domain search', () => {
     )
   })
 
-  test('refresh hides quotes and cart actions until the new result arrives', () => {
+  test('refresh hides availability, prices, and cart actions until the new result arrives', () => {
     scene(
       { update, view },
       given(readyModel('acme')),
@@ -204,7 +343,7 @@ describe('domain search', () => {
         DismissSearchKeyboard,
         Message.CompletedDismissSearchKeyboard(),
       ),
-      resolveSearchTime(),
+      resolveSearchPlanningTime(),
       resolveResultsListScrolls,
       inside(
         domainResults,
@@ -212,50 +351,75 @@ describe('domain search', () => {
         expect(text('Not available')).toBeAbsent(),
         expect(role('button', { name: 'Add acme.com to cart' })).toBeAbsent(),
       ),
-      resolveQuotes(
+      resolveDomains(
         'acme',
-        Result.succeed(Array.take(makeDomainFixtures('acme'), 60)),
+        Result.succeed(
+          Array.take(makeDomainFixtures('acme'), TOP_RESULT_COUNT),
+        ),
       ),
       resolveResultsListScrolls,
       inside(firstDomainResult, expect(text('$12.00')).toExist()),
+      resolveSearchPlanningTime(1),
+      resolveRemainingFirstPageDomains,
+      resolveResultsListScrolls,
       Command.expectNone(),
     )
   })
 
-  test('filters and sorting control the same quoted results', () => {
+  test('filters and sorting control the same domain results', () => {
     scene(
       { update, view },
       given(readyModel('acme')),
       measureResultsList,
-      change(label('Filter by TLD'), 'App'),
+      ...selectFilterOption(
+        'Filter by TLD',
+        '.app',
+        'tld-filter',
+        TldListboxBlock.Message,
+      ),
       resolveResultsListScrolls,
       inside(
         allDomainResults,
         expectAll(domainResultItems).toHaveCount(1),
         expect(text('acme.app')).toExist(),
       ),
-      change(label('Filter by TLD'), 'All'),
+      ...selectFilterOption(
+        'Filter by TLD',
+        'All TLDs',
+        'tld-filter',
+        TldListboxBlock.Message,
+      ),
       resolveResultsListScrolls,
-      change(label('Sort results'), 'PriceDescending'),
+      ...selectFilterOption(
+        'Sort results',
+        'Price: High to Low',
+        'sort-order',
+        SortListboxBlock.Message,
+      ),
       resolveResultsListScrolls,
       inside(firstDomainResult, expect(text('acme.ai')).toExist()),
-      change(label('Sort results'), 'PriceAscending'),
+      ...selectFilterOption(
+        'Sort results',
+        'Price: Low to High',
+        'sort-order',
+        SortListboxBlock.Message,
+      ),
       resolveResultsListScrolls,
       inside(firstDomainResult, expect(text('acme.space')).toExist()),
     )
   })
 
-  test('failed searches expose a retriable alert without stale quotes', () => {
+  test('failed searches expose a retriable alert without stale prices', () => {
     scene(
       { update, view, routing: { onUrlChange: Message.ChangedUrl } },
       given(emptyModel),
       Navigation.changedUrl('/?q=acme'),
-      resolveSearchTime(),
+      resolveSearchPlanningTime(),
       measureResultsList,
-      resolveQuotes(
+      resolveDomains(
         'acme',
         Result.fail(
-          QuoteFailure.make({
+          DomainsQueryFailure.make({
             error: 'Search unavailable',
             maybeSearchCooldown: Option.none(),
           }),
@@ -267,19 +431,138 @@ describe('domain search', () => {
       inside(domainResults, expect(text(/\$/)).toBeAbsent()),
       click(role('button', { name: 'Try again' })),
       Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
-      resolveSearchTime(),
+      resolveSearchPlanningTime(),
       measureResultsList,
-      resolveQuotes(
+      resolveDomains(
         'acme',
-        Result.succeed(Array.take(makeDomainFixtures('acme'), 60)),
+        Result.succeed(
+          Array.take(makeDomainFixtures('acme'), TOP_RESULT_COUNT),
+        ),
       ),
       resolveResultsListScrolls,
       inside(firstDomainResult, expect(text('$12.00')).toExist()),
+      resolveSearchPlanningTime(1),
+      resolveRemainingFirstPageDomains,
+      resolveResultsListScrolls,
+      Command.expectNone(),
     )
   })
 })
 
 describe('filters presentation', () => {
+  test('the mobile TLD sheet searches the catalog, applies selection, and resets search when reopened', () => {
+    scene(
+      { update, view },
+      given(readyModel('acme')),
+      measureResultsList,
+      click(selector('.mobile-tld-filter')),
+      ...acknowledgeTldSheetOpen(1),
+      inside(
+        role('dialog', { name: 'Filter by TLD' }),
+        expect(role('searchbox', { name: 'Search TLDs' })).toHaveValue(''),
+        type(role('searchbox', { name: 'Search TLDs' }), 'no-such-tld'),
+        expect(text('No TLDs found.')).toExist(),
+        expect(role('button', { name: '.academy' })).toBeAbsent(),
+        type(role('searchbox', { name: 'Search TLDs' }), ' .AcAdEmY '),
+        expect(text('No TLDs found.')).toBeAbsent(),
+        expect(role('button', { name: '.academy' })).toExist(),
+        expect(role('button', { name: '.com' })).toBeAbsent(),
+        click(role('button', { name: '.academy' })),
+      ),
+      resolveResultsListScrolls,
+      ...acknowledgeTldSheetClose(2),
+      expect(role('dialog', { name: 'Filter by TLD' })).toBeAbsent(),
+      expect(selector('.mobile-tld-filter')).toHaveText('.academy'),
+      inside(
+        allDomainResults,
+        expectAll(domainResultItems).toHaveCount(1),
+        expect(text('acme.academy')).toExist(),
+        expect(text('acme.com')).toBeAbsent(),
+      ),
+      click(selector('.mobile-tld-filter')),
+      ...acknowledgeTldSheetOpen(3),
+      inside(
+        role('dialog', { name: 'Filter by TLD' }),
+        expect(role('searchbox', { name: 'Search TLDs' })).toHaveValue(''),
+        expect(role('button', { name: '.academy' })).toHaveAttr(
+          'aria-pressed',
+          'true',
+        ),
+        expect(role('button', { name: 'All TLDs' })).toHaveAttr(
+          'aria-pressed',
+          'false',
+        ),
+        click(role('button', { name: 'All TLDs' })),
+      ),
+      resolveResultsListScrolls,
+      ...acknowledgeTldSheetClose(4),
+      expect(selector('.mobile-tld-filter')).toHaveText('All TLDs'),
+      inside(
+        allDomainResults,
+        expect(text('acme.com')).toExist(),
+        expect(text('acme.app')).toExist(),
+      ),
+      Command.expectNone(),
+    )
+  })
+
+  test('keyboard navigation commits the TLD filter without changing selection during navigation', () => {
+    scene(
+      { update, view },
+      given(readyModel('acme')),
+      measureResultsList,
+      ...openFilterListbox(
+        'Filter by TLD',
+        'tld-filter',
+        TldListboxBlock.Message,
+      ),
+      expect(role('option', { name: 'All TLDs' })).toHaveAttr(
+        'aria-selected',
+        'true',
+      ),
+      keydown(role('listbox'), 'ArrowDown'),
+      expectHandled(),
+      Command.resolve(
+        Listbox.test.ScrollListboxItemIntoView({ id: 'tld-filter', index: 0 }),
+        TldListboxBlock.Message.CompletedScrollListboxItemIntoView(),
+      ),
+      keydown(role('listbox'), 'ArrowDown'),
+      expectHandled(),
+      Command.resolve(
+        Listbox.test.ScrollListboxItemIntoView({ id: 'tld-filter', index: 1 }),
+        TldListboxBlock.Message.CompletedScrollListboxItemIntoView(),
+      ),
+      expect(role('option', { name: '.com' })).toHaveAttr('data-active', ''),
+      expect(role('option', { name: '.com' })).toHaveAttr(
+        'aria-selected',
+        'false',
+      ),
+      inside(allDomainResults, expect(text('acme.app')).toExist()),
+      keydown(role('listbox'), 'Enter'),
+      expectHandled(),
+      Command.resolve(
+        Listbox.test.ClickListboxItem({ id: 'tld-filter', index: 1 }),
+        TldListboxBlock.Message.CompletedClickListboxItem(),
+      ),
+      click(role('option', { name: '.com' })),
+      ...closeFilterListbox('tld-filter', TldListboxBlock.Message),
+      resolveResultsListScrolls,
+      expect(role('listbox')).toBeAbsent(),
+      expect(
+        within(
+          selector('.desktop-tld-filter'),
+          role('button', { name: /^Filter by TLD/ }),
+        ),
+      ).toHaveText('.com'),
+      inside(
+        allDomainResults,
+        expectAll(domainResultItems).toHaveCount(1),
+        expect(text('acme.com')).toExist(),
+        expect(text('acme.app')).toBeAbsent(),
+      ),
+    )
+  })
+
   test('the filters sheet applies selection to the results and restores its trigger on close', () => {
     scene(
       { update, view },
@@ -297,11 +580,47 @@ describe('filters presentation', () => {
         }),
         DialogBlock.Message.SucceededAcquireResources(),
       ),
+      Command.resolveAll(
+        [
+          Animation.test.WaitForPaint,
+          Animation.AnimationBlock.Message.CompletedWaitForPaint({
+            generation: 1,
+          }),
+        ],
+        [
+          Animation.test.WaitForPaint,
+          Animation.AnimationBlock.Message.CompletedWaitForPaint({
+            generation: 1,
+          }),
+        ],
+        [
+          Animation.test.WaitForAnimationSettled,
+          Animation.AnimationBlock.Message.EndedAnimation({ generation: 1 }),
+        ],
+      ),
       inside(
         selector('.filters-panel'),
-        change(role('combobox', { name: 'Sort results' }), 'PriceDescending'),
-        resolveResultsListScrolls,
-        click(role('button', { name: 'Done' })),
+        expect(role('button', { name: 'Show All' })).toHaveAttr(
+          'aria-pressed',
+          'true',
+        ),
+        expect(role('button', { name: 'Relevance' })).toHaveAttr(
+          'aria-pressed',
+          'true',
+        ),
+        expect(role('listbox')).toBeAbsent(),
+        click(role('button', { name: 'Price' })),
+      ),
+      resolveResultsListScrolls,
+      Command.resolve(
+        Animation.test.WaitForPaint,
+        Animation.AnimationBlock.Message.CompletedWaitForPaint({
+          generation: 2,
+        }),
+      ),
+      Command.resolve(
+        Animation.test.WaitForAnimationSettled,
+        Animation.AnimationBlock.Message.EndedAnimation({ generation: 2 }),
       ),
       Command.resolve(
         Dialog.test.CloseDialog,
@@ -313,7 +632,7 @@ describe('filters presentation', () => {
       ),
       Mount.expectEnded(Dialog.test.AcquireResources),
       expect(selector('.filters-panel')).toBeAbsent(),
-      expect(firstDomainResult).toHaveText('acme.ai$80.00'),
+      expect(firstDomainResult).toHaveText('acme.space$1.99'),
     )
   })
 })
@@ -379,10 +698,15 @@ describe('cart presentation', () => {
 })
 
 test('multi-year quotes display and sort by the full registration price', () => {
-  const quotedModel = withQuotedWindow(
+  const quotedModel = withDomainsForRange(
     readyModel('acme'),
-    { label: 'acme', offset: 0, limit: domainTlds.length },
-    Array.map(domainNames('acme'), candidate =>
+    {
+      mode: SearchMode.make('Demo'),
+      label: 'acme',
+      offset: 0,
+      limit: domainTlds.length,
+    },
+    Array.map(domainCandidates('acme'), candidate =>
       Option.getOrElse(
         Array.findFirst(
           [
@@ -404,7 +728,7 @@ test('multi-year quotes display and sort by the full registration price', () => 
               isPremium: false,
             }),
           ],
-          quote => quote.name === candidate.name,
+          domain => domain.name === candidate.name,
         ),
         () => Domain.Unconfirmed(candidate),
       ),
@@ -416,10 +740,20 @@ test('multi-year quotes display and sort by the full registration price', () => 
     given(quotedModel),
     measureResultsList,
     expect(text('$160.00 / 2 years')).toExist(),
-    change(label('Sort results'), 'PriceAscending'),
+    ...selectFilterOption(
+      'Sort results',
+      'Price: Low to High',
+      'sort-order',
+      SortListboxBlock.Message,
+    ),
     resolveResultsListScrolls,
     inside(firstDomainResult, expect(text('acme.dev')).toExist()),
-    change(label('Sort results'), 'PriceDescending'),
+    ...selectFilterOption(
+      'Sort results',
+      'Price: High to Low',
+      'sort-order',
+      SortListboxBlock.Message,
+    ),
     resolveResultsListScrolls,
     inside(
       firstDomainResult,
@@ -440,7 +774,7 @@ describe('accessibility', () => {
         DismissSearchKeyboard,
         Message.CompletedDismissSearchKeyboard(),
       ),
-      resolveSearchTime(),
+      resolveSearchPlanningTime(),
       resolveResultsListScrolls,
       expect(role('status', { name: 'Searching domains' })).toHaveText(
         'Checking availability and prices…',
@@ -448,12 +782,19 @@ describe('accessibility', () => {
       expect(role('status')).toHaveAttr('aria-atomic', 'true'),
       expect(selector('[aria-busy]')).toHaveAttr('aria-busy', 'true'),
       inside(selector('[aria-busy]'), expect(role('status')).toBeAbsent()),
-      resolveQuotes(
+      resolveDomains(
         'acme',
-        Result.succeed(Array.take(makeDomainFixtures('acme'), 60)),
+        Result.succeed(
+          Array.take(makeDomainFixtures('acme'), TOP_RESULT_COUNT),
+        ),
       ),
       resolveResultsListScrolls,
+      resolveSearchPlanningTime(1),
+      expect(selector('[aria-busy]')).toHaveAttr('aria-busy', 'true'),
+      resolveRemainingFirstPageDomains,
+      resolveResultsListScrolls,
       expect(selector('[aria-busy]')).toHaveAttr('aria-busy', 'false'),
+      Command.expectNone(),
     )
   })
 
@@ -503,3 +844,27 @@ test.each(PageScrollKey.literals)(
     )
   },
 )
+
+test('the search data source radio group changes mode with the keyboard while retaining the query', () => {
+  scene(
+    { update, view },
+    given(readyModel('acme')),
+    measureResultsList,
+    expect(role('radio', { name: 'Demo' })).toHaveAttr('aria-checked', 'true'),
+    keydown(role('radio', { name: 'Demo' }), 'ArrowRight'),
+    Command.resolve(
+      RadioGroup.test.FocusOption({ id: SEARCH_MODE_CONTROL_ID, index: 1 }),
+      SearchModeControlBlock.Message.CompletedFocusOption(),
+    ),
+    resolveSearchPlanningTime(),
+    resolveDomains(
+      'acme',
+      Result.succeed(Array.take(makeDomainFixtures('acme'), TOP_RESULT_COUNT)),
+    ),
+    resolveSearchPlanningTime(),
+    resolveRemainingFirstPageDomains,
+    resolveResultsListScrolls,
+    expect(role('radio', { name: 'Live' })).toHaveAttr('aria-checked', 'true'),
+    expect(role('searchbox', { name: 'Search domains' })).toHaveValue('acme'),
+  )
+})

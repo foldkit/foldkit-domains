@@ -10,3 +10,4 @@ export const Message = defineMessageUnion({
   SucceededAddComment: { comment: Comment },
   FailedAddComment: { error: Schema.String },
 })
+export type Message = typeof Message.Type

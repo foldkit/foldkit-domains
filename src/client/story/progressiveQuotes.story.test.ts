@@ -8,11 +8,13 @@ import { VirtualList } from '@foldkit/ui'
 
 import { domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
-import { DetermineSearchTime, FocusSearchInput } from '../command'
+import { SearchMode } from '../../shared/searchMode'
+import { FocusSearchInput, ReadSearchPlanningTime } from '../command'
 import { ResultsListBinding } from '../composition'
+import { DomainListing, SortOrder } from '../domain'
+import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
 import { Message } from '../message'
-import { emptyModel, urlOrThrow, withQuotedWindow } from '../model.fixture'
-import { QuoteFailure, QuoteWindows } from '../quoteWindows'
+import { emptyModel, urlOrThrow, withDomainsForRange } from '../model.fixture'
 import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute } from '../route'
 import {
@@ -21,35 +23,52 @@ import {
   searchPresentation,
 } from '../searchPresentation'
 import { update } from '../update'
+import { visibleResultListings } from '../visibleResultListings'
 import {
-  quoteFetch,
-  resolveQuoteFailure,
-  resolveQuoteSuccess,
+  makeDomainsFetch,
+  resolveDomainsFailure,
+  resolveDomainsSuccess,
   resolveResultsListScrolls,
   resolveSearchTime,
 } from './test'
 
-const firstArgs = { label: 'acme', offset: 0, limit: 60 }
-const secondArgs = { label: 'acme', offset: 60, limit: 60 }
-const laterArgs = { label: 'acme', offset: 180, limit: 60 }
+const firstArgs = {
+  mode: SearchMode.make('Demo'),
+  label: 'acme',
+  offset: 0,
+  limit: 60,
+}
+const secondArgs = {
+  mode: SearchMode.make('Demo'),
+  label: 'acme',
+  offset: 60,
+  limit: 60,
+}
+const laterArgs = {
+  mode: SearchMode.make('Demo'),
+  label: 'acme',
+  offset: 180,
+  limit: 60,
+}
 const catalogArgs = {
+  mode: SearchMode.make('Demo'),
   label: 'acme',
   offset: 0,
   limit: domainTlds.length,
 }
-const allQuotes = makeDomainFixtures('acme')
-const firstQuotes = Array.take(allQuotes, 60)
-const secondQuotes = Array.take(Array.drop(allQuotes, 60), 60)
-const laterQuotes = Array.take(Array.drop(allQuotes, 180), 60)
-const partialModel = withQuotedWindow(
+const allDomains = makeDomainFixtures('acme')
+const firstPageDomains = Array.take(allDomains, 60)
+const secondPageDomains = Array.take(Array.drop(allDomains, 60), 60)
+const laterPageDomains = Array.take(Array.drop(allDomains, 180), 60)
+const partialModel = withDomainsForRange(
   modifyFields(emptyModel, {
     route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
     searchGeneration: () => 1,
   }),
   firstArgs,
-  firstQuotes,
+  firstPageDomains,
 )
-const pageFailure = QuoteFailure.make({
+const pageFailure = DomainsQueryFailure.make({
   error: 'Provider busy',
   maybeSearchCooldown: Option.none(),
 })
@@ -72,32 +91,177 @@ const failPageAroundCriteriaChange = (
   isBeforeFailure
     ? steps(
         message(criteriaMessage),
-        resolveQuoteFailure(secondArgs, 2, pageFailure, 20),
+        resolveDomainsFailure(secondArgs, 2, pageFailure, 20),
       )
     : steps(
-        resolveQuoteFailure(secondArgs, 2, pageFailure, 20),
+        resolveDomainsFailure(secondArgs, 2, pageFailure, 20),
         message(criteriaMessage),
       )
 
-describe('progressive quotes', () => {
-  test('starts with 60 quotes and ignores a duplicate planning Clock while that window is pending', () => {
+describe('progressive domain results', () => {
+  test.each(
+    Array.filter(
+      SortOrder.literals,
+      sortOrder => sortOrder === 'Length' || sortOrder === 'Alphabetical',
+    ),
+  )(
+    '%s sorts pending names immediately and retries only the visible candidate range',
+    sortOrder => {
+      const topArgs = {
+        mode: SearchMode.make('Demo'),
+        label: 'acme',
+        offset: 0,
+        limit: 4,
+      }
+      const remainingArgs = {
+        mode: SearchMode.make('Demo'),
+        label: 'acme',
+        offset: 4,
+        limit: 56,
+      }
+      const loadingModel = modifyFields(emptyModel, {
+        route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
+      })
+      const expectedNames =
+        sortOrder === 'Length'
+          ? ['acme.ac', 'acme.ag', 'acme.ai', 'acme.am', 'acme.au']
+          : [
+              'acme.ac',
+              'acme.academy',
+              'acme.accountant',
+              'acme.accountants',
+              'acme.actor',
+            ]
+
+      story(
+        update,
+        given(loadingModel),
+        message(Message.UpdatedSortOrder({ value: sortOrder })),
+        model(model => {
+          const listings = visibleResultListings(model)
+
+          expect(
+            Array.map(Array.take(listings, 5), listing => listing.name),
+          ).toEqual(expectedNames)
+          expect(
+            Array.every(listings, DomainListing.isAnyOf(['Pending'])),
+          ).toBe(true)
+        }),
+        resolveResultsListScrolls,
+        Command.expectNone(),
+        message(Message.RequestedSearch()),
+        resolveSearchTime(1, 0),
+        Command.expectHas(makeDomainsFetch(topArgs, 1)),
+        resolveDomainsSuccess(topArgs, 1, Array.take(allDomains, 4), 5),
+        model(model => {
+          const listings = visibleResultListings(model)
+
+          expect(
+            Array.map(Array.take(listings, 5), listing => listing.name),
+          ).toEqual(expectedNames)
+          expect(Option.getOrThrow(Array.head(listings))).toEqual(
+            DomainListing.Pending({ name: 'acme.ac', tld: 'ac' }),
+          )
+          expect(
+            Array.findFirst(listings, listing => listing.name === 'acme.com'),
+          ).toEqual(
+            Option.some(
+              DomainListing.Ready({
+                name: 'acme.com',
+                tld: 'com',
+                domain: Option.getOrThrow(Array.head(allDomains)),
+              }),
+            ),
+          )
+        }),
+        resolveResultsListScrolls,
+        Command.expectExact(
+          ReadSearchPlanningTime({
+            searchGeneration: 1,
+            offset: 4,
+            limit: 56,
+            isForced: false,
+          }),
+        ),
+        resolveSearchTime(1, 10, 4, 56),
+        resolveResultsListScrolls,
+        Command.expectExact(makeDomainsFetch(remainingArgs, 2)),
+        resolveDomainsFailure(remainingArgs, 2, pageFailure, 20),
+        message(Message.ClickedRetrySearch()),
+        Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
+        resolveResultsListScrolls,
+        Command.expectExact(
+          ReadSearchPlanningTime({
+            searchGeneration: 1,
+            offset: 4,
+            limit: 56,
+            isForced: true,
+          }),
+        ),
+        resolveSearchTime(1, 30, 4, 56, true),
+        resolveResultsListScrolls,
+        Command.expectExact(makeDomainsFetch(remainingArgs, 3)),
+        resolveDomainsFailure(remainingArgs, 3, pageFailure, 40),
+        resolveResultsListScrolls,
+        Command.expectNone(),
+      )
+    },
+  )
+
+  test('shows Top Results before the rest of the first page and ignores a duplicate planning Clock while pending', () => {
+    const topArgs = {
+      mode: SearchMode.make('Demo'),
+      label: 'acme',
+      offset: 0,
+      limit: 4,
+    }
+    const remainingArgs = {
+      mode: SearchMode.make('Demo'),
+      label: 'acme',
+      offset: 4,
+      limit: 56,
+    }
+    const topDomains = Array.take(allDomains, 4)
+
     story(
       update,
       given(emptyModel),
       message(
-        Message.ChangedUrl({
-          url: urlOrThrow('http://localhost/?q=acme'),
-        }),
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
       ),
       resolveSearchTime(1, 0),
-      Command.expectHas(quoteFetch(firstArgs, 1)),
-      message(Message.RequestedQuotes({ offset: 0, limit: 60 })),
+      Command.expectHas(makeDomainsFetch(topArgs, 1)),
+      message(Message.RequestedQuotes({ offset: 0, limit: 4 })),
       resolveSearchTime(1, 1),
-      Command.expectHas(quoteFetch(firstArgs, 1)),
-      resolveQuoteSuccess(firstArgs, 1, firstQuotes, 10),
+      Command.expectHas(makeDomainsFetch(topArgs, 1)),
+      resolveDomainsSuccess(topArgs, 1, topDomains, 10),
       model(model => {
         expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: firstQuotes }),
+          SearchPresentation.Ready({ domains: topDomains }),
+        )
+      }),
+      resolveSearchTime(1, 10, 4, 56),
+      Command.expectHas(makeDomainsFetch(remainingArgs, 2)),
+      model(model => {
+        expect(searchPresentation(model)).toEqual(
+          SearchPresentation.Ready({
+            domains: topDomains,
+            quoteRequest: QuoteRequestPresentation.Loading({
+              offset: 4,
+              limit: 56,
+            }),
+          }),
+        )
+      }),
+      resolveDomainsSuccess(
+        remainingArgs,
+        2,
+        Array.drop(firstPageDomains, 4),
+        20,
+      ),
+      model(model => {
+        expect(searchPresentation(model)).toEqual(
+          SearchPresentation.Ready({ domains: firstPageDomains }),
         )
       }),
       resolveResultsListScrolls,
@@ -111,11 +275,11 @@ describe('progressive quotes', () => {
       given(partialModel),
       message(scroll(1140)),
       resolveSearchTime(1, 10, 60, 60),
-      Command.expectHas(quoteFetch(secondArgs, 2)),
+      Command.expectHas(makeDomainsFetch(secondArgs, 2)),
       message(scroll(3762)),
-      resolveQuoteSuccess(secondArgs, 2, secondQuotes, 20),
+      resolveDomainsSuccess(secondArgs, 2, secondPageDomains, 20),
       Command.expectHas(
-        DetermineSearchTime({
+        ReadSearchPlanningTime({
           searchGeneration: 1,
           offset: 180,
           limit: 60,
@@ -123,8 +287,8 @@ describe('progressive quotes', () => {
         }),
       ),
       resolveSearchTime(1, 30, 180, 60),
-      Command.expectHas(quoteFetch(laterArgs, 3)),
-      resolveQuoteSuccess(laterArgs, 3, laterQuotes, 40),
+      Command.expectHas(makeDomainsFetch(laterArgs, 3)),
+      resolveDomainsSuccess(laterArgs, 3, laterPageDomains, 40),
       model(model => {
         const presentation = searchPresentation(model)
         expect(presentation._tag).toBe('Ready')
@@ -139,17 +303,17 @@ describe('progressive quotes', () => {
     )
   })
 
-  test('a later failure preserves checked quotes, retries only that page, and global sort loads the catalog', () => {
+  test('a later failure preserves checked domain results, retries only that page, and global sort loads the catalog', () => {
     story(
       update,
       given(partialModel),
       message(scroll(1140)),
       resolveSearchTime(1, 10, 60, 60),
-      resolveQuoteFailure(secondArgs, 2, pageFailure, 20),
+      resolveDomainsFailure(secondArgs, 2, pageFailure, 20),
       model(model => {
         expect(searchPresentation(model)).toEqual(
           SearchPresentation.Ready({
-            domains: firstQuotes,
+            domains: firstPageDomains,
             quoteRequest: QuoteRequestPresentation.Failed({
               offset: 60,
               limit: 60,
@@ -162,16 +326,16 @@ describe('progressive quotes', () => {
       message(Message.ClickedRetrySearch()),
       Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
       resolveSearchTime(1, 30, 60, 60, true),
-      Command.expectHas(quoteFetch(secondArgs, 3)),
-      resolveQuoteSuccess(secondArgs, 3, secondQuotes, 40),
+      Command.expectHas(makeDomainsFetch(secondArgs, 3)),
+      resolveDomainsSuccess(secondArgs, 3, secondPageDomains, 40),
       message(Message.UpdatedSortOrder({ value: 'PriceAscending' })),
       resolveSearchTime(1, 50, 0, domainTlds.length),
-      Command.expectHas(quoteFetch(catalogArgs, 4)),
-      resolveQuoteSuccess(catalogArgs, 4, allQuotes, 60),
+      Command.expectHas(makeDomainsFetch(catalogArgs, 4)),
+      resolveDomainsSuccess(catalogArgs, 4, allDomains, 60),
       model(model => {
         expect(model.sortOrder).toBe('PriceAscending')
         expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: allQuotes }),
+          SearchPresentation.Ready({ domains: allDomains }),
         )
       }),
       resolveResultsListScrolls,
@@ -214,7 +378,7 @@ describe('progressive quotes', () => {
         resolveSearchTime(1, 10, 60, 60),
         failPageAroundCriteriaChange(criteriaMessage, isBeforeFailure),
         Command.expectHas(
-          DetermineSearchTime({
+          ReadSearchPlanningTime({
             searchGeneration: 1,
             offset: 0,
             limit: domainTlds.length,
@@ -222,33 +386,33 @@ describe('progressive quotes', () => {
           }),
         ),
         resolveSearchTime(1, 30, 0, domainTlds.length),
-        Command.expectHas(quoteFetch(catalogArgs, 3)),
+        Command.expectHas(makeDomainsFetch(catalogArgs, 3)),
         model(model => {
           expect(searchPresentation(model)).toEqual(
             SearchPresentation.Ready({
-              domains: firstQuotes,
+              domains: firstPageDomains,
               quoteRequest: QuoteRequestPresentation.Loading({
                 offset: 0,
                 limit: domainTlds.length,
               }),
             }),
           )
-          expect(model.quotePlan).toEqual([
+          expect(model.domainCandidateRanges).toEqual([
             { offset: 0, limit: 60 },
             { offset: 60, limit: 60 },
             { offset: 0, limit: domainTlds.length },
           ])
         }),
-        resolveQuoteSuccess(catalogArgs, 3, allQuotes, 40),
+        resolveDomainsSuccess(catalogArgs, 3, allDomains, 40),
         model(model => {
-          expect(model.quotePlan).toEqual([
+          expect(model.domainCandidateRanges).toEqual([
             { offset: 0, limit: domainTlds.length },
           ])
-          expect(QuoteWindows.read(model.quoteWindows, secondArgs)._tag).toBe(
+          expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
             'Failure',
           )
           expect(searchPresentation(model)).toEqual(
-            SearchPresentation.Ready({ domains: allQuotes }),
+            SearchPresentation.Ready({ domains: allDomains }),
           )
         }),
         resolveResultsListScrolls,
@@ -263,11 +427,11 @@ describe('progressive quotes', () => {
       given(partialModel),
       message(Message.UpdatedSortOrder({ value: 'PriceAscending' })),
       resolveSearchTime(1, 10, 0, domainTlds.length),
-      resolveQuoteFailure(catalogArgs, 2, pageFailure, 20),
+      resolveDomainsFailure(catalogArgs, 2, pageFailure, 20),
       model(model => {
         expect(searchPresentation(model)).toEqual(
           SearchPresentation.Ready({
-            domains: firstQuotes,
+            domains: firstPageDomains,
             quoteRequest: QuoteRequestPresentation.Failed({
               offset: 0,
               limit: domainTlds.length,
@@ -282,14 +446,14 @@ describe('progressive quotes', () => {
       message(Message.ClickedRetrySearch()),
       Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
       resolveSearchTime(1, 30, 0, domainTlds.length, true),
-      Command.expectHas(quoteFetch(catalogArgs, 3)),
-      resolveQuoteSuccess(catalogArgs, 3, allQuotes, 40),
+      Command.expectHas(makeDomainsFetch(catalogArgs, 3)),
+      resolveDomainsSuccess(catalogArgs, 3, allDomains, 40),
       model(model => {
-        expect(model.quotePlan).toEqual([
+        expect(model.domainCandidateRanges).toEqual([
           { offset: 0, limit: domainTlds.length },
         ])
         expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: allQuotes }),
+          SearchPresentation.Ready({ domains: allDomains }),
         )
       }),
       resolveResultsListScrolls,

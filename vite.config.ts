@@ -4,6 +4,7 @@ import { foldkit } from '@foldkit/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(({ command, isPreview }) => ({
+  define: { 'globalThis.__ALCHEMY_RUNTIME__': 'true' },
   plugins: [
     tailwindcss(),
     {
@@ -23,7 +24,10 @@ export default defineConfig(({ command, isPreview }) => ({
       },
     }),
   ],
-  ssr: { external: ['cloudflare:workers'] },
+  ssr: {
+    external: ['cloudflare:workers'],
+    noExternal: [/^alchemy(?:\/|$)/, /^@alchemy\.run\//],
+  },
   environments: {
     ssr: { build: { rolldownOptions: { external: ['cloudflare:workers'] } } },
   },

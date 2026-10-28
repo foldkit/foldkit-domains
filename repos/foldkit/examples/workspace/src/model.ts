@@ -36,3 +36,4 @@ export const Model = Schema.Struct({
   projectSettings: Schema.Record(Schema.String, ProjectSettingsBlock.Model),
   issueMoveState: IssueMoveState,
 })
+export type Model = typeof Model.Type

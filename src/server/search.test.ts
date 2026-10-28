@@ -17,9 +17,14 @@ import { TestClock } from 'effect/testing'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { DomainsClient, makeDomainsClientLayer } from '../client/rpc'
-import { QuoteWindow, domainNames } from '../shared/domain'
+import { DomainCandidateRange, domainCandidates } from '../shared/domain'
 import { SearchError } from '../shared/domainsRpc'
-import { Registrar, RegistrarLayer } from './registrar'
+import {
+  Registrar,
+  RegistrarAdmission,
+  RegistrarError,
+  RegistrarLayer,
+} from './registrar'
 import { DomainsRpcLayer } from './rpc'
 
 const SEARCH_BURST_SIZE = 10
@@ -48,13 +53,13 @@ const callSearch = (
   ip = '192.0.2.1',
   context = Context.empty(),
   rpcHeaders: Readonly<Record<string, string>> = {},
-  window: QuoteWindow = { offset: 0, limit: 556 },
+  range: DomainCandidateRange = { offset: 0, limit: 556 },
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
       const client = yield* DomainsClient
       return yield* client.SearchDomains(
-        { label, ...window },
+        { mode: 'Live', label, ...range },
         { headers: rpcHeaders },
       )
     }),
@@ -75,7 +80,7 @@ const rawRequest = (label: string) =>
       _tag: 'Request',
       id: '0',
       tag: 'SearchDomains',
-      payload: { label },
+      payload: { mode: 'Live', label },
       headers: [],
     }),
   })
@@ -142,7 +147,7 @@ describe('domain search RPC', () => {
     expect(Option.getOrThrow(Array.last(domains)).name).toBe('acme.zone')
   })
 
-  test('looks up only the selected page and isolates its completed cache entry from other windows', async () => {
+  test('looks up only the selected page and isolates its completed cache entry from other ranges', async () => {
     const batches: Array<ReadonlyArray<string>> = []
     const handler = makeApi(async (input, init) => {
       const names = await readNames(input, init)
@@ -170,10 +175,10 @@ describe('domain search RPC', () => {
       ),
     )
     expect(first.map(domain => domain.name)).toEqual(
-      Array.take(domainNames('acme'), 60).map(domain => domain.name),
+      Array.take(domainCandidates('acme'), 60).map(domain => domain.name),
     )
     expect(second.map(domain => domain.name)).toEqual(
-      Array.take(Array.drop(domainNames('acme'), 60), 60).map(
+      Array.take(Array.drop(domainCandidates('acme'), 60), 60).map(
         domain => domain.name,
       ),
     )
@@ -582,6 +587,53 @@ describe('domain search RPC', () => {
     )
   })
 
+  test('one registrar instance keeps concurrent admission policies isolated', async () => {
+    const requestedNames: Array<ReadonlyArray<string>> = []
+    const denied = RegistrarError.AdmissionLimited({
+      source: 'Client',
+      retryAfterSeconds: 1,
+    })
+    const transport: typeof globalThis.fetch = async (input, init) => {
+      const names = await readNames(input, init)
+      requestedNames.push(names)
+      return Response.json(registrarResponse(names))
+    }
+    const searches = await Effect.runPromise(
+      Effect.gen(function* () {
+        const registrar = yield* Registrar
+
+        return yield* Effect.all(
+          [
+            registrar.search('denied', 0, 4).pipe(
+              Effect.provideService(RegistrarAdmission, {
+                run: () => Effect.fail(denied),
+              }),
+              Effect.result,
+            ),
+            registrar.search('acme', 0, 4).pipe(
+              Effect.provideService(RegistrarAdmission, {
+                run: batch => batch,
+              }),
+              Effect.result,
+            ),
+          ],
+          { concurrency: 'unbounded' },
+        )
+      }).pipe(
+        Effect.provide(
+          RegistrarLayer.pipe(Layer.provide(FetchHttpClient.layer)),
+        ),
+        Effect.provideService(FetchHttpClient.Fetch, transport),
+      ),
+    )
+
+    expect(Array.head(searches)).toEqual(Option.some(Result.fail(denied)))
+    expect(Array.map(searches, Result.isSuccess)).toEqual([false, true])
+    expect(requestedNames).toEqual([
+      Array.map(Array.take(domainCandidates('acme'), 4), domain => domain.name),
+    ])
+  })
+
   test('waits for slow registrar quotes on later catalog pages', async () => {
     const domains = await Effect.runPromise(
       Effect.gen(function* () {
@@ -613,7 +665,7 @@ describe('domain search RPC', () => {
     )
     expect(domains).toHaveLength(60)
     expect(Array.map(domains, domain => domain.name)).toEqual(
-      Array.take(Array.drop(domainNames('acme'), 180), 60).map(
+      Array.take(Array.drop(domainCandidates('acme'), 180), 60).map(
         domain => domain.name,
       ),
     )
@@ -675,7 +727,7 @@ describe('domain search RPC', () => {
         Effect.gen(function* () {
           const client = yield* DomainsClient
           const search = yield* Effect.forkChild(
-            client.SearchDomains({ label: 'acme' }),
+            client.SearchDomains({ mode: 'Live', label: 'acme' }),
           )
           yield* Effect.promise(() => started)
           yield* Fiber.interrupt(search)
@@ -691,4 +743,43 @@ describe('domain search RPC', () => {
     )
     expect(isAborted).toBe(true)
   })
+})
+
+test('default and explicit Demo requests return deterministic sample quotes without external API calls', async () => {
+  let providerCalls = 0
+  const handler = makeApi(async () => {
+    providerCalls += 1
+    throw new Error('Demo mode must not call the registrar')
+  })
+  const domains = await Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const client = yield* DomainsClient
+        const defaults = yield* client.SearchDomains({
+          label: 'acme',
+          offset: 0,
+          limit: 4,
+        })
+        const explicit = yield* client.SearchDomains({
+          mode: 'Demo',
+          label: 'acme',
+          offset: 0,
+          limit: 4,
+        })
+        expect(explicit).toEqual(defaults)
+        return defaults
+      }),
+    ).pipe(
+      Effect.provide(makeDomainsClientLayer('http://localhost/rpc')),
+      Effect.provideService(FetchHttpClient.Fetch, (input, init) =>
+        handler(new Request(input, init)),
+      ),
+    ),
+  )
+  expect(Array.head(domains).pipe(Option.getOrThrow)).toMatchObject({
+    name: 'acme.com',
+    price: 12,
+  })
+  expect(domains).toHaveLength(4)
+  expect(providerCalls).toBe(0)
 })

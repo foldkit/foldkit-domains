@@ -14,3 +14,5 @@ export const Message = defineMessageUnion({
   ClickedResult: { target: ResultTarget },
   CompletedScrollActiveResult: {},
 })
+export type Message = typeof Message.Type
+export type UpdatedQuery = typeof Message.UpdatedQuery.Type

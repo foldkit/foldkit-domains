@@ -45,6 +45,16 @@ The optional [makeStep.fromMessage](/core/block#featuredefinitionmakestep) adapt
 
 Run [the upgrade checks](#verify-the-upgrade), including public declaration output where applicable. The older snapshot sections below describe migrations already present in `f3be22cfeefe`.
 
+### Effect compatibility
+
+The candidate accepts the tested Effect versions through `4.0.0 || 4.0.6` peers. The browser-platform peer accepts the same two versions. Keep one resolved Effect runtime and choose platform releases whose own Effect peer ranges accept it: platform 4.0.6 requires Effect 4.0.6 or newer. Application and development dependencies can stay exactly pinned for reproducibility. Unverified releases are excluded because some upstream APIs are marked unstable and changed between these patches. This does not require a Block API migration.
+
+### UI Block factories
+
+Rename `create` to `makeBlock` on Listbox, Combobox, Menu, RadioGroup, Tabs, and VirtualList, including the Listbox and Combobox Multi variants. Rename `Toast.make` to `Toast.makeBlock` too. Type parameters and Schema arguments stay the same; the old factory names have no compatibility aliases.
+
+Each factory returns a checked completed Block. Declare it once at module scope, then bind that value into its parent. Calling the factory does not initialize an occurrence or start effects; the Block's `init` produces its initial Model and Commands. See [Selection Blocks](/ui/selection-blocks#make-block-factory), [Toast](/ui/toast), and [VirtualList](/ui/virtual-list) for current usage.
+
 ### Machine authoring
 
 The experimental [Machine API](/core/machine) now binds State, Message, and optional Context Schemas once with `Machine.makeDefinition`. Author inline transitions through its bound helpers, use `makeGuard`, `makeHandler`, and `makeTransitions` for extracted logic, and complete the checked table with `Definition.makeMachine`. This brings Machine authoring into the same vocabulary as Block Definitions, with exact source-state and Message narrowing and preserved Command requirements.
@@ -239,7 +249,7 @@ Keep a custom leave Command when settlement also watches another signal, such as
 
 This change applies to `c701daa80af1`, `396b19976386`, and `bfd880b1e6ca`.
 
-The module-level `Toast.test` fixture is gone. Call `test.drainEntry` on the exact completed Block returned by `Toast.make`, and pass the exact Binding registered for that Block. A keyed Binding also needs its occurrence key.
+The module-level `Toast.test` fixture is gone. Call `test.drainEntry` on the exact completed Block returned by `Toast.makeBlock`, and pass the exact Binding registered for that Block. A keyed Binding also needs its occurrence key.
 
 ::Snippet{name="uiToastDrainEntry" label="Selecting the Toast fixture and Binding"}
 

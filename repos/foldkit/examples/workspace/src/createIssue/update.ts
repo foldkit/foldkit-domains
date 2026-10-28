@@ -7,7 +7,7 @@ import { CreateIssue } from './command'
 import { CreateIssueComposition, DialogBinding } from './composition'
 import { makeFieldsStep, makeStep } from './definition'
 import { editDraftStep } from './draft'
-import { Message } from './message'
+import type { UpdatedDescription } from './message'
 import { CreateState, type Model } from './model'
 import { OutMessage } from './outMessage'
 
@@ -48,8 +48,8 @@ const createIssueStep = makeStep(model => {
 })
 
 const handleUpdatedDescription = (
-  model: typeof Model.Type,
-  { value }: typeof Message.UpdatedDescription.Type,
+  model: Model,
+  { value }: UpdatedDescription,
 ) =>
   editDraftStep(draft => modifyFields(draft, { description: () => value }))(
     model,

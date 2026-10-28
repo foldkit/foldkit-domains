@@ -10,3 +10,4 @@ export const ViewInputs = Schema.Struct({
   filters: IssueFilters,
   issueHrefs: Schema.Record(Schema.String, Schema.String),
 })
+export type ViewInputs = typeof ViewInputs.Type

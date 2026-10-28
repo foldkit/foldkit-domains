@@ -13,9 +13,9 @@ import { defineTaggedUnion } from 'foldkit/schema'
 
 import {
   Domain,
+  DomainCandidateRange,
   DomainName,
-  QuoteWindow,
-  domainNames,
+  domainCandidates,
   domainTlds,
   queryToMaybeDomainLabel,
 } from '../shared/domain'
@@ -31,47 +31,83 @@ export const domainToReadyListing = (domain: Domain) =>
 
 export const TldFilter = Schema.Literals([
   'All',
-  'Com',
-  'Dev',
-  'App',
-  'Io',
-  'Ai',
-  'Org',
+  ...Array.map(domainTlds, String.capitalize),
 ])
 export type TldFilter = typeof TldFilter.Type
 export const AvailabilityFilter = Schema.Literals(['All', 'Available'])
 export type AvailabilityFilter = typeof AvailabilityFilter.Type
 export const SortOrder = Schema.Literals([
   'Relevance',
+  'Length',
   'PriceAscending',
   'PriceDescending',
+  'Alphabetical',
 ])
 export type SortOrder = typeof SortOrder.Type
 
+export const isCompleteCatalogRequired = (
+  availabilityFilter: AvailabilityFilter,
+  sortOrder: SortOrder,
+): boolean =>
+  availabilityFilter === 'Available' ||
+  Match.value(sortOrder).pipe(
+    Match.whenOr('Relevance', 'Length', 'Alphabetical', () => false),
+    Match.whenOr('PriceAscending', 'PriceDescending', () => true),
+    Match.exhaustive,
+  )
+
+const domainNameOrder = Order.mapInput(
+  Order.String,
+  (domain: DomainName) => domain.name,
+)
+
+const domainNameLengthOrder = Order.combine(
+  Order.mapInput(Order.Number, (domain: DomainName) =>
+    String.length(domain.name),
+  ),
+  domainNameOrder,
+)
+
+export const TOP_RESULT_COUNT = 4
 export const QUOTE_PAGE_SIZE = 60
 
-export const tldToMaybeQuoteWindow = (
+export const tldToMaybeDomainCandidateRange = (
   tld: string,
-): Option.Option<QuoteWindow> =>
+): Option.Option<DomainCandidateRange> =>
   pipe(
     domainTlds,
     Array.findFirstIndex(candidate => candidate === tld),
-    Option.map(index =>
-      QuoteWindow.make({
-        offset: Math.floor(index / QUOTE_PAGE_SIZE) * QUOTE_PAGE_SIZE,
-        limit: QUOTE_PAGE_SIZE,
-      }),
-    ),
+    Option.map(index => {
+      if (index < TOP_RESULT_COUNT) {
+        return DomainCandidateRange.make({ offset: 0, limit: TOP_RESULT_COUNT })
+      } else if (index < QUOTE_PAGE_SIZE) {
+        return DomainCandidateRange.make({
+          offset: TOP_RESULT_COUNT,
+          limit: QUOTE_PAGE_SIZE - TOP_RESULT_COUNT,
+        })
+      } else {
+        const offset = Math.floor(index / QUOTE_PAGE_SIZE) * QUOTE_PAGE_SIZE
+
+        return DomainCandidateRange.make({
+          offset,
+          limit: Math.min(QUOTE_PAGE_SIZE, domainTlds.length - offset),
+        })
+      }
+    }),
   )
 
-export const mergeDomainQuotes = (
+export const mergeDomainsByName = (
   previous: ReadonlyArray<Domain>,
   incoming: ReadonlyArray<Domain>,
 ) =>
   pipe(
     previous,
     Array.filter(
-      domain => !Array.some(incoming, quote => quote.name === domain.name),
+      domain =>
+        !Array.some(
+          incoming,
+          incomingDomain => incomingDomain.name === domain.name,
+        ),
     ),
     Array.appendAll(incoming),
   )
@@ -93,7 +129,7 @@ export const queryToDomainListings = (
 // query results before the client bundle runs.
 export const queryToPendingDomainListings = (query: string) => {
   const label = Option.getOrElse(queryToMaybeDomainLabel(query), () => '')
-  return Array.map(domainNames(label), DomainListing.Pending)
+  return Array.map(domainCandidates(label), DomainListing.Pending)
 }
 
 export const matchesTldFilter =
@@ -127,21 +163,33 @@ export const visibleDomains = (
     Order.Number,
     (domain: typeof Domain.Available.Type) => domain.price,
   )
-  const available = Array.filter(filteredDomains, Domain.isAnyOf(['Available']))
-  const unconfirmed = Array.filter(
+  const availableDomains = Array.filter(
+    filteredDomains,
+    Domain.isAnyOf(['Available']),
+  )
+  const unconfirmedDomains = Array.filter(
     filteredDomains,
     Domain.isAnyOf(['Unconfirmed']),
   )
 
   return Match.value(sortOrder).pipe(
     Match.when('Relevance', () => filteredDomains),
+    Match.when('Length', () =>
+      Array.sort(filteredDomains, domainNameLengthOrder),
+    ),
+    Match.when('Alphabetical', () =>
+      Array.sort(filteredDomains, domainNameOrder),
+    ),
     Match.when('PriceAscending', () =>
-      Array.appendAll(Array.sort(available, priceOrder), unconfirmed),
+      Array.appendAll(
+        Array.sort(availableDomains, priceOrder),
+        unconfirmedDomains,
+      ),
     ),
     Match.when('PriceDescending', () =>
       Array.appendAll(
-        Array.sort(available, Order.flip(priceOrder)),
-        unconfirmed,
+        Array.sort(availableDomains, Order.flip(priceOrder)),
+        unconfirmedDomains,
       ),
     ),
     Match.exhaustive,
@@ -155,30 +203,30 @@ export const visibleDomainListings = (
   availabilityFilter: AvailabilityFilter,
   sortOrder: SortOrder,
 ): ReadonlyArray<DomainListing> => {
-  const listings = queryToDomainListings(query, domains)
+  const listings = Array.filter(
+    queryToDomainListings(query, domains),
+    listing =>
+      matchesTldFilter(tldFilter)(listing) &&
+      (availabilityFilter === 'All' ||
+        listing._tag === 'Pending' ||
+        listing.domain._tag === 'Available'),
+  )
 
-  if (sortOrder === 'Relevance') {
-    return Array.filter(
-      listings,
-      listing =>
-        matchesTldFilter(tldFilter)(listing) &&
-        (availabilityFilter === 'All' ||
-          listing._tag === 'Pending' ||
-          listing.domain._tag === 'Available'),
-    )
-  } else {
-    return Array.appendAll(
-      Array.map(
-        visibleDomains(domains, tldFilter, availabilityFilter, sortOrder),
-        domainToReadyListing,
+  return Match.value(sortOrder).pipe(
+    Match.when('Relevance', () => listings),
+    Match.when('Length', () => Array.sort(listings, domainNameLengthOrder)),
+    Match.when('Alphabetical', () => Array.sort(listings, domainNameOrder)),
+    Match.whenOr('PriceAscending', 'PriceDescending', () =>
+      Array.appendAll(
+        Array.map(
+          visibleDomains(domains, tldFilter, availabilityFilter, sortOrder),
+          domainToReadyListing,
+        ),
+        Array.filter(listings, DomainListing.isAnyOf(['Pending'])),
       ),
-      Array.filter(
-        listings,
-        listing =>
-          listing._tag === 'Pending' && matchesTldFilter(tldFilter)(listing),
-      ),
-    )
-  }
+    ),
+    Match.exhaustive,
+  )
 }
 
 export const formatPrice = (price: number): string => `$${price.toFixed(2)}`

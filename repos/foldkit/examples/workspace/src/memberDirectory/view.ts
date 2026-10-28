@@ -17,22 +17,23 @@ const ViewInputs = Schema.Struct({
   issues: Schema.Array(Issue),
   issueHrefs: Schema.Record(Schema.String, Schema.String),
 })
+type ViewInputs = typeof ViewInputs.Type
 
 const MEMBER_CARD_CLASS =
   'flex w-full cursor-pointer flex-col items-start gap-3 rounded-xl border p-5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500'
 
 const issuesAssignedToMember = (
   memberId: string,
-  issues: ReadonlyArray<typeof Issue.Type>,
+  issues: ReadonlyArray<Issue>,
 ) =>
   Array.filter(issues, issue =>
     Option.contains(issue.maybeAssigneeId, memberId),
   )
 
 const memberCard = (
-  member: typeof Member.Type,
-  model: typeof Model.Type,
-  issues: ReadonlyArray<typeof Issue.Type>,
+  member: Member,
+  model: Model,
+  issues: ReadonlyArray<Issue>,
   h: MemberDirectoryViewBuilder,
 ): Html => {
   const assignedIssues = issuesAssignedToMember(member.id, issues)
@@ -90,7 +91,7 @@ const memberCard = (
 }
 
 const assignedIssueContent = (
-  issue: typeof Issue.Type,
+  issue: Issue,
   h: MemberDirectoryViewBuilder,
 ): ReadonlyArray<Html> => [
   h.span(
@@ -105,8 +106,8 @@ const assignedIssueContent = (
 ]
 
 const assignedIssueView = (
-  issue: typeof Issue.Type,
-  issueHrefs: (typeof ViewInputs.Type)['issueHrefs'],
+  issue: Issue,
+  issueHrefs: ViewInputs['issueHrefs'],
   h: MemberDirectoryViewBuilder,
 ): Html =>
   Option.match(Option.fromNullishOr(issueHrefs[issue.id]), {
@@ -133,9 +134,9 @@ const assignedIssueView = (
   })
 
 const memberProfile = (
-  member: typeof Member.Type,
-  issues: ReadonlyArray<typeof Issue.Type>,
-  issueHrefs: (typeof ViewInputs.Type)['issueHrefs'],
+  member: Member,
+  issues: ReadonlyArray<Issue>,
+  issueHrefs: ViewInputs['issueHrefs'],
   h: MemberDirectoryViewBuilder,
 ): Html => {
   const assignedIssues = issuesAssignedToMember(member.id, issues)
@@ -213,100 +214,100 @@ const memberProfile = (
   )
 }
 
-export const view = MemberDirectoryComposition.makeView.withInputs<
-  typeof ViewInputs.Type
->((model, viewInputs, h) => {
-  const searchText = model.query.trim().toLowerCase()
+export const view = MemberDirectoryComposition.makeView.withInputs<ViewInputs>(
+  (model, viewInputs, h) => {
+    const searchText = model.query.trim().toLowerCase()
 
-  const matchingMembers = Array.filter(viewInputs.members, member =>
-    `${member.name} ${member.initials}`.toLowerCase().includes(searchText),
-  )
+    const matchingMembers = Array.filter(viewInputs.members, member =>
+      `${member.name} ${member.initials}`.toLowerCase().includes(searchText),
+    )
 
-  const maybeSelectedMember = Option.flatMap(
-    model.maybeSelectedMemberId,
-    memberId =>
-      Array.findFirst(viewInputs.members, member => member.id === memberId),
-  )
+    const maybeSelectedMember = Option.flatMap(
+      model.maybeSelectedMemberId,
+      memberId =>
+        Array.findFirst(viewInputs.members, member => member.id === memberId),
+    )
 
-  return h.section(
-    [h.Class('space-y-6 p-5 lg:p-8'), h.AriaLabel('Member directory')],
-    [
-      h.div(
-        [h.Class('flex flex-wrap items-center justify-between gap-3')],
-        [
-          Input.view(
-            {
-              id: 'workspace-member-search',
-              type: 'search',
-              value: model.query,
-              placeholder: 'Search members…',
-              onInput: value => Message.UpdatedQuery({ value }),
-              toView: attributes =>
-                h.div(
-                  [h.Class('w-full max-w-md')],
+    return h.section(
+      [h.Class('space-y-6 p-5 lg:p-8'), h.AriaLabel('Member directory')],
+      [
+        h.div(
+          [h.Class('flex flex-wrap items-center justify-between gap-3')],
+          [
+            Input.view(
+              {
+                id: 'workspace-member-search',
+                type: 'search',
+                value: model.query,
+                placeholder: 'Search members…',
+                onInput: value => Message.UpdatedQuery({ value }),
+                toView: attributes =>
+                  h.div(
+                    [h.Class('w-full max-w-md')],
+                    [
+                      h.label(
+                        [...attributes.label, h.Class('sr-only')],
+                        ['Search members'],
+                      ),
+                      h.input([...attributes.input, h.Class('input-control')]),
+                    ],
+                  ),
+              },
+              h,
+            ),
+            h.span(
+              [h.Class('text-xs font-medium leading-6 text-slate-500')],
+              [`${matchingMembers.length} members`],
+            ),
+          ],
+        ),
+        h.div(
+          [
+            h.Class(
+              'grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]',
+            ),
+          ],
+          [
+            Array.match(matchingMembers, {
+              onEmpty: () =>
+                h.p(
                   [
-                    h.label(
-                      [...attributes.label, h.Class('sr-only')],
-                      ['Search members'],
+                    h.Class(
+                      'rounded-xl border border-dashed border-slate-200 px-5 py-10 text-center text-sm leading-7 text-slate-500',
                     ),
-                    h.input([...attributes.input, h.Class('input-control')]),
+                    h.Role('status'),
                   ],
+                  ['No matching members.'],
                 ),
-            },
-            h,
-          ),
-          h.span(
-            [h.Class('text-xs font-medium leading-6 text-slate-500')],
-            [`${matchingMembers.length} members`],
-          ),
-        ],
-      ),
-      h.div(
-        [
-          h.Class(
-            'grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]',
-          ),
-        ],
-        [
-          Array.match(matchingMembers, {
-            onEmpty: () =>
-              h.p(
-                [
-                  h.Class(
-                    'rounded-xl border border-dashed border-slate-200 px-5 py-10 text-center text-sm leading-7 text-slate-500',
+              onNonEmpty: members =>
+                h.ul(
+                  [h.Class('grid gap-3 sm:grid-cols-2 2xl:grid-cols-3')],
+                  Array.map(members, member =>
+                    memberCard(member, model, viewInputs.issues, h),
                   ),
-                  h.Role('status'),
-                ],
-                ['No matching members.'],
-              ),
-            onNonEmpty: members =>
-              h.ul(
-                [h.Class('grid gap-3 sm:grid-cols-2 2xl:grid-cols-3')],
-                Array.map(members, member =>
-                  memberCard(member, model, viewInputs.issues, h),
                 ),
-              ),
-          }),
-          Option.match(maybeSelectedMember, {
-            onNone: () =>
-              h.p(
-                [
-                  h.Class(
-                    'rounded-xl border border-dashed border-slate-200 px-5 py-10 text-center text-sm leading-7 text-slate-500',
-                  ),
-                ],
-                ['Select a teammate to see their assigned issues.'],
-              ),
-            onSome: member =>
-              memberProfile(
-                member,
-                viewInputs.issues,
-                viewInputs.issueHrefs,
-                h,
-              ),
-          }),
-        ],
-      ),
-    ],
-  )
-})
+            }),
+            Option.match(maybeSelectedMember, {
+              onNone: () =>
+                h.p(
+                  [
+                    h.Class(
+                      'rounded-xl border border-dashed border-slate-200 px-5 py-10 text-center text-sm leading-7 text-slate-500',
+                    ),
+                  ],
+                  ['Select a teammate to see their assigned issues.'],
+                ),
+              onSome: member =>
+                memberProfile(
+                  member,
+                  viewInputs.issues,
+                  viewInputs.issueHrefs,
+                  h,
+                ),
+            }),
+          ],
+        ),
+      ],
+    )
+  },
+)

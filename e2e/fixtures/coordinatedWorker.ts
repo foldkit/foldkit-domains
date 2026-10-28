@@ -1,13 +1,46 @@
+import { DurableObject as NativeDurableObject } from 'cloudflare:workers'
 import { Array, Clock, Effect, Schema } from 'effect'
+import { HttpServerResponse } from 'effect/http'
 
-import type { DurableObjectState } from '@cloudflare/workers-types'
+import { DurableObject } from '@alchemy.run/cloudflare/Workers/DurableObject'
+import {
+  type DurableObjectBridgeConstructor,
+  makeDurableObjectBridge,
+} from '@alchemy.run/cloudflare/Workers/DurableObjectBridge'
+import { DurableObjectState } from '@alchemy.run/cloudflare/Workers/DurableObjectState'
+import { Request as CoordinatorRequest } from '@alchemy.run/cloudflare/Workers/Request'
+import {
+  Worker,
+  WorkerEnvironment,
+} from '@alchemy.run/cloudflare/Workers/Worker'
 
 import type { SearchEnvironment } from '../../src/server/coordination'
-import { DomainSearchCoordinator } from '../../src/server/domainSearchCoordinator'
-import { RegistrarCoordinator } from '../../src/server/registrarCoordinator'
+import { makeDomainSearchCoordinatorImplementation } from '../../src/server/domainSearchCoordinator'
+import { makeRegistrarCoordinatorImplementation } from '../../src/server/registrarCoordinator'
 import { makeCoordinatedDomainsRpc } from '../../src/server/rpc'
 
 const RegistrarRequest = Schema.Struct({ domains: Schema.Array(Schema.String) })
+
+interface FixtureEnvironment extends SearchEnvironment {
+  readonly LOW_QUOTES: SearchEnvironment['DOMAIN_QUOTES']
+  readonly LOW_BUDGET: SearchEnvironment['REGISTRAR_BUDGET']
+  readonly PERSISTENCE_BUDGET: SearchEnvironment['REGISTRAR_BUDGET']
+}
+
+const readFixtureEnvironment = Effect.map(
+  WorkerEnvironment,
+  (environment): FixtureEnvironment => ({
+    DOMAIN_QUOTES: environment.DOMAIN_QUOTES,
+    REGISTRAR_BUDGET: environment.REGISTRAR_BUDGET,
+    LOW_QUOTES: environment.LOW_QUOTES,
+    LOW_BUDGET: environment.LOW_BUDGET,
+    PERSISTENCE_BUDGET: environment.PERSISTENCE_BUDGET,
+    VERCEL_API_TOKEN: environment.VERCEL_API_TOKEN,
+    REGISTRAR_REQUESTS_PER_SECOND: environment.REGISTRAR_REQUESTS_PER_SECOND,
+    REGISTRAR_REQUESTS_PER_MINUTE: environment.REGISTRAR_REQUESTS_PER_MINUTE,
+    REGISTRAR_MAX_CONCURRENT: environment.REGISTRAR_MAX_CONCURRENT,
+  }),
+)
 
 const withNativeFetchReceiver = (
   execute: typeof globalThis.fetch,
@@ -20,65 +53,72 @@ const withNativeFetchReceiver = (
     return execute(input, init)
   }
 
-export class FixtureDomainSearchCoordinator extends DomainSearchCoordinator {
-  private readonly fixtureState: DurableObjectState
-  private readonly fixtureEnvironment: SearchEnvironment
+const makeFixtureDomainSearchImplementation = (
+  environment: SearchEnvironment,
+) =>
+  Effect.gen(function* () {
+    const state = yield* DurableObjectState
+    const implementation =
+      yield* makeDomainSearchCoordinatorImplementation(environment)
 
-  constructor(state: DurableObjectState, environment: SearchEnvironment) {
-    super(state, environment)
-    this.fixtureState = state
-    this.fixtureEnvironment = environment
-  }
+    return {
+      ...implementation,
+      fetch: Effect.gen(function* () {
+        const request = yield* CoordinatorRequest
 
-  override async fetch(request: Request): Promise<Response> {
-    if (request.url.endsWith('/expire')) {
-      const entries = await this.fixtureState.storage.list<{
-        expiresAt: number
-      }>()
-      const nowMillis = Effect.runSync(Clock.currentTimeMillis)
+        if (request.url.endsWith('/expire')) {
+          const entries = yield* Effect.promise(() =>
+            state.raw.storage.list<{ expiresAt: number }>(),
+          )
+          const nowMillis = yield* Clock.currentTimeMillis
 
-      for (const [key, entry] of entries) {
-        await this.fixtureState.storage.put(key, {
-          ...entry,
-          expiresAt: nowMillis - 1,
-        })
-      }
+          for (const [key, entry] of entries) {
+            yield* Effect.promise(() =>
+              state.raw.storage.put(key, {
+                ...entry,
+                expiresAt: nowMillis - 1,
+              }),
+            )
+          }
 
-      await this.alarm()
-      return new Response(null, { status: 204 })
-    } else if (request.url.endsWith('/reopen')) {
-      const coordinator = new DomainSearchCoordinator(
-        this.fixtureState,
-        this.fixtureEnvironment,
-      )
-      return coordinator.fetch(
-        new Request('https://domains.internal/search', request),
-      )
-    } else {
-      return super.fetch(request)
+          const coordinator = new FixtureDomainSearchCoordinator(
+            state.raw,
+            environment,
+          )
+          yield* Effect.promise(() => coordinator.alarm())
+          return HttpServerResponse.empty({ status: 204 })
+        } else if (request.url.endsWith('/reopen')) {
+          const coordinator = new FixtureDomainSearchCoordinator(
+            state.raw,
+            environment,
+          )
+          const response = yield* Effect.promise(() =>
+            coordinator.fetch(
+              new Request('https://domains.internal/search', request),
+            ),
+          )
+          return HttpServerResponse.fromWeb(response)
+        } else {
+          return yield* implementation.fetch
+        }
+      }),
     }
-  }
-}
+  })
 
-export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
-  private readonly fixtureState: DurableObjectState
-  private readonly instanceId = crypto.randomUUID()
-
-  constructor(state: DurableObjectState, environment: SearchEnvironment) {
-    super(state, environment)
-    this.fixtureState = state
-  }
-
-  private calls = 0
-  private inFlight = 0
-  private maximumInFlight = 0
-  private aborted = 0
-  private readonly starts: Array<number> = []
-  private readonly failed = new Set<string>()
-  private readonly throttled = new Set<string>()
-
-  protected override readonly fetchRegistrar: typeof globalThis.fetch =
-    withNativeFetchReceiver(async (input, init) => {
+const makeFixtureRegistrarImplementation = (environment: SearchEnvironment) =>
+  Effect.gen(function* () {
+    const state = yield* DurableObjectState
+    const stats = {
+      instanceId: crypto.randomUUID(),
+      calls: 0,
+      inFlight: 0,
+      maximumInFlight: 0,
+      aborted: 0,
+      starts: Array.empty<number>(),
+    }
+    const failed = new Set<string>()
+    const throttled = new Set<string>()
+    const fetchRegistrar = withNativeFetchReceiver(async (input, init) => {
       const request = new Request(input, init)
       const { domains } = Schema.decodeUnknownSync(RegistrarRequest)(
         await request.json(),
@@ -101,22 +141,22 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
       const isThrottled = Array.some(domains, domain =>
         domain.startsWith('throttle-'),
       )
-      this.calls += 1
-      this.inFlight += 1
-      this.maximumInFlight = Math.max(this.maximumInFlight, this.inFlight)
-      this.starts.push(Effect.runSync(Clock.currentTimeMillis))
+      stats.calls += 1
+      stats.inFlight += 1
+      stats.maximumInFlight = Math.max(stats.maximumInFlight, stats.inFlight)
+      stats.starts.push(Effect.runSync(Clock.currentTimeMillis))
 
       try {
         if (
           Array.some(domains, domain => domain.startsWith('failure-once-')) &&
-          !this.failed.has(firstName)
+          !failed.has(firstName)
         ) {
-          this.failed.add(firstName)
+          failed.add(firstName)
           return new Response(null, { status: 503 })
         }
 
-        if (isThrottled && !this.throttled.has(firstName)) {
-          this.throttled.add(firstName)
+        if (isThrottled && !throttled.has(firstName)) {
+          throttled.add(firstName)
           return Response.json(
             {},
             {
@@ -138,7 +178,7 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
           })
         } catch (error) {
           if (request.signal.aborted) {
-            this.aborted += 1
+            stats.aborted += 1
           }
           throw error
         }
@@ -154,65 +194,93 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
           })),
         })
       } finally {
-        this.inFlight -= 1
+        stats.inFlight -= 1
       }
     })
+    const implementation = yield* makeRegistrarCoordinatorImplementation(
+      environment,
+      fetchRegistrar,
+    )
 
-  override fetch(request: Request): Promise<Response> {
-    if (request.url.endsWith('/restart')) {
-      this.fixtureState.abort('Restarting registrar test instance')
-      return Promise.resolve(new Response(null, { status: 204 }))
+    return {
+      ...implementation,
+      fetch: Effect.gen(function* () {
+        const request = yield* CoordinatorRequest
+
+        if (request.url.endsWith('/restart')) {
+          yield* state.abort('Restarting registrar test instance')
+          return HttpServerResponse.empty({ status: 204 })
+        } else if (request.url.endsWith('/stats')) {
+          return HttpServerResponse.fromWeb(Response.json(stats))
+        } else {
+          return yield* implementation.fetch
+        }
+      }),
     }
+  })
 
-    if (request.url.endsWith('/stats')) {
-      return Promise.resolve(
-        Response.json({
-          instanceId: this.instanceId,
-          calls: this.calls,
-          inFlight: this.inFlight,
-          maximumInFlight: this.maximumInFlight,
-          aborted: this.aborted,
-          starts: this.starts,
+const fixtureEntrypoint = Worker(
+  'Website',
+  {},
+  Effect.gen(function* () {
+    const environment = yield* readFixtureEnvironment
+
+    yield* DurableObject(
+      'DOMAIN_QUOTES',
+      Effect.succeed(makeFixtureDomainSearchImplementation(environment)),
+    )
+    yield* DurableObject(
+      'REGISTRAR_BUDGET',
+      Effect.succeed(makeFixtureRegistrarImplementation(environment)),
+    )
+    yield* DurableObject(
+      'LOW_QUOTES',
+      Effect.succeed(
+        makeFixtureDomainSearchImplementation({
+          ...environment,
+          REGISTRAR_BUDGET: environment.LOW_BUDGET,
         }),
-      )
-    } else {
-      return super.fetch(request)
-    }
-  }
-}
+      ),
+    )
+    yield* DurableObject(
+      'LOW_BUDGET',
+      Effect.succeed(
+        makeFixtureRegistrarImplementation({
+          ...environment,
+          REGISTRAR_REQUESTS_PER_SECOND: '2',
+          REGISTRAR_REQUESTS_PER_MINUTE: '100',
+          REGISTRAR_MAX_CONCURRENT: '2',
+        }),
+      ),
+    )
+    yield* DurableObject(
+      'PERSISTENCE_BUDGET',
+      Effect.succeed(
+        makeFixtureRegistrarImplementation({
+          ...environment,
+          REGISTRAR_REQUESTS_PER_SECOND: '1000',
+          REGISTRAR_REQUESTS_PER_MINUTE: '1',
+        }),
+      ),
+    )
 
-interface FixtureEnvironment extends SearchEnvironment {
-  readonly LOW_QUOTES: SearchEnvironment['DOMAIN_QUOTES']
-  readonly LOW_BUDGET: SearchEnvironment['REGISTRAR_BUDGET']
-  readonly PERSISTENCE_BUDGET: SearchEnvironment['REGISTRAR_BUDGET']
-}
+    return {}
+  }),
+)
 
-export class LowDomainSearchCoordinator extends DomainSearchCoordinator {
-  constructor(state: DurableObjectState, environment: FixtureEnvironment) {
-    super(state, { ...environment, REGISTRAR_BUDGET: environment.LOW_BUDGET })
-  }
-}
+const bridge: (className: string) => DurableObjectBridgeConstructor =
+  makeDurableObjectBridge(NativeDurableObject, {
+    entrypoint: fixtureEntrypoint,
+    stack: { name: 'FoldkitDomainsCapacity', stage: 'test' },
+  })
 
-export class LowRegistrarCoordinator extends FixtureRegistrarCoordinator {
-  constructor(state: DurableObjectState, environment: FixtureEnvironment) {
-    super(state, {
-      ...environment,
-      REGISTRAR_REQUESTS_PER_SECOND: '2',
-      REGISTRAR_REQUESTS_PER_MINUTE: '100',
-      REGISTRAR_MAX_CONCURRENT: '2',
-    })
-  }
-}
-
-export class PersistenceRegistrarCoordinator extends FixtureRegistrarCoordinator {
-  constructor(state: DurableObjectState, environment: FixtureEnvironment) {
-    super(state, {
-      ...environment,
-      REGISTRAR_REQUESTS_PER_SECOND: '1000',
-      REGISTRAR_REQUESTS_PER_MINUTE: '1',
-    })
-  }
-}
+export class FixtureDomainSearchCoordinator extends bridge('DOMAIN_QUOTES') {}
+export class FixtureRegistrarCoordinator extends bridge('REGISTRAR_BUDGET') {}
+export class LowDomainSearchCoordinator extends bridge('LOW_QUOTES') {}
+export class LowRegistrarCoordinator extends bridge('LOW_BUDGET') {}
+export class PersistenceRegistrarCoordinator extends bridge(
+  'PERSISTENCE_BUDGET',
+) {}
 
 const handlers = new WeakMap<
   FixtureEnvironment,

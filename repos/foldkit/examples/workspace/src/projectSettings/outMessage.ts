@@ -5,3 +5,4 @@ import { Project } from '../domain'
 export const OutMessage = defineMessageUnion({
   Saved: { project: Project },
 })
+export type OutMessage = typeof OutMessage.Type
