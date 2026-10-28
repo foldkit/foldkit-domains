@@ -9,6 +9,17 @@ import { makeCoordinatedDomainsRpc } from '../../src/server/rpc'
 
 const RegistrarRequest = Schema.Struct({ domains: Schema.Array(Schema.String) })
 
+const withNativeFetchReceiver = (
+  execute: typeof globalThis.fetch,
+): typeof globalThis.fetch =>
+  function (this: unknown, input, init) {
+    if (this !== undefined && this !== globalThis) {
+      throw new TypeError('Illegal invocation')
+    }
+
+    return execute(input, init)
+  }
+
 export class FixtureDomainSearchCoordinator extends DomainSearchCoordinator {
   private readonly fixtureState: DurableObjectState
   private readonly fixtureEnvironment: SearchEnvironment
@@ -66,88 +77,86 @@ export class FixtureRegistrarCoordinator extends RegistrarCoordinator {
   private readonly failed = new Set<string>()
   private readonly throttled = new Set<string>()
 
-  protected override readonly fetchRegistrar: typeof globalThis.fetch = async (
-    input,
-    init,
-  ) => {
-    const request = new Request(input, init)
-    const { domains } = Schema.decodeUnknownSync(RegistrarRequest)(
-      await request.json(),
-    )
-    const firstName = domains.join(',')
-    const isSlow = Array.some(domains, domain => domain.startsWith('cancel-'))
-    const isSlowRegistry = Array.some(
-      domains,
-      domain => domain.startsWith('slow-page-') && domain.endsWith('.eus'),
-    )
-    const providerDelay = () => {
-      if (isSlowRegistry) {
-        return '9 seconds'
-      } else if (isSlow) {
-        return '6 seconds'
-      } else {
-        return '50 millis'
+  protected override readonly fetchRegistrar: typeof globalThis.fetch =
+    withNativeFetchReceiver(async (input, init) => {
+      const request = new Request(input, init)
+      const { domains } = Schema.decodeUnknownSync(RegistrarRequest)(
+        await request.json(),
+      )
+      const firstName = domains.join(',')
+      const isSlow = Array.some(domains, domain => domain.startsWith('cancel-'))
+      const isSlowRegistry = Array.some(
+        domains,
+        domain => domain.startsWith('slow-page-') && domain.endsWith('.eus'),
+      )
+      const providerDelay = () => {
+        if (isSlowRegistry) {
+          return '9 seconds'
+        } else if (isSlow) {
+          return '6 seconds'
+        } else {
+          return '50 millis'
+        }
       }
-    }
-    const isThrottled = Array.some(domains, domain =>
-      domain.startsWith('throttle-'),
-    )
-    this.calls += 1
-    this.inFlight += 1
-    this.maximumInFlight = Math.max(this.maximumInFlight, this.inFlight)
-    this.starts.push(Effect.runSync(Clock.currentTimeMillis))
-
-    try {
-      if (
-        Array.some(domains, domain => domain.startsWith('failure-once-')) &&
-        !this.failed.has(firstName)
-      ) {
-        this.failed.add(firstName)
-        return new Response(null, { status: 503 })
-      }
-
-      if (isThrottled && !this.throttled.has(firstName)) {
-        this.throttled.add(firstName)
-        return Response.json(
-          {},
-          {
-            status: 429,
-            headers: {
-              'retry-after': Array.some(domains, domain =>
-                domain.startsWith('throttle-persist-'),
-              )
-                ? '60'
-                : '1',
-            },
-          },
-        )
-      }
+      const isThrottled = Array.some(domains, domain =>
+        domain.startsWith('throttle-'),
+      )
+      this.calls += 1
+      this.inFlight += 1
+      this.maximumInFlight = Math.max(this.maximumInFlight, this.inFlight)
+      this.starts.push(Effect.runSync(Clock.currentTimeMillis))
 
       try {
-        await Effect.runPromise(Effect.sleep(providerDelay()), {
-          signal: request.signal,
-        })
-      } catch (error) {
-        if (request.signal.aborted) {
-          this.aborted += 1
+        if (
+          Array.some(domains, domain => domain.startsWith('failure-once-')) &&
+          !this.failed.has(firstName)
+        ) {
+          this.failed.add(firstName)
+          return new Response(null, { status: 503 })
         }
-        throw error
-      }
 
-      return Response.json({
-        results: Array.map(domains, domain => ({
-          domain,
-          available: true,
-          years: 1,
-          price: 13,
-          renewalPrice: 14,
-          premium: false,
-        })),
-      })
-    } finally {
-      this.inFlight -= 1
-    }
-  }
+        if (isThrottled && !this.throttled.has(firstName)) {
+          this.throttled.add(firstName)
+          return Response.json(
+            {},
+            {
+              status: 429,
+              headers: {
+                'retry-after': Array.some(domains, domain =>
+                  domain.startsWith('throttle-persist-'),
+                )
+                  ? '60'
+                  : '1',
+              },
+            },
+          )
+        }
+
+        try {
+          await Effect.runPromise(Effect.sleep(providerDelay()), {
+            signal: request.signal,
+          })
+        } catch (error) {
+          if (request.signal.aborted) {
+            this.aborted += 1
+          }
+          throw error
+        }
+
+        return Response.json({
+          results: Array.map(domains, domain => ({
+            domain,
+            available: true,
+            years: 1,
+            price: 13,
+            renewalPrice: 14,
+            premium: false,
+          })),
+        })
+      } finally {
+        this.inFlight -= 1
+      }
+    })
 
   override fetch(request: Request): Promise<Response> {
     if (request.url.endsWith('/restart')) {

@@ -19,7 +19,7 @@ export class RegistrarCoordinator {
   constructor(state: DurableObjectState, environment: SearchEnvironment) {
     this.runtime = ManagedRuntime.make(
       makeRegistrarSearchLayer(state.storage, environment, (input, init) =>
-        this.fetchRegistrar(input, init),
+        this.fetchRegistrar.call(globalThis, input, init),
       ),
     )
     void state.blockConcurrencyWhile(() =>
