@@ -18,7 +18,7 @@ import {
   paintingRouter,
   studioRouter,
 } from './route'
-import type { AppTransition } from './transition'
+import type { AppTransition } from './steps'
 
 const routeLabel = (route: typeof ApplicationRoute.Type): string =>
   ApplicationRoute.match(route, {

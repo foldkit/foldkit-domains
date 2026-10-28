@@ -10,7 +10,7 @@ import {
   makeNoopStep,
   makeStep,
 } from './definition'
-import { type LoggedTransition, type Model, PaintingStatus } from './model'
+import { type LoggedTransition, PaintingStatus } from './model'
 import { type ApplicationRoute } from './route'
 
 const MAX_LOGGED_TRANSITIONS = 20
@@ -87,11 +87,8 @@ const saveDraftOnStudioExitStep = (transition: AppTransition) =>
     ),
   )
 
-export const handleTransition = (
-  model: typeof Model.Type,
-  transition: AppTransition,
-) =>
-  Update.combineSteps(model, [
+export const handleTransitionStep = (transition: AppTransition) =>
+  Update.combineSteps([
     logTransitionStep(transition),
     loadCatalogOnGalleryEntryStep(transition),
     reconcilePaintingRouteStep(transition),

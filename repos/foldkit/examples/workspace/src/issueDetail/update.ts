@@ -3,12 +3,13 @@ import { modifyFields } from 'foldkit/struct'
 
 import { RepositoryError } from '../repository'
 import { SaveIssue } from './command'
-import { IssueDetailComposition, editDraftStep } from './composition'
+import { IssueDetailComposition } from './composition'
 import { makeOutMessageStep, makeStep } from './definition'
 import { isDirty, latestRevision, reconcileIssue } from './draft'
 import { Message } from './message'
 import { type Model, SaveState } from './model'
 import { OutMessage } from './outMessage'
+import { editDraftStep } from './steps'
 
 const resetDraftFields = (model: typeof Model.Type) => {
   const nextBaseline = latestRevision(model)

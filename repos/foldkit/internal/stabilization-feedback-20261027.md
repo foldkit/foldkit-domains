@@ -1,6 +1,10 @@
 # Blocks + Effect Layers stabilization feedback
 
-The [latest stabilization addendum](preview-stabilization-1811-20261027.md)
+The [SSG contribution reconciliation](ssg-preview-1814-reconciliation-20261027.md)
+records the later #1814 patch and evening feedback refresh. It strengthens the
+existing #1811 repair without relabeling earlier verification.
+
+The [preceding SSG stabilization addendum](preview-stabilization-1811-20261027.md)
 records #1811's repair and affected verification at `f15fa1646241`.
 The [preceding summary](preview-stabilization-final-20261027.md) retains the
 full source/performance checkpoint at `93c49c77b6d2`.

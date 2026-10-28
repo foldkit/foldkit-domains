@@ -45,6 +45,21 @@ The optional [makeStep.fromMessage](/core/block#featuredefinitionmakestep) adapt
 
 Run [the upgrade checks](#verify-the-upgrade), including public declaration output where applicable. The older snapshot sections below describe migrations already present in `f3be22cfeefe`.
 
+### Machine authoring
+
+The experimental [Machine API](/core/machine) now binds State, Message, and optional Context Schemas once with `Machine.makeDefinition`. Author inline transitions through its bound helpers, use `makeGuard`, `makeHandler`, and `makeTransitions` for extracted logic, and complete the checked table with `Definition.makeMachine`. This brings Machine authoring into the same vocabulary as Block Definitions, with exact source-state and Message narrowing and preserved Command requirements.
+
+Replace the previous curried `Machine.define` and standalone authoring helpers with the Definition methods. Pure execution, folding, and graph analysis remain available. Machine's authoring changes are part of testing API consistency during the Blocks + Effect Layers preview.
+
+### Query and VirtualList additions
+
+The domain-search showcase, `foldkit-domains`, also motivated additional capabilities on this preview branch:
+
+- Experimental [Query and KeyedQuery](/core/query) support freshness-aware loading, targeted cancellation, and opt-in accepted-completion OutMessages. KeyedQuery adds bounded retention of settled entries and pending-request inspection. Freshness expiry preserves retained display data; pending entries are protected from eviction and can temporarily exceed the settled-entry limit. Existing defaults remain unchanged. Persisted experimental Query Models need migration for the new freshness and recency metadata.
+- [VirtualList](/ui/virtual-list) adds continuous upward history loading, semantic table rows, ancestor or Window scroll ownership, and positioned ordinary rows. Parent policies must handle the new `ApproachedLoadedStart` and `EndedContainerScroll` OutMessages. History uses Self scrolling and spacer rows; table rows use external scrolling and spacer rows. The guide covers the supported combinations and parent-owned fetching.
+
+These additions support that application and are included in the preview's release notes. Adopting them is optional for a Blocks + Effect Layers migration.
+
 ## Upgrade from 1f6776fa7ece
 
 The source snapshot is `1f6776fa7ececa766188df5201eefec6ba781b5d`. It already uses `Composition.prepareBlock`, checked `Block.assemble(prepare)` exports, the `make*` Definition factories, and `Program.make` or `Program.makeElement`. Keep those names and the existing child graph. Coverchart's starting installation uses `foldkit@0.169.0-canary.1f6776fa7ece`; identify your own starting packages from the lockfile.
@@ -143,7 +158,7 @@ Remove annotations and imports that use the old loose root types from `Runtime`:
 
 Root behavior types now come from the completed Block and its Composition. Use `Program.Program`, `Program.Element`, or `Program.Runnable` when a public signature needs to describe a browser host value. Server rendering has separate host configuration types and keeps them.
 
-Application Schema aliases remain legal, but current application code uses direct type queries. Inside a feature, annotate an uncommon explicit boundary with `typeof Model.Type`, `typeof Message.Type`, or `typeof OutMessage.Type`. Outside a child, query `typeof ChildBlock.Model.Type`, `typeof ChildBlock.Message.Type`, or `typeof ChildBlock.OutMessage.Type`. Let Definition and Composition callbacks infer their owned parameters. Keep purposeful public, generic, mapped, and conditional aliases such as an owner-specific `Block.ViewBuilderFor` type.
+Declare a same-named decoded type immediately below each Schema, with no blank line, and use that alias in explicit value annotations. For example, put `type Model = typeof Model.Type` on the next line after the Model Schema, then annotate with `Model`. Keep `typeof Model` in checked assembly headers because those helpers take the Schema type. Across a child boundary, derive a named alias from the completed Block, such as `type ChildModel = typeof ChildBlock.Model.Type`. Let Definition and Composition callbacks infer their owned parameters. See [Schema and type organization](/patterns/project-organization#file-layout).
 
 Canonical routing Messages can be passed directly when their payloads are `{ request }` and `{ url }`. Keep a callback when the application maps either value into a different payload.
 

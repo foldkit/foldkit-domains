@@ -14,8 +14,6 @@ import {
   ApplicationComposition,
   CommandPaletteBinding,
   NotificationCenterBinding,
-  applyIssueCommentStep,
-  requestIssueMoveStep,
 } from '../composition'
 import {
   makeCommandsStep,
@@ -28,6 +26,7 @@ import { NotificationActivity, type Workspace, mergeIssues } from '../domain'
 import { WorkspaceAsyncData } from '../model'
 import { IssueMoveState } from '../optimistic'
 import { RepositoryError } from '../repository'
+import { applyIssueCommentStep, requestIssueMoveStep } from '../steps'
 import { handleChangedUrlStep } from './handleChangedUrl'
 import { handleClickedDeleteSavedView } from './handleClickedDeleteSavedView'
 import { initChildrenStep } from './initChildrenStep'

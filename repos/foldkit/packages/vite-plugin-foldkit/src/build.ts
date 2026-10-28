@@ -17,6 +17,8 @@ import type {
   ViteBuilder,
 } from 'vite'
 
+import { installPrerenderPreview } from './preview.js'
+
 /** How a build materializes the URLs a server entry can render. */
 export type FoldkitPrerenderOptions = Readonly<{
   /**
@@ -472,6 +474,10 @@ const assetsForFetchModule = (
  * use the server entry's `renderDocument` export with the emitted browser assets.
  * The browser build has a script input and emits no HTML until prerendering.
  * The server bundle's default export is `{ fetch }`.
+ *
+ * With prerendering enabled, `vite preview` resolves generated directory-index
+ * pages at their declared paths. Vite serves the existing files without running
+ * the server entry. Custom application hosts retain their own routing.
  */
 export const foldkitBuild = (
   serverEntry: string,
@@ -624,7 +630,11 @@ export const foldkitBuild = (
 
   return {
     name: 'foldkit:build',
-    apply: 'build',
+    apply: (_config, { command, isPreview }) =>
+      command === 'build' || (isPreview === true && prerender !== undefined),
+    ...(prerender === undefined
+      ? {}
+      : { configurePreviewServer: installPrerenderPreview }),
     sharedDuringBuild: true,
     api: {
       serverEntry,
@@ -709,10 +719,14 @@ export const foldkitBuild = (
         )
       },
     },
-    config: userConfig => {
+    config: (userConfig, { isPreview }) => {
       const client: EnvironmentOptions = {
         build: {
-          outDir: clientOutDir,
+          outDir: isPreview
+            ? (userConfig.environments?.['client']?.build?.outDir ??
+              userConfig.build?.outDir ??
+              clientOutDir)
+            : clientOutDir,
           rolldownOptions: { input: { [CLIENT_CHUNK_NAME]: CLIENT_MODULE_ID } },
         },
       }

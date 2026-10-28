@@ -4,7 +4,7 @@
 
 Port PR #1633 from `9499d5264c51c842c3cb11a9d62eb16eb48d7a34` to the current Composition API, then implement issue #1722. The original contribution targets main at `49dc36ef672d1caee23f153f88c09d98c8241670`; its six commits and full diff were reviewed. It has no review comments or issue comments to reconcile, and all recorded original checks passed. Those original checks do not verify this port.
 
-This work is prepared on the preview follow-up checkout. It has not been published. Keep it out of the preview PR description and next X post. Normal API documentation, migration notes and changesets remain accurate. The published Ready snapshot and release approval hold remain unchanged.
+This work is prepared on the preview follow-up checkout. It has not been published. The user's October 28 clarification includes it in preview update documentation, PR release notes and the announcement handoff, superseding the earlier exclusion. These additions support `foldkit-domains`; they are separate from Block/Layer migration requirements. The published Ready snapshot and release approval hold remain unchanged.
 
 ## Consumer behavior
 

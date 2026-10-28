@@ -45,6 +45,11 @@ import type {
   LayeredMountDefinition,
   MountDefinition,
 } from '../mount/index.js'
+import {
+  type RoutingConfig,
+  type RoutingInputConfig,
+  normalizeRoutingHandler,
+} from '../runtime/browserListeners.js'
 import { Dispatch } from '../runtime/dispatch.js'
 import {
   type Registrations as RuntimeRegistrations,
@@ -55,6 +60,7 @@ import {
   __messageDeclarations as subscriptionMessageDeclarations,
 } from '../subscription/subscription.js'
 import { tagNameFromSelector } from '../tagName.js'
+import { type Url, fromString as urlFromString } from '../url/index.js'
 import type { VNode } from '../vdom.js'
 import { commandArgs, commandMatches } from './bindingMatcher.js'
 import type {
@@ -213,6 +219,27 @@ export type SubscriptionMessageStep<Message, Entry = undefined> = Readonly<{
   message: Message
 }>
 
+/** URL-change delivery configuration. Uses the same callback or canonical
+ * Message constructor accepted by Program routing. Relative references resolve
+ * against origin (default http://localhost), never the test host or prior step. */
+export type SceneRouting<Message> = Pick<
+  RoutingInputConfig<Message>,
+  'onUrlChange'
+> &
+  Readonly<{ origin?: string }>
+
+type SceneRoutingCallback<Message> = Pick<
+  RoutingConfig<Message>,
+  'onUrlChange'
+> &
+  Readonly<{ origin?: string }>
+
+/** An explicit URL-change event delivered through the Scene's routing callback. */
+export type ChangedUrlStep = Readonly<{
+  _tag: 'ChangedUrlStep'
+  url: string
+}>
+
 /** A group of Scene steps whose Locators resolve within one parent element. */
 export type InsideStep<Steps extends ReadonlyArray<unknown>> = Readonly<{
   _tag: 'InsideStep'
@@ -326,8 +353,17 @@ type TestHtmlBuilder<Message> = HtmlBuilder<Message, TestMountRequirements>
 
 /** A single step in a scene: a `given` step, typed Message or OutMessage step,
  *  or scene simulation transform. */
-export type SceneStep<Model, Message, OutMessage, Subscriptions = undefined> =
+export type SceneStep<
+  Model,
+  Message,
+  OutMessage,
+  Subscriptions = undefined,
+  Routing = undefined,
+> =
   | GivenStep<NoInfer<Model>>
+  | ([Routing] extends [SceneRouting<NoInfer<Message>>]
+      ? ChangedUrlStep
+      : never)
   | (RuntimeRegistryEntries<NoInfer<Subscriptions>> extends Readonly<
       Record<string, RuntimeSubscription<any, any, any, any>>
     >
@@ -354,7 +390,8 @@ export type SceneStep<Model, Message, OutMessage, Subscriptions = undefined> =
           NoInfer<Model>,
           NoInfer<Message>,
           NoInfer<OutMessage>,
-          NoInfer<Subscriptions>
+          NoInfer<Subscriptions>,
+          NoInfer<Routing>
         >
       >
     >
@@ -444,6 +481,12 @@ type InternalSceneSimulation<
     maybeUnacknowledgedIgnored: Option.Option<IgnoredInteraction>
     subscriptionDeclarations: ReadonlyArray<SubscriptionMessageDeclaration>
     keptPendingCommands: ReadonlyArray<AnyCommand>
+    routing:
+      | Readonly<{
+          onUrlChange: (url: Url) => Message
+          origin: string
+        }>
+      | undefined
   }>
 
 const slotKey = ({ name, occurrence }: PendingMount): string =>
@@ -864,6 +907,92 @@ const applySubscriptionMessage = <Model, Message, OutMessage>(
     commands: Array.appendAll(internal.commands, messageUpdate.commands ?? []),
     outMessage: messageUpdate.outMessage,
   } as SceneSimulation<Model, Message, OutMessage>
+}
+
+const DEFAULT_SCENE_ORIGIN = 'http://localhost'
+
+const sceneOrigin = (origin: string): string => {
+  if (Predicate.isString(origin)) {
+    try {
+      const url = new URL(origin)
+
+      if (
+        url.origin !== 'null' &&
+        url.pathname === '/' &&
+        url.search === '' &&
+        url.hash === '' &&
+        url.username === '' &&
+        url.password === ''
+      ) {
+        return url.origin
+      }
+    } catch {}
+  }
+
+  throw new Error(
+    `Scene routing.origin must be an absolute origin without a path, query, fragment, or credentials. Received: ${globalThis.String(origin)}`,
+  )
+}
+
+const normalizeSceneRouting = <Message>(
+  routing: SceneRouting<Message> | undefined,
+): InternalSceneSimulation<unknown, Message>['routing'] => {
+  if (routing === undefined) {
+    return undefined
+  }
+
+  if (
+    !Predicate.isObject(routing) ||
+    !Predicate.isFunction(routing.onUrlChange)
+  ) {
+    throw new Error(
+      'Scene routing.onUrlChange must be a callback or canonical Message constructor.',
+    )
+  }
+
+  return {
+    onUrlChange: normalizeRoutingHandler('url', routing.onUrlChange),
+    origin: sceneOrigin(
+      routing.origin === undefined ? DEFAULT_SCENE_ORIGIN : routing.origin,
+    ),
+  }
+}
+
+const resolveSceneUrl = (url: string, origin: string): Url => {
+  if (Predicate.isString(url)) {
+    try {
+      const resolved = urlFromString(new URL(url, `${origin}/`).href)
+
+      if (Option.isSome(resolved)) {
+        return resolved.value
+      }
+    } catch {}
+  }
+
+  throw new Error(
+    `Scene.Navigation.changedUrl received an invalid URL: ${globalThis.String(url)}`,
+  )
+}
+
+const applyChangedUrl = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: ChangedUrlStep,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const { routing } = toInternal(simulation)
+
+  if (routing === undefined) {
+    throw new Error(
+      'Scene.Navigation.changedUrl requires routing.onUrlChange in the scene configuration.',
+    )
+  }
+
+  const url = resolveSceneUrl(step.url, routing.origin)
+  assertExternalMessageBoundary(
+    simulation,
+    'when Navigation.changedUrl delivered a new URL',
+  )
+
+  return applyMessageWithoutBoundaryChecks(simulation, routing.onUrlChange(url))
 }
 
 /** Clears the pending fall-through, marking it acknowledged. Paired with
@@ -1719,7 +1848,7 @@ export const Command = {
   /** Asserts that there are no pending Commands. */
   expectNone: expectNoCommandsStep,
   /** Keeps one exact pending invocation active across later interactions and
-   *  Subscription deliveries. It remains pending for assertions and
+   *  Subscription or Navigation deliveries. It remains pending for assertions and
    *  resolution, and must be resolved before the Scene ends. */
   keepPending: keepPendingCommandStep,
 } as const
@@ -1757,6 +1886,23 @@ export const Subscription = {
    */
   emit: emitSubscriptionMessage,
 } as const
+
+/** Explicit Program routing events. No navigation Effect or browser history
+ * is executed. Resolving a navigation Command does not deliver this event. */
+export const Navigation = {
+  /** Delivers a URL through configured routing.onUrlChange, then runs update
+   * and re-renders. Relative references use routing.origin, defaulting to
+   * http://localhost. Each step uses that fixed origin root, not the previous
+   * URL. Absolute URLs retain their own origin.
+   *
+   * Requires routing configuration and the ordinary external-Message boundary:
+   * resolve pending work first, or use Command.keepPending for an exact Command
+   * whose completion should arrive later. Pending work is never resolved here. */
+  changedUrl: (url: string): ChangedUrlStep => ({
+    _tag: 'ChangedUrlStep',
+    url,
+  }),
+}
 
 /** Steps that model the lifecycle Messages of a ManagedResource. The test
  *  declares the lifecycle outcome the way `Scene.Command.resolve` declares a
@@ -1969,12 +2115,16 @@ export const tap =
     return simulation
   }
 
-const applySceneStep = <Model, Message, OutMessage, Subscriptions>(
+const applySceneStep = <Model, Message, OutMessage, Subscriptions, Routing>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-  step: SceneStep<Model, Message, OutMessage, Subscriptions>,
+  step: SceneStep<Model, Message, OutMessage, Subscriptions, Routing>,
 ): SceneSimulation<Model, Message, OutMessage> => {
   if (Predicate.isTagged(step, 'InsideStep')) {
     return applyInsideStep(simulation, step)
+  }
+
+  if (Predicate.isTagged(step, 'ChangedUrlStep')) {
+    return applyChangedUrl(simulation, step)
   }
 
   if (Predicate.isTagged(step, 'SubscriptionMessageStep')) {
@@ -1998,9 +2148,11 @@ const applySceneStep = <Model, Message, OutMessage, Subscriptions>(
   return simulation
 }
 
-const runSteps = <Model, Message, OutMessage, Subscriptions>(
+const runSteps = <Model, Message, OutMessage, Subscriptions, Routing>(
   seed: SceneSimulation<Model, Message, OutMessage>,
-  steps: ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions>>,
+  steps: ReadonlyArray<
+    SceneStep<Model, Message, OutMessage, Subscriptions, Routing>
+  >,
 ): SceneSimulation<Model, Message, OutMessage> =>
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   Array.reduce(steps, seed, (current, step) => {
@@ -2047,10 +2199,10 @@ const runSteps = <Model, Message, OutMessage, Subscriptions>(
   })
 /* eslint-enable @typescript-eslint/consistent-type-assertions */
 
-const applyInsideStep = <Model, Message, OutMessage, Subscriptions>(
+const applyInsideStep = <Model, Message, OutMessage, Subscriptions, Routing>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
   step: InsideStep<
-    ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions>>
+    ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions, Routing>>
   >,
 ): SceneSimulation<Model, Message, OutMessage> => {
   const internal = toInternal(simulation)
@@ -2064,10 +2216,13 @@ const applyInsideStep = <Model, Message, OutMessage, Subscriptions>(
     ...internal,
     scope: Option.some(nextScope),
   } as unknown as SceneSimulation<Model, Message, OutMessage>
-  const afterSteps = runSteps<Model, Message, OutMessage, Subscriptions>(
-    scopedEntry,
-    step.steps,
-  )
+  const afterSteps = runSteps<
+    Model,
+    Message,
+    OutMessage,
+    Subscriptions,
+    Routing
+  >(scopedEntry, step.steps)
   const afterInternal = toInternal(afterSteps)
   return {
     ...afterInternal,
@@ -2082,7 +2237,7 @@ const applyInsideStep = <Model, Message, OutMessage, Subscriptions>(
  *  prefer `within(parent, child)` directly. Nested `inside` calls compose scopes
  *  via `within(outer, inner)`. */
 export const inside = <
-  const Steps extends ReadonlyArray<SceneStep<any, any, any, any>>,
+  const Steps extends ReadonlyArray<SceneStep<any, any, any, any, any>>,
 >(
   parent: Locator,
   ...steps: Steps
@@ -3292,15 +3447,35 @@ export const withViewInputs =
 
 // SCENE
 
-/**
- * Executes a scene test. Register the tested program's `subscriptions` to use
- *  {@link Subscription.emit}; the exact record retains each entry's declared
- *  Message schemas and lift path. A scene without registered Subscriptions
- *  cannot use that step.
+/** Configuration for a deterministic Scene. Routing and Subscription entries
+ * declare the external causes the Scene may deliver; no Effects are executed. */
+export type SceneConfig<
+  Model,
+  Message,
+  OutMessage = undefined,
+  Subscriptions = undefined,
+  Routing = undefined,
+> = Readonly<{
+  update: (
+    model: Model,
+    message: Message,
+  ) => Readonly<{
+    model: Model
+    commands?: ReadonlyArray<AnyCommand> | undefined
+    outMessage?: OutMessage
+  }>
+  view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+  subscriptions?: Subscriptions
+  routing?: Routing
+}>
+
+/** Runs update and view against deterministic Scene steps. Register
+ * subscriptions for Subscription.emit and routing.onUrlChange for
+ * Navigation.changedUrl. Routing accepts the same callback or canonical
+ * Message constructor as Program; Navigation delivery remains explicit.
  *
- *  Throws if any Commands or Mounts remain unresolved, any unmount is
- *  unacknowledged, or any interaction fell through unacknowledged.
- */
+ * Throws if Commands or Mounts remain unresolved, unmounts remain
+ * unacknowledged, or an interaction fell through without acknowledgement. */
 export const scene: {
   <
     Model,
@@ -3310,24 +3485,21 @@ export const scene: {
       | RegisteredSubscriptions<Model, Message>
       | undefined = undefined,
   >(
-    config: Readonly<{
-      update: (
-        model: Model,
-        message: Message,
-      ) => Readonly<{
-        model: Model
-        commands?: ReadonlyArray<AnyCommand> | undefined
-        outMessage?: OutMessage
-      }>
-      view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
-      subscriptions?: Subscriptions
-    }>,
+    config: SceneConfig<
+      Model,
+      Message,
+      OutMessage,
+      Subscriptions,
+      SceneRoutingCallback<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRoutingCallback<NoInfer<Message>> }>,
     ...steps: ReadonlyArray<
       SceneStep<
         NoInfer<Model>,
         NoInfer<Message>,
         NoInfer<OutMessage>,
-        NoInfer<Subscriptions>
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
       >
     >
   ): void
@@ -3338,24 +3510,121 @@ export const scene: {
       | RegisteredSubscriptions<Model, Message>
       | undefined = undefined,
   >(
-    config: Readonly<{
-      update: (
-        model: Model,
-        message: Message,
-      ) => Readonly<{
-        model: Model
-        commands?: ReadonlyArray<AnyCommand> | undefined
-        outMessage?: never
-      }>
-      view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
-      subscriptions?: Subscriptions
-    }>,
+    config: SceneConfig<
+      Model,
+      Message,
+      never,
+      Subscriptions,
+      SceneRoutingCallback<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRoutingCallback<NoInfer<Message>> }>,
     ...steps: ReadonlyArray<
       SceneStep<
         NoInfer<Model>,
         NoInfer<Message>,
         undefined,
-        NoInfer<Subscriptions>
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    OutMessage = never,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      OutMessage,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRouting<NoInfer<Message>> }>,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        NoInfer<OutMessage>,
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      never,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>>
+    > &
+      Readonly<{ routing: SceneRouting<NoInfer<Message>> }>,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        undefined,
+        NoInfer<Subscriptions>,
+        SceneRouting<NoInfer<Message>>
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    OutMessage = never,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      OutMessage,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>> | undefined
+    >,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        NoInfer<OutMessage>,
+        NoInfer<Subscriptions>,
+        undefined
+      >
+    >
+  ): void
+  <
+    Model,
+    Message,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
+    config: SceneConfig<
+      Model,
+      Message,
+      never,
+      Subscriptions,
+      SceneRouting<NoInfer<Message>> | undefined
+    >,
+    ...steps: ReadonlyArray<
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        undefined,
+        NoInfer<Subscriptions>,
+        undefined
       >
     >
   ): void
@@ -3364,6 +3633,7 @@ export const scene: {
   Message,
   OutMessage = undefined,
   Subscriptions extends AnySubscriptions | undefined = undefined,
+  Routing extends SceneRouting<Message> | undefined = undefined,
 >(
   config: Readonly<{
     update: (
@@ -3372,8 +3642,11 @@ export const scene: {
     ) => SimulationUpdateReturn<Model, OutMessage>
     view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
     subscriptions?: Subscriptions
+    routing?: Routing
   }>,
-  ...steps: ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions>>
+  ...steps: ReadonlyArray<
+    SceneStep<Model, Message, OutMessage, Subscriptions, Routing>
+  >
 ): void => {
   const capturingDispatch = createCapturingDispatch()
 
@@ -3399,6 +3672,7 @@ export const scene: {
       config.subscriptions ?? {},
     ),
     keptPendingCommands: [],
+    routing: normalizeSceneRouting(config.routing),
   } as unknown as SceneSimulation<Model, Message, OutMessage>
 
   const result = runSteps(seed, steps)

@@ -38,7 +38,7 @@ If a Model or Schema accepts only some application Routes, create that Schema wi
 
 `subset` includes only the tags you name. If you add a Route to `ApplicationRoute` later, `TopLevelRoute` will not accept it until you add its tag. There is no `omit`: an exclusion list would silently accept every Route added later.
 
-When an annotation needs one variant's type, query its Schema directly: `typeof ApplicationRoute.Newsletter.Type`. A routine `NewsletterRoute` alias only hides which union owns the variant.
+Declare `type ApplicationRoute = typeof ApplicationRoute.Type` directly below the Route Schema, with no blank line. When an annotation needs one variant, name that type beside the union, such as `type NewsletterRoute = typeof ApplicationRoute.Newsletter.Type`.
 
 ## Building Routers
 

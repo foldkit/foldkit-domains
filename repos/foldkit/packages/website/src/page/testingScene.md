@@ -226,6 +226,28 @@ Each matcher accepts either a Command Definition or a Command instance. A Defini
 
 When a Scene helper needs to read captured args before resolving a Command, use `Command.argsOf` with the original Definition. The [Story example](/testing/story#inspect-captured-command-arguments) shows the same projection over both Story and Scene simulations. Keep occurrence selection explicit; `argsOf` returns every source match when mapped across the pending list.
 
+## Navigation
+
+`Navigation.changedUrl` delivers a URL through the Scene's configured `routing.onUrlChange`. Scene applies the resulting Message through update and renders the next view. Use the same callback or canonical Message constructor that the Program uses.
+
+Inside a Scene test, import the named helpers from `foldkit/scene` and the shown Commands, `Message`, initial Model, update, and view from your search feature. The feature increments its request id when input changes; its URL-change handler returns `FetchSearch`.
+
+::Snippet{name="sceneNavigation" label="Search through URL-change delivery"}
+
+Resolving `ReplaceSearchUrl` supplies its completion Message. It does not execute the navigation Effect or deliver a URL change. The explicit `Navigation.changedUrl` step lets the Scene continue through the routing handler and resulting fetch.
+
+### Pending work
+
+URL delivery uses the same pending-work boundary as an interaction or Subscription emission. Resolve pending Commands and Mounts and acknowledge ended Mounts first. To deliver a URL before a navigation Command completes, use `Command.keepPending` for that exact invocation. The event leaves the Command pending; resolve it afterward. Kept Commands still participate in assertions and final completeness.
+
+Navigation delivery tracks OutMessages and reconciles Mounts through the ordinary Scene machinery. It does not acknowledge an ignored interaction or change the last interaction's handled/ignored outcome.
+
+### URL resolution
+
+Relative references resolve against `http://localhost/` by default, independently of the test host. Set `routing.origin` when origin matters, for example `https://search.example:444`. An origin may have a trailing slash; it must not contain credentials, a path, a query, or a fragment.
+
+Root-relative paths, query references such as `?q=foldkit`, and fragments such as `#results` use that fixed origin root on every step. Absolute URLs retain their own origin. Scene does not remember a current URL or emulate browser history. It rejects invalid URL input and requires routing configuration before navigation steps can be used.
+
 ## Mounts
 
 When a rendered view contains an `OnMount` attribute, Scene keeps that Mount pending until the test supplies its result Message. If the mounted element later leaves the tree, the test must also acknowledge the unmount with `Mount.expectEnded`.

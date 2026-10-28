@@ -54,11 +54,17 @@ A compact feature destructures its helpers beside its Definition. Keep qualified
 
 For example, `CompletedSave: makeNoopStep()` constructs a Model-preserving Step once and uses it as the handler. Pass the constructed Step, including the factory call's parentheses. The bare `makeNoopStep` factory does not have a handler's signature.
 
-Keep a Step with the behavior it owns. A Block's reusable internal transition can live in `update.ts` or an owning helper module. Parent coordination belongs beside its Bindings and policies. Steps are useful throughout update authoring, not only in composition files or calls to `Update.combineSteps`.
+#### Shared Steps
+
+Keep a Step used by only one responsibility with that code. Put reusable Steps shared by update, composition, or init in the owning Block's `steps.ts`. For a larger module, use responsibility files such as `steps/search.ts` and `steps/quoteLoading.ts`, with an explicit `steps/index.ts` barrel. The owner is the Block whose Model the Step transforms. Keep shared Steps independent of the owning update and completed Block.
+
+`update.ts` maps incoming Messages to handlers and Steps. `composition.ts` registers relationships and maps child OutMessages to parent Steps. `steps.ts` owns the reusable transitions those entry points share. Keep Binding registration and OutMessage policy in composition, and retain the `Step` suffix on named Steps. A Step that closes over a Binding from composition must read it in a deferred producer when the modules depend on one another; module initialization must not invoke that Binding.
 
 When a handler only applies an existing compatible Model-first Step, supply the Step directly as its record value. A no-argument Binding operation returns that Step without applying it. Keep a callback when it consumes the Message payload, derives arguments from the Model, defers argument construction until dispatch, supplies dispatch context, or provides necessary contextual inference. Payload-first `Message.match` branches have a different signature and require their own callbacks.
 
 The retained precision depends on the visible handler and helper return types. A broad annotation or an already-erased helper contract cannot recover narrower Commands or OutMessages.
+
+Plain inline handlers infer the Model and exact Message from the record. A Model-aware callback wrapped in general `makeStep` currently needs a precise Message variant annotation, because that helper also supports arbitrary operation arguments. Use `makeStep.fromMessage` when only the payload constructs the Step; inline records infer its Message. An extracted producer needs its own precise parameter contract.
 
 ### Updates with Dispatch Context
 
