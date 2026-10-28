@@ -56,7 +56,7 @@
           }
         ]
       },
-      "excludeFiles": ["src/client/command.test.ts"]
+      "excludeFiles": ["src/client/quoteWindows.test.ts"]
     },
     {
       "files": ["src/shared/**/*.ts"],

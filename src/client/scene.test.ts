@@ -36,11 +36,12 @@ import {
   DismissSearchKeyboard,
   FocusCartButton,
   FocusCartCloseButton,
+  FocusFiltersButton,
   FocusSearchInput,
   ReplaceSearchUrl,
   ScrollPage,
 } from './command'
-import { CART_DIALOG_ID } from './composition'
+import { CART_DIALOG_ID, FILTERS_DIALOG_ID } from './composition'
 import { Message } from './message'
 import { emptyModel, readyModel, withQuotedWindow } from './model.fixture'
 import { QuoteFailure, QuoteWindows } from './quoteWindows'
@@ -274,6 +275,45 @@ describe('domain search', () => {
       ),
       resolveResultsListScrolls,
       inside(firstDomainResult, expect(text('$12.00')).toExist()),
+    )
+  })
+})
+
+describe('filters presentation', () => {
+  test('the filters sheet applies selection to the results and restores its trigger on close', () => {
+    scene(
+      { update, view },
+      given(readyModel('acme')),
+      measureResultsList,
+      click(role('button', { name: 'Filters and sort' })),
+      Command.resolve(
+        Dialog.test.ShowDialog,
+        DialogBlock.Message.SucceededShowDialog(),
+      ),
+      Mount.resolve(
+        Dialog.test.AcquireResources({
+          id: FILTERS_DIALOG_ID,
+          focusSelector: Dialog.initialFocusMarkerSelector,
+        }),
+        DialogBlock.Message.SucceededAcquireResources(),
+      ),
+      inside(
+        selector('.filters-panel'),
+        change(role('combobox', { name: 'Sort results' }), 'PriceDescending'),
+        resolveResultsListScrolls,
+        click(role('button', { name: 'Done' })),
+      ),
+      Command.resolve(
+        Dialog.test.CloseDialog,
+        DialogBlock.Message.CompletedCloseDialog(),
+      ),
+      Command.resolve(
+        FocusFiltersButton,
+        Message.CompletedFocusFiltersButton(),
+      ),
+      Mount.expectEnded(Dialog.test.AcquireResources),
+      expect(selector('.filters-panel')).toBeAbsent(),
+      expect(firstDomainResult).toHaveText('acme.ai$80.00'),
     )
   })
 })

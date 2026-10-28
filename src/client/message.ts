@@ -14,6 +14,7 @@ export const Message = defineMessageUnion({
   RequestedQuotes: QuoteWindow.fields,
   ReachedSearchCooldownExpiry: { nowMillis: Schema.Number },
   PressedEscape: {},
+  FocusedResultsList: {},
   PressedResultsListScrollKey: { key: ResultsListScrollKey },
   ClickedClearSearch: {},
   ChangedUrl: { url: Url },
@@ -27,6 +28,7 @@ export const Message = defineMessageUnion({
   ClickedRemoveDomain: { name: Schema.String },
   ClickedRemoveCartDomain: { name: Schema.String },
   ClickedCart: {},
+  ClickedFilters: {},
   ClickedRetrySearch: {},
   CompletedDetermineSearchTime: {
     searchGeneration: Schema.Number,
@@ -40,8 +42,10 @@ export const Message = defineMessageUnion({
   CompletedLoadExternal: {},
   CompletedFocusSearchInput: {},
   CompletedFocusCartButton: {},
+  CompletedFocusFiltersButton: {},
   CompletedFocusCartCloseButton: {},
   CompletedScrollPage: {},
+  CompletedRevealResultsListStart: {},
   CompletedDismissSearchKeyboard: {},
   CompletedReleaseEarlySearchListeners: {},
 })

@@ -5,7 +5,7 @@ import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 import { QuoteWindow } from '../shared/domain'
 import { ApplicationDefinition } from './definition'
 import { Message } from './message'
-import { PageScrollKey } from './resultsList'
+import { PageScrollKey, RESULTS_LIST_ID } from './resultsList'
 import { searchRouter } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
 import { subscriptions } from './subscription'
@@ -93,6 +93,21 @@ export const FocusCartButton = ApplicationDefinition.makeCommand(
   },
 )
 
+export const FocusFiltersButton = ApplicationDefinition.makeCommand(
+  'FocusFiltersButton',
+  {
+    messages: [Message.CompletedFocusFiltersButton],
+    handler: function* () {
+      return () =>
+        Effect.sync(() => {
+          document
+            .getElementById('filters-button')
+            ?.focus({ preventScroll: true })
+        }).pipe(Effect.as(Message.CompletedFocusFiltersButton()))
+    },
+  },
+)
+
 export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
   'FocusCartCloseButton',
   {
@@ -103,6 +118,26 @@ export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
           Effect.ignore,
           Effect.as(Message.CompletedFocusCartCloseButton()),
         )
+    },
+  },
+)
+
+export const RevealResultsListStart = ApplicationDefinition.makeCommand(
+  'RevealResultsListStart',
+  {
+    messages: [Message.CompletedRevealResultsListStart],
+    handler: function* () {
+      return () =>
+        Effect.sync(() => {
+          const results = document.getElementById(RESULTS_LIST_ID)
+
+          if (
+            document.activeElement === results &&
+            results?.matches(':focus-visible')
+          ) {
+            results.scrollIntoView({ block: 'start', behavior: 'instant' })
+          }
+        }).pipe(Effect.as(Message.CompletedRevealResultsListStart()))
     },
   },
 )
@@ -177,8 +212,10 @@ export const EffectsLayer = Layer.mergeAll(
   LoadExternal.layer,
   FocusSearchInput.layer,
   FocusCartButton.layer,
+  FocusFiltersButton.layer,
   FocusCartCloseButton.layer,
   ScrollPage.layer,
+  RevealResultsListStart.layer,
   DismissSearchKeyboard.layer,
   ReleaseEarlySearchListeners.layer,
 )

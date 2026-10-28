@@ -9,11 +9,13 @@ import {
   FocusSearchInput,
   LoadExternal,
   NavigateInternal,
+  RevealResultsListStart,
   ScrollPage,
 } from './command'
 import {
   ApplicationComposition,
   CartDialogBinding,
+  FiltersDialogBinding,
   ResultsListBinding,
 } from './composition'
 import {
@@ -62,6 +64,8 @@ export const update = ApplicationComposition.makeUpdate({
   ]),
 
   PressedEscape: clearSearchStep,
+
+  FocusedResultsList: makeCommandsStep(() => [RevealResultsListStart()]),
 
   PressedResultsListScrollKey: makeStep.fromMessage(({ key }) =>
     Match.value(key).pipe(
@@ -141,6 +145,8 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedCart: CartDialogBinding.requestOpen(),
 
+  ClickedFilters: FiltersDialogBinding.requestOpen(),
+
   CompletedDetermineSearchTime: startQuoteWindowStep,
 
   ClickedDomainsHome: makeNoopStep(),
@@ -150,8 +156,10 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedLoadExternal: makeNoopStep(),
   CompletedFocusSearchInput: makeNoopStep(),
   CompletedFocusCartButton: makeNoopStep(),
+  CompletedFocusFiltersButton: makeNoopStep(),
   CompletedFocusCartCloseButton: makeNoopStep(),
   CompletedScrollPage: makeNoopStep(),
+  CompletedRevealResultsListStart: makeNoopStep(),
   CompletedDismissSearchKeyboard: makeNoopStep(),
   CompletedReleaseEarlySearchListeners: makeNoopStep(),
 })

@@ -115,7 +115,24 @@ for (const width of [1440, 390, 320]) {
     await checkAccessibility(page, testInfo, 'results')
 
     await page.getByLabel('Filter by TLD').selectOption('Com')
-    await page.getByLabel('Filter availability').selectOption('Available')
+    if (width < 701) {
+      await page
+        .getByRole('button', { name: 'Filters and sort', exact: true })
+        .click()
+      await expect(
+        page.getByRole('button', { name: 'Close filters and sort' }),
+      ).toBeFocused()
+      await checkAccessibility(page, testInfo, 'filters-sheet')
+    }
+    await page
+      .getByRole('combobox', { name: 'Filter availability' })
+      .selectOption('Available')
+    if (width < 701) {
+      await page.getByRole('button', { name: 'Done', exact: true }).click()
+      await expect(
+        page.getByRole('button', { name: 'Filters and sort', exact: true }),
+      ).toBeFocused()
+    }
     await expect(page.getByRole('status')).toContainText([
       'No domains match',
       '0 domains',
@@ -314,12 +331,15 @@ for (const viewport of [
     await expect(page.locator('.domain-card .price').first()).toBeVisible()
     const results = page.getByRole('list', { name: 'All domain results' })
     const firstRow = results.locator('.domain-row').first()
-    const sort = page.getByLabel('Sort results')
+    const precedingControl =
+      viewport.width < 701
+        ? page.getByRole('button', { name: 'Filters and sort', exact: true })
+        : page.getByLabel('Sort results')
     const headerBottom = await page
       .locator('.header')
       .evaluate(element => element.getBoundingClientRect().bottom)
 
-    await sort.focus()
+    await precedingControl.focus()
     for (const entry of ['initial', 'repeated']) {
       await page.keyboard.press(tabKeys(browserName).next)
       await expect(results, entry).toBeFocused()
@@ -333,7 +353,7 @@ for (const viewport of [
         .toBeGreaterThanOrEqual(headerBottom)
       await expect(firstRow, entry).toBeInViewport({ ratio: 1 })
       await page.keyboard.press(tabKeys(browserName).previous)
-      await expect(sort, entry).toBeFocused()
+      await expect(precedingControl, entry).toBeFocused()
     }
   })
 }
@@ -456,7 +476,7 @@ test('custom filter backgrounds and modal text have readable contrast, and the c
     throw new Error('The cart trigger must identify its dialog')
   }
 
-  await expect(page.locator('dialog')).toHaveId(controlledId)
+  await expect(page.locator(`#${controlledId}`)).toHaveId(controlledId)
   await trigger.click()
   const dialog = page.getByRole('dialog', { name: 'Your cart' })
   await expect(dialog).toHaveId(controlledId)

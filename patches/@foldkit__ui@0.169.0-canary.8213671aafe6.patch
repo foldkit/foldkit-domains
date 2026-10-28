@@ -1,0 +1,55 @@
+diff --git a/dist/virtualList/virtualList.js b/dist/virtualList/virtualList.js
+index 04e32135222626a6f348cac9209266440cb6b316..717777184b5a6d3ebc2e61c687b5d9e4f20b1e8c 100644
+--- a/dist/virtualList/virtualList.js
++++ b/dist/virtualList/virtualList.js
+@@ -857,6 +857,7 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
+         : registerExternalViewport(viewport);
+     const scrollOwner = viewport?.owner ?? element;
+     let previousScrollTop = element.scrollTop;
++    let lastMeasuredContainerWidth = element.clientWidth;
+     let previousDistanceFromEnd = Math.max(0, element.scrollHeight - element.clientHeight - element.scrollTop);
+     let lastApproachedPageVersion;
+     let scrollSettleTimeout;
+@@ -907,22 +908,28 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
+             emitEndedContainerScroll();
+         }, SCROLL_SETTLE_FALLBACK_MS);
+     };
+-    const emitContainerMeasurement = () => __foldkitBrandViewResult((Queue.offerUnsafe(queue, Message.ResizedContainer({
+-        containerWidth: element.clientWidth,
+-        containerHeight: viewportHeight(element),
+-        ...(viewport === undefined
+-            ? {}
+-            : {
+-                viewport: {
+-                    scrollTop: readScrollTop(element),
+-                    scrollHeight: contentHeight(element),
+-                    containerHeight: viewportHeight(element),
+-                    anchor: observedAnchor(element),
+-                },
+-            }),
+-    }))), "@foldkit/ui/virtualList/virtualList.js#emitContainerMeasurement");
++    const emitContainerMeasurement = () => {
++        lastMeasuredContainerWidth = element.clientWidth;
++        return __foldkitBrandViewResult((Queue.offerUnsafe(queue, Message.ResizedContainer({
++            containerWidth: element.clientWidth,
++            containerHeight: viewportHeight(element),
++            ...(viewport === undefined
++                ? {}
++                : {
++                    viewport: {
++                        scrollTop: readScrollTop(element),
++                        scrollHeight: contentHeight(element),
++                        containerHeight: viewportHeight(element),
++                        anchor: observedAnchor(element),
++                    },
++                }),
++        }))), "@foldkit/ui/virtualList/virtualList.js#emitContainerMeasurement");
++    };
+     emitContainerMeasurement();
+     const scrollListener = (event) => {
++        if (element.clientWidth !== lastMeasuredContainerWidth) {
++            emitContainerMeasurement();
++        }
+         const origin = scrollObservationOrigin(element, event);
+         const distanceFromEnd = Math.max(0, element.scrollHeight - element.clientHeight - element.scrollTop);
+         const isTowardStart = element.scrollTop < previousScrollTop - 1 &&

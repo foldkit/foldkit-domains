@@ -15,7 +15,12 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { DomainsRpcRoutes } from '../server/rpc'
 import { Domain, QuoteWindow, domainTlds } from '../shared/domain'
 import { DomainsRpcs, SearchError } from '../shared/domainsRpc'
-import { QuoteFailure, QuoteWindowArgs, QuoteWindows } from './quoteWindows'
+import {
+  QuoteFailure,
+  QuoteWindowArgs,
+  QuoteWindows,
+  makeFetchQuoteWindow,
+} from './quoteWindows'
 import { makeDomainsClientLayer } from './rpc'
 import { SearchCooldown } from './searchCooldown'
 import { quoteFetch, quoteRequestKey } from './story/test'
@@ -31,14 +36,13 @@ const quotedDomain = Domain.Available({
 const args = QuoteWindowArgs.make({ label: 'acme', offset: 0, limit: 60 })
 const disposals: Array<() => Promise<void>> = []
 
-const commandLayer = (fetch: typeof globalThis.fetch) =>
-  QuoteWindows.EffectsLayer.pipe(
-    Layer.provide(
-      makeDomainsClientLayer('http://localhost/rpc').pipe(
-        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetch)),
-      ),
-    ),
+const clientLayer = (fetch: typeof globalThis.fetch) =>
+  makeDomainsClientLayer('http://localhost/rpc').pipe(
+    Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetch)),
   )
+
+const queryLayer = (fetch: typeof globalThis.fetch) =>
+  QuoteWindows.EffectsLayer.pipe(Layer.provide(clientLayer(fetch)))
 
 const rpcTransport = (
   search: (
@@ -66,8 +70,8 @@ afterEach(async () => {
   await Promise.all(disposals.splice(0).map(dispose => dispose()))
 })
 
-describe('QuoteWindows.Fetch execution', () => {
-  test('debounces the RPC and completes with the originating Query request', async () => {
+describe('quote window fetching', () => {
+  test('the Query wires a debounced lookup to its originating request', async () => {
     let calls = 0
     const transport = rpcTransport((label, window) => {
       calls += 1
@@ -84,7 +88,7 @@ describe('QuoteWindows.Fetch execution', () => {
 
         yield* TestClock.adjust('1 millis')
         return yield* Fiber.join(fetch)
-      }).pipe(Effect.provide([commandLayer(transport), TestClock.layer()])),
+      }).pipe(Effect.provide([queryLayer(transport), TestClock.layer()])),
     )
 
     expect(calls).toBe(1)
@@ -157,56 +161,52 @@ describe('QuoteWindows.Fetch execution', () => {
       }),
     },
   ])(
-    'maps a $failure into the typed Query failure and cooldown deadline',
+    'maps a $failure into a quote failure and cooldown deadline',
     async ({ error, expected }) => {
       const transport = rpcTransport(() => Effect.fail(error))
-      const completed = await Effect.runPromise(
+      const quoteWindowResult = await Effect.runPromise(
         Effect.gen(function* () {
-          const fetch = yield* Effect.forkChild(quoteFetch(args, 42).effect)
+          const fetch = yield* Effect.forkChild(
+            makeFetchQuoteWindow().pipe(
+              Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
+              Effect.result,
+            ),
+          )
 
           yield* TestClock.adjust('350 millis')
           return yield* Fiber.join(fetch)
-        }).pipe(Effect.provide([commandLayer(transport), TestClock.layer()])),
+        }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
       )
 
-      expect(completed).toEqual(
-        QuoteWindows.Message.CompletedFetch({
-          args,
-          generation: 42,
-          requestKey: quoteRequestKey(args),
-          result: Result.fail(expected),
-          completedAtMillis: 350,
-        }),
-      )
+      expect(quoteWindowResult).toEqual(Result.fail(expected))
     },
   )
 
-  test('turns a remote defect into a retriable Query failure', async () => {
+  test('turns a remote defect into a retriable quote failure', async () => {
     const transport = rpcTransport(() =>
       Effect.die(new Error('unexpected provider defect')),
     )
-    const completed = await Effect.runPromise(
+    const quoteWindowResult = await Effect.runPromise(
       Effect.gen(function* () {
-        const fetch = yield* Effect.forkChild(quoteFetch(args, 42).effect)
+        const fetch = yield* Effect.forkChild(
+          makeFetchQuoteWindow().pipe(
+            Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
+            Effect.result,
+          ),
+        )
 
         yield* TestClock.adjust('350 millis')
         return yield* Fiber.join(fetch)
-      }).pipe(Effect.provide([commandLayer(transport), TestClock.layer()])),
+      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
     )
 
-    expect(completed).toEqual(
-      QuoteWindows.Message.CompletedFetch({
-        args,
-        generation: 42,
-        requestKey: quoteRequestKey(args),
-        result: Result.fail(
-          QuoteFailure.make({
-            error: 'Could not search domains. Please try again.',
-            maybeSearchCooldown: Option.none(),
-          }),
-        ),
-        completedAtMillis: 350,
-      }),
+    expect(quoteWindowResult).toEqual(
+      Result.fail(
+        QuoteFailure.make({
+          error: 'Could not search domains. Please try again.',
+          maybeSearchCooldown: Option.none(),
+        }),
+      ),
     )
   })
 
@@ -228,35 +228,34 @@ describe('QuoteWindows.Fetch execution', () => {
         )
         markStarted()
       })
-    const completed = await Effect.runPromise(
+    const quoteWindowResult = await Effect.runPromise(
       Effect.gen(function* () {
-        const fetch = yield* Effect.forkChild(quoteFetch(args, 42).effect)
+        const fetch = yield* Effect.forkChild(
+          makeFetchQuoteWindow().pipe(
+            Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
+            Effect.result,
+          ),
+        )
 
         yield* TestClock.adjust('350 millis')
         yield* Effect.promise(() => started)
         yield* TestClock.adjust('19650 millis')
         return yield* Fiber.join(fetch)
-      }).pipe(Effect.provide([commandLayer(transport), TestClock.layer()])),
+      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
     )
 
-    expect(completed).toEqual(
-      QuoteWindows.Message.CompletedFetch({
-        args,
-        generation: 42,
-        requestKey: quoteRequestKey(args),
-        result: Result.fail(
-          QuoteFailure.make({
-            error: 'Could not search domains. Please try again.',
-            maybeSearchCooldown: Option.none(),
-          }),
-        ),
-        completedAtMillis: 20_000,
-      }),
+    expect(quoteWindowResult).toEqual(
+      Result.fail(
+        QuoteFailure.make({
+          error: 'Could not search domains. Please try again.',
+          maybeSearchCooldown: Option.none(),
+        }),
+      ),
     )
     expect(isAborted).toBe(true)
   })
 
-  test('interrupting the Query fetch aborts the RPC without completing it', async () => {
+  test('interrupting a quote lookup aborts the RPC without returning a result', async () => {
     let isAborted = false
     let markStarted = () => {}
     const started = new Promise<void>(resolve => {
@@ -276,13 +275,18 @@ describe('QuoteWindows.Fetch execution', () => {
       })
     const exit = await Effect.runPromise(
       Effect.gen(function* () {
-        const fetch = yield* Effect.forkChild(quoteFetch(args, 42).effect)
+        const fetch = yield* Effect.forkChild(
+          makeFetchQuoteWindow().pipe(
+            Effect.flatMap(fetchQuoteWindow => fetchQuoteWindow(args)),
+            Effect.result,
+          ),
+        )
 
         yield* TestClock.adjust('350 millis')
         yield* Effect.promise(() => started)
         yield* Fiber.interrupt(fetch)
         return yield* Fiber.await(fetch)
-      }).pipe(Effect.provide([commandLayer(transport), TestClock.layer()])),
+      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
     )
 
     expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(

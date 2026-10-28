@@ -45,3 +45,27 @@ export const RESULTS_LIST_ID = 'domain-results'
 export const RESULTS_GROUP_HEIGHT_PX = 114
 export const RESULTS_OVERSCAN_GROUPS = 2
 export const ResultsListBlock = VirtualList.create<DomainListingGroup>()
+
+const MOBILE_RESULTS_WIDTH_PX = 668
+const TABLET_RESULTS_WIDTH_PX = 944
+const MOBILE_RESULT_HEIGHT_PX = 61
+const DESKTOP_RESULT_HEIGHT_PX = 57
+
+export const estimateDomainListingGroupHeightPx = (
+  resultsList: typeof ResultsListBlock.Model.Type,
+  listingCount = RESULTS_GROUP_SIZE,
+): number => {
+  if (resultsList.measurement._tag === 'Unmeasured') {
+    return RESULTS_GROUP_HEIGHT_PX
+  }
+
+  const { containerWidth } = resultsList.measurement
+
+  if (containerWidth <= MOBILE_RESULTS_WIDTH_PX) {
+    return listingCount * MOBILE_RESULT_HEIGHT_PX
+  } else if (containerWidth <= TABLET_RESULTS_WIDTH_PX) {
+    return Math.ceil(listingCount / 2) * DESKTOP_RESULT_HEIGHT_PX
+  } else {
+    return Math.ceil(listingCount / 3) * DESKTOP_RESULT_HEIGHT_PX
+  }
+}

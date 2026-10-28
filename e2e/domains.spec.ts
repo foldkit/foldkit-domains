@@ -199,7 +199,7 @@ test('prefills the URL query after the field receives early focus', async ({
   }
 })
 
-test('first mobile tap moves the same input into the header before hydration', async ({
+test('first mobile tap moves the same input into the second header row before hydration', async ({
   browser,
   baseURL,
 }, testInfo) => {
@@ -232,7 +232,7 @@ test('first mobile tap moves the same input into the header before hydration', a
     await expect(input).toBeFocused()
     await expect
       .poll(async () => (await input.boundingBox())?.y)
-      .toBeLessThan(30)
+      .toBeCloseTo(76, 0)
     await input.fill('mobile-idea')
     releaseBundle()
     await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
@@ -327,7 +327,7 @@ test('mobile search scrolls with the hero and stays pinned during a search', asy
       .poll(() =>
         input.evaluate(element => element.getBoundingClientRect().top),
       )
-      .toBeLessThan(30)
+      .toBeCloseTo(76, 0)
     await expect(input).toBeFocused()
     await expect(input).toHaveValue('scrolling-search')
     expect(
@@ -429,7 +429,7 @@ test('updates domain names while prices and availability wait for the current lo
   ).toContainText('new-idea.')
   await expect(page.locator('.results .price')).toHaveCount(0)
   await expect(page.locator('.results .unavailable')).toHaveCount(0)
-  await expect(page.locator('.results button')).toHaveCount(0)
+  await expect(page.locator('.results .domain-action button')).toHaveCount(0)
   await expect(
     page.getByRole('status', { name: 'Searching domains' }),
   ).toBeVisible()
@@ -687,7 +687,13 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
       return rows.last().textContent()
     })
     .toContain('fresh.zone')
-  await page.getByLabel('Sort results').selectOption('PriceAscending')
+  await page
+    .getByRole('button', { name: 'Filters and sort', exact: true })
+    .click()
+  await page
+    .getByRole('combobox', { name: 'Sort results' })
+    .selectOption('PriceAscending')
+  await page.getByRole('button', { name: 'Done', exact: true }).click()
   await expect
     .poll(async () => {
       await Page.scrollResultsToOffset(page, 0)
@@ -697,7 +703,7 @@ test('virtualizes the catalog and preserves scrolling and cart selections across
   await page.getByLabel('Filter by TLD').selectOption('App')
   await expect(rows).toHaveCount(1)
   await expect(rows.first()).toContainText('fresh.app')
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+  await expect(rows.first()).toBeInViewport({ ratio: 1 })
 
   await page.getByRole('button', { name: 'Cart, 1 domains' }).click()
   await expect(page.getByRole('region', { name: 'Your cart' })).toContainText(

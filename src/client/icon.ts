@@ -43,6 +43,13 @@ export const search = () =>
 export const close = () =>
   icon([ih.path([ih.D('M18 6 6 18')]), ih.path([ih.D('m6 6 12 12')])])
 
+export const filter = () =>
+  icon([
+    ih.path([ih.D('M4 7h16')]),
+    ih.path([ih.D('M7 12h10')]),
+    ih.path([ih.D('M10 17h4')]),
+  ])
+
 export const check = () => icon([ih.path([ih.D('M20 6 9 17l-5-5')])])
 
 export const arrowUpRight = () =>

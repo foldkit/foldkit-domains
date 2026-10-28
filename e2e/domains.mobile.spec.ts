@@ -48,12 +48,15 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
       await input.fill('mobile-idea')
       await expect(page.locator('.results .price').first()).toBeVisible()
 
+      const filtersAndSort = page.getByRole('button', {
+        name: 'Filters and sort',
+      })
+
       for (const control of [
         page.getByRole('button', { name: 'Clear search' }),
         page.getByRole('button', { name: /^Cart,/ }),
-        page.getByLabel('Filter by TLD'),
-        page.getByLabel('Filter availability'),
-        page.getByLabel('Sort results'),
+        page.getByRole('combobox', { name: 'Filter by TLD' }),
+        filtersAndSort,
       ]) {
         const bounds = await control.boundingBox()
         expect(bounds?.width).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_SIZE_PX)
@@ -69,36 +72,54 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
       await expect(input).toBeInViewport()
       await expect(input).toHaveValue('mobile-idea')
       await page.setViewportSize({ width, height })
-      await page.getByLabel('Sort results').selectOption('PriceDescending')
-      await expect(page.locator('.domain-row').first()).toContainText('$80.00')
-      const sortTextFits = await page
-        .getByLabel('Sort results')
-        .evaluate(element => {
-          if (!(element instanceof HTMLSelectElement)) {
-            return false
-          }
+      await filtersAndSort.tap()
+      const filtersDialog = page.getByRole('dialog', {
+        name: 'Filters and sort',
+      })
+      const availability = filtersDialog.getByRole('combobox', {
+        name: 'Filter availability',
+      })
+      const sort = filtersDialog.getByRole('combobox', {
+        name: 'Sort results',
+      })
+      const closeFilters = filtersDialog.getByRole('button', { name: 'Done' })
+      await expect(filtersDialog).toBeVisible()
+      for (const control of [availability, sort, closeFilters]) {
+        const bounds = await control.boundingBox()
+        expect(bounds?.width).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_SIZE_PX)
+        expect(bounds?.height).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_SIZE_PX)
+      }
+      await sort.selectOption('PriceDescending')
+      await availability.selectOption('Available')
+      const sortTextFits = await sort.evaluate(element => {
+        if (!(element instanceof HTMLSelectElement)) {
+          return false
+        }
 
-          const style = getComputedStyle(element)
-          const canvas = document.createElement('canvas')
-          const drawing = canvas.getContext('2d')
-          if (drawing === null) {
-            return false
-          }
+        const style = getComputedStyle(element)
+        const canvas = document.createElement('canvas')
+        const drawing = canvas.getContext('2d')
+        if (drawing === null) {
+          return false
+        }
 
-          drawing.font = style.font
-          const selected = element.selectedOptions.item(0)
-          const textWidth = drawing.measureText(
-            selected?.textContent ?? '',
-          ).width
-          return (
-            textWidth <=
-            element.clientWidth -
-              parseFloat(style.paddingLeft) -
-              parseFloat(style.paddingRight)
-          )
-        })
+        drawing.font = style.font
+        const selected = element.selectedOptions.item(0)
+        const textWidth = drawing.measureText(selected?.textContent ?? '').width
+        return (
+          textWidth <=
+          element.clientWidth -
+            parseFloat(style.paddingLeft) -
+            parseFloat(style.paddingRight)
+        )
+      })
       expect(sortTextFits).toBe(true)
-      await page.getByLabel('Filter by TLD').selectOption('App')
+      await closeFilters.tap()
+      await expect(filtersDialog).toBeHidden()
+      await expect(page.locator('.domain-row').first()).toContainText('$80.00')
+      await page
+        .getByRole('combobox', { name: 'Filter by TLD' })
+        .selectOption('App')
       await expect(page.locator('.result-count')).toHaveText(
         '1 domains · Registration prices in USD',
       )
@@ -324,7 +345,7 @@ for (const { name, width, height } of PHONE_VIEWPORTS.filter(
       await trigger.tap()
       await page.setViewportSize({ width: 844, height: 320 })
       await page
-        .locator('.cart-backdrop')
+        .locator('.dialog-backdrop')
         .click({ position: { x: 20, y: 100 } })
       await expect(dialog).toBeHidden()
       await expect(trigger).toBeFocused()
@@ -369,6 +390,111 @@ test('mobile results use page scrolling beneath the pinned navigation', async ({
   await expect(
     page.getByRole('searchbox', { name: 'Search domains' }),
   ).toBeInViewport()
+})
+
+test('mobile results use a dark two-row header and single-column layout', async ({
+  page,
+}, testInfo) => {
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/?q=foldkit')
+  await expect(page.locator('.domain-card').first()).toContainText(
+    'Not available',
+  )
+  await expect(page.locator('.domain-card .price').first()).toBeVisible()
+  await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
+
+  const geometry = await page.evaluate(() => {
+    const bounds = (element: Element | null) => {
+      if (element === null) {
+        throw new Error('Expected responsive layout element')
+      }
+
+      const rect = element.getBoundingClientRect()
+      return {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        right: rect.right,
+        bottom: rect.bottom,
+      }
+    }
+    const itemBounds = (selector: string) =>
+      [...document.querySelectorAll(selector)]
+        .slice(0, 4)
+        .map(element => bounds(element))
+
+    return {
+      viewportWidth: innerWidth,
+      header: bounds(document.querySelector('.header')),
+      brand: bounds(document.querySelector('.brand')),
+      search: bounds(document.querySelector('form.search')),
+      topResults: bounds(document.querySelector('.top-results')),
+      cards: itemBounds('.top-results .domain-card'),
+      rowGroup: bounds(document.querySelector('.domain-row-group')),
+      rows: itemBounds('.domain-row-group .domain-row'),
+      scrollWidth: document.documentElement.scrollWidth,
+    }
+  })
+
+  expect(geometry.header.y).toBe(0)
+  expect(geometry.header.height).toBeCloseTo(129, 0)
+  expect(geometry.search.x).toBeCloseTo(16, 0)
+  expect(geometry.search.y).toBeCloseTo(75, 0)
+  expect(geometry.search.width).toBeCloseTo(geometry.viewportWidth - 32, 0)
+  expect(geometry.search.height).toBeCloseTo(44, 0)
+  expect(geometry.search.y).toBeGreaterThan(geometry.brand.bottom)
+  expect(geometry.search.bottom).toBeLessThanOrEqual(geometry.header.bottom)
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.viewportWidth)
+
+  const expectSingleColumn = (
+    items: ReadonlyArray<{
+      x: number
+      y: number
+      width: number
+      bottom: number
+    }>,
+    container: { x: number; width: number },
+  ) => {
+    expect(items).toHaveLength(4)
+
+    items.reduce<number | undefined>((previousBottom, item) => {
+      expect(item.x).toBeCloseTo(container.x, 0)
+      expect(item.width).toBeCloseTo(container.width, 0)
+
+      if (previousBottom !== undefined) {
+        expect(item.y).toBeGreaterThanOrEqual(previousBottom)
+      }
+
+      return item.bottom
+    }, undefined)
+  }
+
+  expectSingleColumn(geometry.cards, geometry.topResults)
+  expectSingleColumn(geometry.rows, geometry.rowGroup)
+  const [unavailableCard, , availableCard] = geometry.cards
+  const [unavailableRow, , availableRow] = geometry.rows
+
+  if (
+    unavailableCard === undefined ||
+    availableCard === undefined ||
+    unavailableRow === undefined ||
+    availableRow === undefined
+  ) {
+    throw new Error('Expected available and unavailable mobile results')
+  }
+
+  expect(unavailableCard.height).toBeCloseTo(availableCard.height, 0)
+  expect(unavailableRow.height).toBeCloseTo(availableRow.height, 0)
+  await page.screenshot({ path: testInfo.outputPath('mobile-results.png') })
+  await page
+    .getByRole('button', { name: 'Filters and sort', exact: true })
+    .click()
+  await expect(
+    page.getByRole('dialog', { name: 'Filters and sort' }),
+  ).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('mobile-filters.png') })
 })
 
 for (const phase of ['before hydration', 'after hydration']) {

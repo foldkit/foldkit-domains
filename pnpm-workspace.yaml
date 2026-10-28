@@ -8,3 +8,5 @@ overrides:
   foldkit: file:vendor/foldkit-preview/foldkit-0.169.0-canary.8213671aafe6.tgz
   '@foldkit/ui': file:vendor/foldkit-preview/foldkit-ui-0.169.0-canary.8213671aafe6.tgz
   '@effect/platform-node@4.0.0>@effect/platform-node-shared': 4.0.0
+patchedDependencies:
+  '@foldkit/ui@0.169.0-canary.8213671aafe6': patches/@foldkit__ui@0.169.0-canary.8213671aafe6.patch

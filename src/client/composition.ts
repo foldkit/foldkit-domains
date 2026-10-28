@@ -4,7 +4,7 @@ import { Block, Update } from 'foldkit'
 import { DialogBlock, VirtualList } from '@foldkit/ui'
 
 import { domainTlds, queryToMaybeDomainLabel } from '../shared/domain'
-import { FocusCartButton } from './command'
+import { FocusCartButton, FocusFiltersButton } from './command'
 import {
   makeBinding,
   makeCommandsStep,
@@ -56,6 +56,19 @@ export const CartDialogBinding = makeBinding(DialogBlock, {
   }),
 })
 
+export const FILTERS_DIALOG_ID = 'domains-filters'
+
+export const FiltersDialogBinding = makeBinding(DialogBlock, {
+  field: 'filtersDialog',
+  init: { contextToArgs: () => [{ id: FILTERS_DIALOG_ID }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(DialogBlock, {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+    CompletedClose: () => makeCommandsStep(() => [FocusFiltersButton()]),
+  }),
+})
+
 export const QuoteWindowsBinding = makeBinding(QuoteWindows, {
   field: 'quoteWindows',
 }).withOutMessagePolicy({
@@ -96,7 +109,12 @@ export const QuoteWindowsBinding = makeBinding(QuoteWindows, {
 })
 
 export const ApplicationComposition = makeComposition({
-  bindings: [ResultsListBinding, CartDialogBinding, QuoteWindowsBinding],
+  bindings: [
+    ResultsListBinding,
+    CartDialogBinding,
+    FiltersDialogBinding,
+    QuoteWindowsBinding,
+  ],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition

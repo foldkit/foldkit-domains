@@ -7,7 +7,7 @@ import { DialogBlock, VirtualList } from '@foldkit/ui'
 
 import { Domain, domainTlds, queryToMaybeDomainLabel } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
-import { CART_DIALOG_ID } from './composition'
+import { CART_DIALOG_ID, FILTERS_DIALOG_ID } from './composition'
 import { Model } from './model'
 import { QuoteWindowArgs, QuoteWindows } from './quoteWindows'
 import {
@@ -35,6 +35,7 @@ export const emptyModel = Model.make({
   sortOrder: 'Relevance',
   cart: [],
   cartDialog: DialogBlock.init({ id: CART_DIALOG_ID }).model,
+  filtersDialog: DialogBlock.init({ id: FILTERS_DIALOG_ID }).model,
 })
 
 export const withQuotedWindow = (

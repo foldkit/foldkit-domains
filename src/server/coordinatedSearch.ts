@@ -19,10 +19,12 @@ export const makeCoordinatedSearchHandlersLayer = (
         const maybeRequest = yield* Effect.serviceOption(
           HttpServerRequest.HttpServerRequest,
         )
+
         const client = Option.match(maybeRequest, {
           onNone: () => 'local',
           onSome: request => request.headers['cf-connecting-ip'] ?? 'local',
         })
+
         return yield* search.search({ label, offset, limit, client })
       }),
   }).pipe(

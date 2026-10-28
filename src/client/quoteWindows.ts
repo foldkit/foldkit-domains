@@ -20,18 +20,11 @@ export const QuoteFailure = Schema.Struct({
 })
 export type QuoteFailure = typeof QuoteFailure.Type
 
-export const QuoteWindows = Query.define({
-  name: 'QuoteWindows',
-  args: QuoteWindowArgs.fields,
-  data: Schema.Array(Domain),
-  error: QuoteFailure,
-  staleTime: '1 minute',
-  maxSettledEntries: 100,
-  notifyOnCompletion: true,
-  handler: function* () {
+export const makeFetchQuoteWindow = () =>
+  Effect.gen(function* () {
     const client = yield* DomainsClient
 
-    return args => {
+    return (args: QuoteWindowArgs) => {
       const unavailable = (error: string) =>
         Effect.fail(
           QuoteFailure.make({ error, maybeSearchCooldown: Option.none() }),
@@ -75,5 +68,17 @@ export const QuoteWindows = Query.define({
         ),
       )
     }
+  })
+
+export const QuoteWindows = Query.define({
+  name: 'QuoteWindows',
+  args: QuoteWindowArgs.fields,
+  data: Schema.Array(Domain),
+  error: QuoteFailure,
+  staleTime: '1 minute',
+  maxSettledEntries: 100,
+  notifyOnCompletion: true,
+  handler: function* () {
+    return yield* makeFetchQuoteWindow()
   },
 })

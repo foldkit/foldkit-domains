@@ -14,6 +14,8 @@ import {
   type ApplicationViewBuilder,
   CART_DIALOG_ID,
   CartDialogBinding,
+  FILTERS_DIALOG_ID,
+  FiltersDialogBinding,
   ResultsListBinding,
 } from './composition'
 import {
@@ -34,6 +36,7 @@ import {
   RESULTS_LIST_ID,
   RESULTS_OVERSCAN_GROUPS,
   ResultsListScrollKey,
+  estimateDomainListingGroupHeightPx,
   groupDomainListings,
 } from './resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from './route'
@@ -348,12 +351,53 @@ const domainRowView = (
     ],
   )
 
+const availabilityFilterView = (
+  model: Model,
+  h: ApplicationViewBuilder,
+): Html =>
+  h.select(
+    [
+      h.Class('filter-select'),
+      h.AriaLabel('Filter availability'),
+      h.Value(model.availabilityFilter),
+      h.OnChange(value =>
+        Message.UpdatedAvailabilityFilter({
+          value: Schema.decodeUnknownSync(AvailabilityFilter)(value),
+        }),
+      ),
+    ],
+    [
+      h.option([h.Value('All')], ['Show All']),
+      h.option([h.Value('Available')], ['Available']),
+    ],
+  )
+
+const sortOrderView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.select(
+    [
+      h.Class('filter-select'),
+      h.AriaLabel('Sort results'),
+      h.Value(model.sortOrder),
+      h.OnChange(value =>
+        Message.UpdatedSortOrder({
+          value: Schema.decodeUnknownSync(SortOrder)(value),
+        }),
+      ),
+    ],
+    [
+      h.option([h.Value('Relevance')], ['Relevance']),
+      h.option([h.Value('PriceAscending')], ['Price: Low to High']),
+      h.option([h.Value('PriceDescending')], ['Price: High to Low']),
+    ],
+  )
+
 const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('filters')],
     [
       h.select(
         [
+          h.Class('filter-select'),
           h.AriaLabel('Filter by TLD'),
           h.Value(model.tldFilter),
           h.OnChange(value =>
@@ -370,38 +414,83 @@ const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
           ),
         ),
       ),
-      h.select(
-        [
-          h.AriaLabel('Filter availability'),
-          h.Value(model.availabilityFilter),
-          h.OnChange(value =>
-            Message.UpdatedAvailabilityFilter({
-              value: Schema.decodeUnknownSync(AvailabilityFilter)(value),
-            }),
-          ),
-        ],
-        [
-          h.option([h.Value('All')], ['Show All']),
-          h.option([h.Value('Available')], ['Available']),
-        ],
+      h.div(
+        [h.Class('desktop-filters')],
+        [availabilityFilterView(model, h), sortOrderView(model, h)],
       ),
-      h.select(
+      h.button(
         [
-          h.AriaLabel('Sort results'),
-          h.Value(model.sortOrder),
-          h.OnChange(value =>
-            Message.UpdatedSortOrder({
-              value: Schema.decodeUnknownSync(SortOrder)(value),
-            }),
+          h.Id('filters-button'),
+          h.Class(
+            `filters-button${model.availabilityFilter !== 'All' || model.sortOrder !== 'Relevance' ? ' has-active-filters' : ''}`,
           ),
+          h.AriaLabel('Filters and sort'),
+          h.AriaHasPopup('dialog'),
+          h.AriaControls(FILTERS_DIALOG_ID),
+          h.OnClick(Message.ClickedFilters()),
         ],
-        [
-          h.option([h.Value('Relevance')], ['Relevance']),
-          h.option([h.Value('PriceAscending')], ['Price: Low to High']),
-          h.option([h.Value('PriceDescending')], ['Price: High to Low']),
-        ],
+        [Icon.filter()],
       ),
     ],
+  )
+
+const filtersDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.block(
+    FiltersDialogBinding.embedView({
+      slotId: model.filtersDialog.id,
+      model: model.filtersDialog,
+      viewInputs: {
+        hasDescription: false,
+        toView: render =>
+          h.dialog(
+            [...render.dialog, h.Class('dialog-overlay')],
+            render.isVisible
+              ? [
+                  h.div([
+                    ...render.backdrop,
+                    h.Class('dialog-backdrop'),
+                    h.AriaHidden(true),
+                  ]),
+                  h.section(
+                    [...render.panel, h.Class('filters-panel')],
+                    [
+                      h.div(
+                        [h.Class('filters-panel-heading')],
+                        [
+                          h.h2([...render.title], ['Filters and sort']),
+                          h.button(
+                            [
+                              ...render.closeButton,
+                              ...render.initialFocus,
+                              h.Class('icon-button'),
+                              h.AriaLabel('Close filters and sort'),
+                            ],
+                            [Icon.close()],
+                          ),
+                        ],
+                      ),
+                      h.label(
+                        [h.Class('filter-field')],
+                        [
+                          h.span([], ['Availability']),
+                          availabilityFilterView(model, h),
+                        ],
+                      ),
+                      h.label(
+                        [h.Class('filter-field')],
+                        [h.span([], ['Sort by']), sortOrderView(model, h)],
+                      ),
+                      h.button(
+                        [...render.closeButton, h.Class('button filters-done')],
+                        ['Done'],
+                      ),
+                    ],
+                  ),
+                ]
+              : undefined,
+          ),
+      },
+    }),
   )
 
 const resultsListView = (
@@ -431,6 +520,11 @@ const resultsListView = (
                     ),
                   ),
                 dynamicRowHeights: true,
+                itemToEstimatedRowHeightPx: group =>
+                  estimateDomainListingGroupHeightPx(
+                    model.resultsList,
+                    group.listings.length,
+                  ),
                 rowLayout: 'Absolute',
                 overscan: RESULTS_OVERSCAN_GROUPS,
                 containerClassName: `results-viewport${Array.length(results) === 1 ? ' is-single-result' : ''}`,
@@ -440,6 +534,7 @@ const resultsListView = (
                     `${results.length} domains. Use arrow keys, Page Up, Page Down, Home, and End to scroll the page.`,
                   ),
                   h.Tabindex(0),
+                  h.OnFocus(Message.FocusedResultsList()),
                   h.OnKeyDownSelfPreventDefault(key =>
                     Option.map(
                       Option.liftPredicate(
@@ -656,7 +751,7 @@ const cartPanelView = (
                       h.strong([], [domain.name]),
                       h.span([], [formatRegistrationPrice(domain)]),
                       h.span(
-                        [h.Class('text-xs text-gray-400')],
+                        [h.Class('mt-1 block text-xs text-gray-400')],
                         [formatRenewalPrice(domain)],
                       ),
                     ],
@@ -702,12 +797,12 @@ const cartView = (model: Model, h: ApplicationViewBuilder): Html =>
         hasDescription: true,
         toView: render =>
           h.dialog(
-            [...render.dialog, h.Class('cart-overlay')],
+            [...render.dialog, h.Class('dialog-overlay')],
             render.isVisible
               ? [
                   h.div([
                     ...render.backdrop,
-                    h.Class('cart-backdrop'),
+                    h.Class('dialog-backdrop'),
                     h.AriaHidden(true),
                   ]),
                   cartPanelView(model, render, h),
@@ -769,6 +864,7 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
       ),
       footerView(h),
       cartView(model, h),
+      filtersDialogView(model, h),
     ],
   )
 

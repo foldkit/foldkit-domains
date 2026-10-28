@@ -10,7 +10,7 @@ import {
 import { RegistrarSearch, makeRegistrarSearchLayer } from './registrarSearch'
 
 export class RegistrarCoordinator {
-  protected readonly fetchRegistrar: typeof globalThis.fetch = globalThis.fetch
+  protected readonly fetchRegistrar = globalThis.fetch
   private readonly runtime: ManagedRuntime.ManagedRuntime<
     RegistrarSearch,
     never

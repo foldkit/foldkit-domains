@@ -16,6 +16,7 @@ import {
   RESULTS_GROUP_HEIGHT_PX,
   RESULTS_OVERSCAN_GROUPS,
   ResultsListBlock,
+  estimateDomainListingGroupHeightPx,
   groupDomainListings,
 } from '../resultsList'
 import { routeToQuery } from '../route'
@@ -46,15 +47,17 @@ const findFirstPendingListingForViewport = (
   groups: ReadonlyArray<DomainListingGroup>,
   resultsList: typeof ResultsListBlock.Model.Type,
 ) => {
-  const groupHeightPx = (id: string) =>
-    Record.get(resultsList.measuredRowHeights, id).pipe(
-      Option.getOrElse(() => RESULTS_GROUP_HEIGHT_PX),
+  const groupHeightPx = (group: DomainListingGroup) =>
+    Record.get(resultsList.measuredRowHeights, group.id).pipe(
+      Option.getOrElse(() =>
+        estimateDomainListingGroupHeightPx(resultsList, group.listings.length),
+      ),
     )
 
   const groupOffsetsPx = Array.scan(
     groups,
     0,
-    (offsetPx, group) => offsetPx + groupHeightPx(group.id),
+    (offsetPx, group) => offsetPx + groupHeightPx(group),
   )
 
   const groupsWithOffsets: ReadonlyArray<{
@@ -69,7 +72,8 @@ const findFirstPendingListingForViewport = (
     resultsList.measurement._tag === 'Measured'
       ? resultsList.measurement.containerHeight
       : RESULTS_GROUP_HEIGHT_PX
-  const overscanHeightPx = RESULTS_GROUP_HEIGHT_PX * RESULTS_OVERSCAN_GROUPS
+  const overscanHeightPx =
+    estimateDomainListingGroupHeightPx(resultsList) * RESULTS_OVERSCAN_GROUPS
   const viewportStartPx = resultsList.scrollTop - overscanHeightPx
   const viewportEndPx =
     resultsList.scrollTop + viewportHeightPx + overscanHeightPx
@@ -78,7 +82,7 @@ const findFirstPendingListingForViewport = (
     groupsWithOffsets,
     Array.filter(
       ({ group, offsetPx }) =>
-        offsetPx + groupHeightPx(group.id) >= viewportStartPx &&
+        offsetPx + groupHeightPx(group) >= viewportStartPx &&
         offsetPx <= viewportEndPx,
     ),
     Array.flatMap(({ group }) => group.listings),

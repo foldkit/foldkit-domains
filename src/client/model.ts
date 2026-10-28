@@ -23,5 +23,6 @@ export const Model = Schema.Struct({
   sortOrder: SortOrder,
   cart: Schema.Array(Domain.Available),
   cartDialog: DialogBlock.Model,
+  filtersDialog: DialogBlock.Model,
 })
 export type Model = typeof Model.Type
