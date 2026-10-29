@@ -40,7 +40,7 @@ import {
   makeChangeSearchQueryStep,
   makeChangeSortOrderStep,
   makeChangeTldFilterStep,
-  makeRequestQuotesForRangeStep,
+  makeScheduleQuoteRequestStep,
   makeSearchQueryStep,
   retrySearchStep,
   searchQueryStep,
@@ -58,7 +58,7 @@ export const update = ApplicationComposition.makeUpdate({
   })),
 
   RequestedQuotes: makeStep.fromMessage(({ offset, limit }) =>
-    makeRequestQuotesForRangeStep({ offset, limit }),
+    makeScheduleQuoteRequestStep({ offset, limit }),
   ),
 
   SubmittedSearch: Update.combineSteps([

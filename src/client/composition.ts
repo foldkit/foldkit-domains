@@ -1,9 +1,7 @@
-import { Option, Result } from 'effect'
-import { Block, Update } from 'foldkit'
+import { Block } from 'foldkit'
 
 import { DialogBlock } from '@foldkit/ui'
 
-import { queryToMaybeDomainLabel } from '../shared/domain'
 import {
   FocusCartButton,
   FocusFiltersButton,
@@ -17,7 +15,6 @@ import {
   makeFieldsStep,
   makeNoopStep,
   makeOutMessageFold,
-  makeStep,
 } from './definition'
 import { DomainsQuery } from './domainsQuery'
 import {
@@ -29,7 +26,6 @@ import {
   TldListboxBlock,
 } from './filterListboxes'
 import { ResultsListBlock, resultsListConfig } from './resultsList'
-import { routeToQuery } from './route'
 import {
   SEARCH_MODE_CONTROL_ID,
   SearchModeControlBlock,
@@ -41,9 +37,8 @@ import {
 } from './steps/filters'
 import {
   loadRequiredQuotesStep,
-  makeUseCompleteCatalogRangeStep,
+  makeApplyQuoteCompletionStep,
 } from './steps/quoteLoading'
-import { informResultsListStep } from './steps/resultsList'
 import { makeRequestSearchModeStep } from './steps/search'
 
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
@@ -127,36 +122,7 @@ export const DomainsQueryBinding = makeBinding(DomainsQuery, {
   field: 'domainsQuery',
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DomainsQuery, {
-    CompletedFetch: ({ args, result, completedAtMillis }) =>
-      makeStep(model => {
-        if (
-          args.mode !== model.searchMode ||
-          !Option.contains(
-            queryToMaybeDomainLabel(routeToQuery(model.route)),
-            args.label,
-          )
-        ) {
-          return { model }
-        }
-
-        return Update.combineSteps([
-          makeFieldsStep(() => ({
-            searchPlanningTimeMillis: time => completedAtMillis ?? time,
-            maybeSearchCooldown: maybeCooldown =>
-              model.searchMode === 'Live' && Result.isFailure(result)
-                ? Option.orElse(
-                    result.failure.maybeSearchCooldown,
-                    () => maybeCooldown,
-                  )
-                : maybeCooldown,
-          })),
-          Result.isSuccess(result)
-            ? makeUseCompleteCatalogRangeStep(args)
-            : makeNoopStep(),
-          loadRequiredQuotesStep,
-          informResultsListStep,
-        ])
-      }),
+    CompletedFetch: makeApplyQuoteCompletionStep,
   }),
 })
 

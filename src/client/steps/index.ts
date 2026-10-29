@@ -5,7 +5,8 @@ export {
 } from './filters'
 export {
   loadRequiredQuotesStep,
-  makeRequestQuotesForRangeStep,
+  makeScheduleQuoteRequestStep,
+  loadQuotesForRangeStep,
 } from './quoteLoading'
 export { informResultsListStep } from './resultsList'
 export {
@@ -14,6 +15,5 @@ export {
   makeChangeSearchQueryStep,
   retrySearchStep,
   searchQueryStep,
-  loadQuotesForRangeStep,
   makeSearchQueryStep,
 } from './search'

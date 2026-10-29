@@ -1,5 +1,5 @@
-import { Array, Option, Record, pipe } from 'effect'
-import { AsyncData } from 'foldkit'
+import { Array, Option, Result, pipe } from 'effect'
+import { AsyncData, Update } from 'foldkit'
 
 import {
   DomainCandidateRange,
@@ -7,26 +7,24 @@ import {
   queryToMaybeDomainLabel,
 } from '../../shared/domain'
 import { ReadSearchPlanningTime } from '../command'
-import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
+import { DomainsQueryBinding } from '../composition'
 import {
-  DomainListing,
-  isCompleteCatalogRequired,
-  tldToMaybeDomainCandidateRange,
-} from '../domain'
-import { DomainsQuery, DomainsQueryArgs } from '../domainsQuery'
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+} from '../definition'
 import {
-  DomainListingGroup,
-  RESULTS_GROUP_HEIGHT_PX,
-  RESULTS_OVERSCAN_GROUPS,
-  type ResultsListModel,
-  estimateDomainListingGroupHeightPx,
-  groupDomainListings,
-} from '../resultsList'
+  DomainsQuery,
+  DomainsQueryArgs,
+  type DomainsQueryCompletedFetch,
+} from '../domainsQuery'
+import type { CompletedReadSearchPlanningTimeMessage } from '../message'
+import { planRequiredDomainCandidateRange } from '../quotePlanning'
 import { routeToQuery } from '../route'
-import { searchPresentation } from '../searchPresentation'
-import { visibleResultListings } from '../visibleResultListings'
+import { informResultsListStep } from './resultsList'
 
-export const makeTrackDomainCandidateRangeStep = (
+const makeTrackDomainCandidateRangeStep = (
   range: DomainCandidateRange,
   nowMillis: number,
   isBlocked: boolean,
@@ -45,7 +43,7 @@ export const makeTrackDomainCandidateRangeStep = (
       isBlocked ? Option.some(range) : Option.none(),
   }))
 
-export const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
+const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
   makeFieldsStep(model =>
     args.offset === 0 &&
     args.limit === domainTlds.length &&
@@ -58,7 +56,7 @@ export const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
       : {},
   )
 
-export const makeRequestQuotesForRangeStep = (
+export const makeScheduleQuoteRequestStep = (
   { offset, limit }: DomainCandidateRange,
   isForced = false,
 ) =>
@@ -71,110 +69,100 @@ export const makeRequestQuotesForRangeStep = (
     }),
   ])
 
-const findFirstPendingListingForViewport = (
-  groups: ReadonlyArray<DomainListingGroup>,
-  resultsList: ResultsListModel,
-) => {
-  const groupHeightPx = (group: DomainListingGroup) =>
-    Record.get(resultsList.measuredRowHeights, group.id).pipe(
-      Option.getOrElse(() =>
-        estimateDomainListingGroupHeightPx(resultsList, group.listings.length),
-      ),
-    )
+export const loadRequiredQuotesStep = makeStep(model =>
+  Option.match(planRequiredDomainCandidateRange(model), {
+    onNone: () => ({ model }),
+    onSome: range => makeScheduleQuoteRequestStep(range)(model),
+  }),
+)
 
-  const groupOffsetsPx = Array.scan(
-    groups,
-    0,
-    (offsetPx, group) => offsetPx + groupHeightPx(group),
-  )
+export const loadQuotesForRangeStep = makeStep(
+  (model, message: CompletedReadSearchPlanningTimeMessage) => {
+    if (message.searchGeneration !== model.searchGeneration) {
+      return { model }
+    }
 
-  const groupsWithOffsets: ReadonlyArray<{
-    group: DomainListingGroup
-    offsetPx: number
-  }> = Array.zipWith(groups, groupOffsetsPx, (group, offsetPx) => ({
-    group,
-    offsetPx,
-  }))
+    const maybeLabel = pipe(model.route, routeToQuery, queryToMaybeDomainLabel)
 
-  const viewportHeightPx =
-    resultsList.measurement._tag === 'Measured'
-      ? resultsList.measurement.containerHeight
-      : RESULTS_GROUP_HEIGHT_PX
-  const overscanHeightPx =
-    estimateDomainListingGroupHeightPx(resultsList) * RESULTS_OVERSCAN_GROUPS
-  const viewportStartPx = resultsList.scrollTop - overscanHeightPx
-  const viewportEndPx =
-    resultsList.scrollTop + viewportHeightPx + overscanHeightPx
-
-  return pipe(
-    groupsWithOffsets,
-    Array.filter(
-      ({ group, offsetPx }) =>
-        offsetPx + groupHeightPx(group) >= viewportStartPx &&
-        offsetPx <= viewportEndPx,
-    ),
-    Array.flatMap(({ group }) => group.listings),
-    Array.findFirst(DomainListing.isAnyOf(['Pending'])),
-  )
-}
-
-export const loadRequiredQuotesStep = makeStep(model => {
-  const search = searchPresentation(model)
-
-  if (search._tag !== 'Ready' || search.quoteRequest._tag === 'Loading') {
-    return { model }
-  }
-
-  const isCatalogFullyChecked = search.domains.length === domainTlds.length
-
-  if (isCatalogFullyChecked) {
-    return { model }
-  }
-
-  if (isCompleteCatalogRequired(model.availabilityFilter, model.sortOrder)) {
-    const hasCompleteCatalogRequestFailed = Option.exists(
-      queryToMaybeDomainLabel(routeToQuery(model.route)),
-      label =>
-        AsyncData.hasError(
-          DomainsQuery.read(model.domainsQuery, {
-            mode: model.searchMode,
-            label,
-            offset: 0,
-            limit: domainTlds.length,
-          }),
-        ),
-    )
+    if (Option.isNone(maybeLabel)) {
+      return { model }
+    }
 
     if (
-      hasCompleteCatalogRequestFailed ||
-      Option.exists(
-        model.maybeBlockedDomainCandidateRange,
-        range => range.offset === 0 && range.limit === domainTlds.length,
+      Array.some(
+        DomainsQuery.pendingArgs(model.domainsQuery),
+        args =>
+          args.mode === model.searchMode && args.label === maybeLabel.value,
       )
     ) {
       return { model }
     }
 
-    return makeRequestQuotesForRangeStep({
-      offset: 0,
-      limit: domainTlds.length,
-    })(model)
-  }
+    const range: DomainCandidateRange = {
+      offset: message.offset,
+      limit: message.limit,
+    }
+    const args = { mode: model.searchMode, label: maybeLabel.value, ...range }
+    const isBlocked =
+      model.searchMode === 'Live' &&
+      (message.isForced ||
+        !DomainsQuery.isFresh(model.domainsQuery, args, message.nowMillis)) &&
+      Option.exists(
+        model.maybeSearchCooldown,
+        cooldown => cooldown.expiresAtMillis > message.nowMillis,
+      )
 
-  if (search.quoteRequest._tag === 'Failed') {
-    return { model }
-  }
+    const loadQuotesStep = (() => {
+      if (isBlocked) {
+        return makeNoopStep()
+      } else if (message.isForced) {
+        return DomainsQueryBinding.requestRevalidationOrLoad(args)
+      } else {
+        return DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis)
+      }
+    })()
 
-  const maybeDomainCandidateRange = pipe(
-    model,
-    visibleResultListings,
-    groupDomainListings,
-    groups => findFirstPendingListingForViewport(groups, model.resultsList),
-    Option.flatMap(listing => tldToMaybeDomainCandidateRange(listing.tld)),
-  )
+    return Update.combineSteps([
+      makeTrackDomainCandidateRangeStep(range, message.nowMillis, isBlocked),
+      loadQuotesStep,
+      makeUseCompleteCatalogRangeStep(args),
+      loadRequiredQuotesStep,
+      informResultsListStep,
+    ])
+  },
+)
 
-  return Option.match(maybeDomainCandidateRange, {
-    onNone: () => ({ model }),
-    onSome: range => makeRequestQuotesForRangeStep(range)(model),
+export const makeApplyQuoteCompletionStep = ({
+  args,
+  result,
+  completedAtMillis,
+}: DomainsQueryCompletedFetch) =>
+  makeStep(model => {
+    if (
+      args.mode !== model.searchMode ||
+      !Option.contains(
+        queryToMaybeDomainLabel(routeToQuery(model.route)),
+        args.label,
+      )
+    ) {
+      return { model }
+    }
+
+    return Update.combineSteps([
+      makeFieldsStep(() => ({
+        searchPlanningTimeMillis: time => completedAtMillis ?? time,
+        maybeSearchCooldown: maybeCooldown =>
+          model.searchMode === 'Live' && Result.isFailure(result)
+            ? Option.orElse(
+                result.failure.maybeSearchCooldown,
+                () => maybeCooldown,
+              )
+            : maybeCooldown,
+      })),
+      Result.isSuccess(result)
+        ? makeUseCompleteCatalogRangeStep(args)
+        : makeNoopStep(),
+      loadRequiredQuotesStep,
+      informResultsListStep,
+    ])
   })
-})

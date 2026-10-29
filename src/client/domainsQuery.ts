@@ -94,3 +94,6 @@ export const DomainsQuery = Query.define({
       fetchDomains(args).pipe(Effect.provideService(DomainsClient, client))
   },
 })
+
+export type DomainsQueryCompletedFetch =
+  typeof DomainsQuery.OutMessage.CompletedFetch.Type

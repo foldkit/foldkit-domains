@@ -1,31 +1,16 @@
-import { Array, Number, Option, String, pipe } from 'effect'
+import { Array, Number, Option, String } from 'effect'
 import { Update } from 'foldkit'
 
-import {
-  DomainCandidateRange,
-  domainTlds,
-  queryToMaybeDomainLabel,
-} from '../../shared/domain'
+import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
 import { SearchMode } from '../../shared/searchMode'
 import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
 import { DomainsQueryBinding, LiveWarningDialogBinding } from '../composition'
-import {
-  makeCommandsStep,
-  makeFieldsStep,
-  makeNoopStep,
-  makeStep,
-} from '../definition'
+import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
 import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
-import type { CompletedReadSearchPlanningTimeMessage } from '../message'
 import { routeToQuery } from '../route'
 import { searchPresentation } from '../searchPresentation'
-import {
-  loadRequiredQuotesStep,
-  makeRequestQuotesForRangeStep,
-  makeTrackDomainCandidateRangeStep,
-  makeUseCompleteCatalogRangeStep,
-} from './quoteLoading'
+import { makeScheduleQuoteRequestStep } from './quoteLoading'
 import { informResultsListStep, resetResultsListStep } from './resultsList'
 
 export const cancelSearchStep = makeStep(model =>
@@ -107,67 +92,11 @@ export const retrySearchStep = makeStep(model => {
       ? { offset: 0, limit: domainTlds.length }
       : search.quoteRequest
 
-    return makeRequestQuotesForRangeStep(range, true)
+    return makeScheduleQuoteRequestStep(range, true)
   } else {
     return makeSearchQueryStep(true)
   }
 })
-
-export const loadQuotesForRangeStep = makeStep(
-  (model, message: CompletedReadSearchPlanningTimeMessage) => {
-    if (message.searchGeneration !== model.searchGeneration) {
-      return { model }
-    }
-
-    const maybeLabel = pipe(model.route, routeToQuery, queryToMaybeDomainLabel)
-
-    if (Option.isNone(maybeLabel)) {
-      return { model }
-    }
-
-    if (
-      Array.some(
-        DomainsQuery.pendingArgs(model.domainsQuery),
-        args =>
-          args.mode === model.searchMode && args.label === maybeLabel.value,
-      )
-    ) {
-      return { model }
-    }
-
-    const range: DomainCandidateRange = {
-      offset: message.offset,
-      limit: message.limit,
-    }
-    const args = { mode: model.searchMode, label: maybeLabel.value, ...range }
-    const isBlocked =
-      model.searchMode === 'Live' &&
-      (message.isForced ||
-        !DomainsQuery.isFresh(model.domainsQuery, args, message.nowMillis)) &&
-      Option.exists(
-        model.maybeSearchCooldown,
-        cooldown => cooldown.expiresAtMillis > message.nowMillis,
-      )
-
-    const loadQuotesStep = (() => {
-      if (isBlocked) {
-        return makeNoopStep()
-      } else if (message.isForced) {
-        return DomainsQueryBinding.requestRevalidationOrLoad(args)
-      } else {
-        return DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis)
-      }
-    })()
-
-    return Update.combineSteps([
-      makeTrackDomainCandidateRangeStep(range, message.nowMillis, isBlocked),
-      loadQuotesStep,
-      makeUseCompleteCatalogRangeStep(args),
-      loadRequiredQuotesStep,
-      informResultsListStep,
-    ])
-  },
-)
 
 export const makeChangeSearchModeStep = (mode: SearchMode) =>
   makeStep(model => {

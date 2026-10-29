@@ -1,4 +1,4 @@
-import { Array, Schema, pipe } from 'effect'
+import { Array, Option, Record, Schema, pipe } from 'effect'
 
 import { VirtualList } from '@foldkit/ui'
 
@@ -75,4 +75,52 @@ export const estimateDomainListingGroupHeightPx = (
   } else {
     return Math.ceil(listingCount / 3) * DESKTOP_RESULT_HEIGHT_PX
   }
+}
+
+export const findFirstPendingListingInViewport = (
+  listings: ReadonlyArray<DomainListing>,
+  resultsList: ResultsListModel,
+): Option.Option<DomainListing> => {
+  const groups = groupDomainListings(listings)
+  const groupHeightPx = (group: DomainListingGroup) =>
+    Record.get(resultsList.measuredRowHeights, group.id).pipe(
+      Option.getOrElse(() =>
+        estimateDomainListingGroupHeightPx(resultsList, group.listings.length),
+      ),
+    )
+
+  const groupOffsetsPx = Array.scan(
+    groups,
+    0,
+    (offsetPx, group) => offsetPx + groupHeightPx(group),
+  )
+
+  const groupsWithOffsets: ReadonlyArray<{
+    group: DomainListingGroup
+    offsetPx: number
+  }> = Array.zipWith(groups, groupOffsetsPx, (group, offsetPx) => ({
+    group,
+    offsetPx,
+  }))
+
+  const viewportHeightPx =
+    resultsList.measurement._tag === 'Measured'
+      ? resultsList.measurement.containerHeight
+      : RESULTS_GROUP_HEIGHT_PX
+  const overscanHeightPx =
+    estimateDomainListingGroupHeightPx(resultsList) * RESULTS_OVERSCAN_GROUPS
+  const viewportStartPx = resultsList.scrollTop - overscanHeightPx
+  const viewportEndPx =
+    resultsList.scrollTop + viewportHeightPx + overscanHeightPx
+
+  return pipe(
+    groupsWithOffsets,
+    Array.filter(
+      ({ group, offsetPx }) =>
+        offsetPx + groupHeightPx(group) >= viewportStartPx &&
+        offsetPx <= viewportEndPx,
+    ),
+    Array.flatMap(({ group }) => group.listings),
+    Array.findFirst(DomainListing.isAnyOf(['Pending'])),
+  )
 }
