@@ -1,13 +1,13 @@
 diff --git a/dist/virtualList/virtualList.js b/dist/virtualList/virtualList.js
-index 75695856e28a9714043b730da332fe62b62994b4..5a5b9d42908b7a113724376fd820ec805a08ba10 100644
+index 75695856e28a9714043b730da332fe62b62994b4..22c81076f5d3d4c409d3650c7c6127f30950c89d 100644
 --- a/dist/virtualList/virtualList.js
 +++ b/dist/virtualList/virtualList.js
 @@ -523,6 +523,9 @@ const applyScrollSnapshot = (model, snapshot) => __foldkitBrandViewResult((modif
          if (snapshot.layoutVersion !== undefined &&
              snapshot.layoutVersion !== model.layoutVersion &&
              nextAnchor._tag !== 'End') {
-+            if (snapshot.origin?._tag === 'Native') {
-+                return __foldkitBrandViewResult((ViewportAnchor.Offset({ scrollTop: snapshot.scrollTop })), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
++            if (snapshot.origin?._tag === 'Native' && Math.abs(snapshot.scrollTop - model.scrollTop) > 1) {
++                return __foldkitBrandViewResult((nextAnchor), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
 +            }
              return __foldkitBrandViewResult((model.viewportAnchor), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
          }

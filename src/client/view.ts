@@ -1,6 +1,7 @@
 import { Array, Number, Option, Schema, String, pipe } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
 
+import * as Checkbox from '@foldkit/ui/checkbox'
 import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
 import type * as Listbox from '@foldkit/ui/listbox'
 
@@ -18,6 +19,7 @@ import {
   CartDialogBinding,
   FILTERS_DIALOG_ID,
   FiltersDialogBinding,
+  LiveWarningDialogBinding,
   ResultsListBinding,
   SearchModeBinding,
   SortListboxBinding,
@@ -1171,6 +1173,96 @@ const cartView = (model: Model, h: ApplicationViewBuilder): Html =>
     }),
   )
 
+const liveWarningView = (model: Model, h: ApplicationViewBuilder): Html =>
+  h.block(
+    LiveWarningDialogBinding.embedView({
+      slotId: model.liveWarningDialog.id,
+      model: model.liveWarningDialog,
+      viewInputs: {
+        hasDescription: true,
+        toView: render =>
+          h.dialog(
+            [...render.dialog, h.Class('dialog-overlay')],
+            render.isVisible
+              ? [
+                  h.div([
+                    ...render.backdrop,
+                    h.Class('dialog-backdrop'),
+                    h.AriaHidden(true),
+                  ]),
+                  h.section(
+                    [...render.panel, h.Class('live-warning-panel')],
+                    [
+                      h.h2([...render.title], ['Before you go Live']),
+                      h.p(
+                        [...render.description, h.Class('live-warning-copy')],
+                        [
+                          'Live availability and pricing depend on Vercel’s Domains API, so results can take a moment. By continuing, you solemnly promise not to blame the CAFE stack for the wait.',
+                        ],
+                      ),
+                      Checkbox.view(
+                        {
+                          id: 'live-latency-acceptance',
+                          isChecked: model.isLiveLatencyAccepted,
+                          onToggle: isAccepted =>
+                            Message.UpdatedLiveLatencyAcceptance({
+                              isAccepted,
+                            }),
+                          toView: attributes =>
+                            h.div(
+                              [h.Class('live-warning-acceptance')],
+                              [
+                                h.button(
+                                  [
+                                    ...attributes.checkbox,
+                                    ...render.initialFocus,
+                                    h.Class('live-warning-checkbox'),
+                                  ],
+                                  model.isLiveLatencyAccepted
+                                    ? [Icon.check()]
+                                    : undefined,
+                                ),
+                                h.span(
+                                  [...attributes.label],
+                                  [
+                                    'I agree to give the CAFE stack a little grace.',
+                                  ],
+                                ),
+                              ],
+                            ),
+                        },
+                        h,
+                      ),
+                      h.p(
+                        [h.Class('live-warning-footnote')],
+                        ['Not legally binding. Please do report actual bugs.'],
+                      ),
+                      h.div(
+                        [h.Class('live-warning-actions')],
+                        [
+                          h.button(
+                            [...render.closeButton, h.Class('button')],
+                            ['Stay in Demo'],
+                          ),
+                          h.button(
+                            [
+                              h.Class('button primary live-warning-continue'),
+                              h.Disabled(!model.isLiveLatencyAccepted),
+                              h.OnClick(Message.ClickedContinueToLive()),
+                            ],
+                            ['Continue to Live'],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ]
+              : undefined,
+          ),
+      },
+    }),
+  )
+
 const footerView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.footer(
     [h.Class('footer')],
@@ -1243,6 +1335,7 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
       ),
       footerView(model, h),
       cartView(model, h),
+      liveWarningView(model, h),
       filtersDialogView(model, h),
       tldDialogView(model, h),
     ],

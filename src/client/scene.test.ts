@@ -43,12 +43,18 @@ import {
   FocusCartCloseButton,
   FocusFiltersButton,
   FocusSearchInput,
+  FocusSearchModeButton,
   FocusTldFilterButton,
   ReadSearchPlanningTime,
   ReplaceSearchUrl,
   ScrollPage,
 } from './command'
-import { CART_DIALOG_ID, FILTERS_DIALOG_ID, TLD_DIALOG_ID } from './composition'
+import {
+  CART_DIALOG_ID,
+  FILTERS_DIALOG_ID,
+  LIVE_WARNING_DIALOG_ID,
+  TLD_DIALOG_ID,
+} from './composition'
 import { QUOTE_PAGE_SIZE, TOP_RESULT_COUNT } from './domain'
 import { DomainsQuery, DomainsQueryFailure } from './domainsQuery'
 import { SortListboxBlock, TldListboxBlock } from './filterListboxes'
@@ -844,7 +850,7 @@ test.each(PageScrollKey.literals)(
   },
 )
 
-test('the data source listbox selects Live and retains the query', () => {
+test('the data source listbox requires acknowledgment before selecting Live and retains the query', () => {
   scene(
     { update, view },
     given(readyModel('acme')),
@@ -895,6 +901,35 @@ test('the data source listbox selects Live and retains the query', () => {
       Listbox.test.AnchorListbox,
       Listbox.test.PortalListboxBackdrop,
     ),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      DialogBlock.Message.SucceededShowDialog(),
+    ),
+    Mount.resolve(
+      Dialog.test.AcquireResources({
+        id: LIVE_WARNING_DIALOG_ID,
+        focusSelector: Dialog.initialFocusMarkerSelector,
+      }),
+      DialogBlock.Message.SucceededAcquireResources(),
+    ),
+    expect(role('dialog', { name: 'Before you go Live' })).toExist(),
+    expect(role('button', { name: 'Continue to Live' })).toBeDisabled(),
+    click(
+      role('checkbox', {
+        name: 'I agree to give the CAFE stack a little grace.',
+      }),
+    ),
+    expect(role('button', { name: 'Continue to Live' })).not.toBeDisabled(),
+    click(role('button', { name: 'Continue to Live' })),
+    Command.resolve(
+      Dialog.test.CloseDialog,
+      DialogBlock.Message.CompletedCloseDialog(),
+    ),
+    Command.resolve(
+      FocusSearchModeButton,
+      Message.CompletedFocusSearchModeButton(),
+    ),
+    Mount.expectEnded(Dialog.test.AcquireResources),
     resolveSearchPlanningTime(),
     resolveDomains(
       'acme',

@@ -59,6 +59,24 @@ export const chooseFilterOption = async (
   await expect(trigger).toBeFocused()
 }
 
+export const acknowledgeLiveWarning = async (page: Page): Promise<void> => {
+  const warning = page.getByRole('dialog', { name: 'Before you go Live' })
+  const checkbox = warning.getByRole('checkbox', {
+    name: 'I agree to give the CAFE stack a little grace.',
+  })
+  const continueButton = warning.getByRole('button', {
+    name: 'Continue to Live',
+  })
+  await expect(warning).toBeVisible()
+  await expect(checkbox).toBeFocused()
+  await expect(checkbox).not.toBeChecked()
+  await expect(continueButton).toBeDisabled()
+  await checkbox.click()
+  await expect(checkbox).toBeChecked()
+  await continueButton.click()
+  await expect(warning).toBeHidden()
+}
+
 export const chooseSearchMode = async (
   page: Page,
   mode: 'Demo' | 'Live',
@@ -69,5 +87,8 @@ export const chooseSearchMode = async (
   await expect(
     page.getByRole('listbox', { name: /^Data source:/ }),
   ).toBeHidden()
+  if (mode === 'Live') {
+    await acknowledgeLiveWarning(page)
+  }
   await expect(trigger).toBeFocused()
 }

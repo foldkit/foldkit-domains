@@ -8,7 +8,7 @@ import {
 } from '../../shared/domain'
 import { SearchMode } from '../../shared/searchMode'
 import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
-import { DomainsQueryBinding } from '../composition'
+import { DomainsQueryBinding, LiveWarningDialogBinding } from '../composition'
 import {
   makeCommandsStep,
   makeFieldsStep,
@@ -180,3 +180,30 @@ export const makeChangeSearchModeStep = (mode: SearchMode) =>
       searchQueryStep,
     ])
   })
+
+export const makeRequestSearchModeStep = (mode: SearchMode) =>
+  makeStep(model => {
+    if (mode === 'Live' && model.searchMode === 'Demo') {
+      return Update.combineSteps([
+        makeFieldsStep(() => ({ isLiveLatencyAccepted: () => false })),
+        LiveWarningDialogBinding.requestOpen(),
+      ])
+    } else {
+      return makeChangeSearchModeStep(mode)
+    }
+  })
+
+export const continueToLiveStep = makeStep(model => {
+  if (
+    !model.liveWarningDialog.isOpen ||
+    !model.isLiveLatencyAccepted ||
+    model.searchMode !== 'Demo'
+  ) {
+    return { model }
+  }
+
+  return Update.combineSteps([
+    makeChangeSearchModeStep('Live'),
+    LiveWarningDialogBinding.requestClose(),
+  ])
+})

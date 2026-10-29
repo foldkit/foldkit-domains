@@ -212,9 +212,10 @@ lives in `src/client/site.ts` and `src/client/entry.server.ts`.
 
 `repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `b75b14110d6ad3fc51c548c5d6c938dad2dc5016`. It supplies source, examples, and documentation matching the installed preview packages. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
 
-The UI dependency patch preserves responsive scroll anchors and admits native
-scroll offsets even when their row-layout observation is stale. Browser coverage
-protects both resize anchoring and returning to the first catalog row with Home.
+The UI dependency patch preserves responsive scroll anchors and accepts native
+scroll observations when their offset changes during a pending row-layout update.
+Browser coverage protects both resize anchoring and returning to the first
+catalog row with Home.
 
 When upgrading Foldkit, pull the subtree at the commit or release tag matching the new package versions:
 

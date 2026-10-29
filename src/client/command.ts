@@ -8,6 +8,7 @@ import { Message } from './message'
 import { PageScrollKey, RESULTS_LIST_ID } from './resultsList'
 import { searchRouter } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
+import { SEARCH_MODE_CONTROL_ID } from './searchModeControl'
 import { subscriptions } from './subscription'
 
 export const ReadSearchPlanningTime = ApplicationDefinition.makeCommand(
@@ -117,6 +118,22 @@ export const FocusTldFilterButton = ApplicationDefinition.makeCommand(
         Dom.focus('#mobile-tld-filter', { preventScroll: true }).pipe(
           Effect.ignore,
           Effect.as(Message.CompletedFocusTldFilterButton()),
+        )
+    },
+  },
+)
+
+export const FocusSearchModeButton = ApplicationDefinition.makeCommand(
+  'FocusSearchModeButton',
+  {
+    messages: [Message.CompletedFocusSearchModeButton],
+    handler: function* () {
+      return () =>
+        Dom.focus(`#${SEARCH_MODE_CONTROL_ID}-button`, {
+          preventScroll: true,
+        }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusSearchModeButton()),
         )
     },
   },
@@ -257,6 +274,7 @@ export const EffectsLayer = Layer.mergeAll(
   FocusFiltersButton.layer,
   FocusTldFilterButton.layer,
   FocusCartCloseButton.layer,
+  FocusSearchModeButton.layer,
   ScrollPage.layer,
   ScrollPageToTop.layer,
   RevealResultsListStart.layer,

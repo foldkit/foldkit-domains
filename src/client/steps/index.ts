@@ -10,6 +10,7 @@ export {
 export { informResultsListStep } from './resultsList'
 export {
   clearSearchStep,
+  continueToLiveStep,
   makeChangeSearchQueryStep,
   retrySearchStep,
   searchQueryStep,

@@ -16,6 +16,7 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
         ? 'Search'
         : 'Landing',
       searchMode: 'Demo',
+      isLiveLatencyAccepted: false,
       searchGeneration: 0,
       searchPlanningTimeMillis: 0,
       domainCandidateRanges: [],

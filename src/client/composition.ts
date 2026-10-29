@@ -7,6 +7,7 @@ import { queryToMaybeDomainLabel } from '../shared/domain'
 import {
   FocusCartButton,
   FocusFiltersButton,
+  FocusSearchModeButton,
   FocusTldFilterButton,
 } from './command'
 import {
@@ -43,7 +44,7 @@ import {
   makeUseCompleteCatalogRangeStep,
 } from './steps/quoteLoading'
 import { informResultsListStep } from './steps/resultsList'
-import { makeChangeSearchModeStep } from './steps/search'
+import { makeRequestSearchModeStep } from './steps/search'
 
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
   field: 'resultsList',
@@ -97,6 +98,20 @@ export const TldDialogBinding = makeBinding(DialogBlock, {
   }),
 })
 
+export const LIVE_WARNING_DIALOG_ID = 'domains-live-warning'
+
+export const LiveWarningDialogBinding = makeBinding(DialogBlock, {
+  field: 'liveWarningDialog',
+  init: { contextToArgs: () => [{ id: LIVE_WARNING_DIALOG_ID }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(DialogBlock, {
+    Opened: makeNoopStep,
+    Closed: () =>
+      makeFieldsStep(() => ({ isLiveLatencyAccepted: () => false })),
+    CompletedClose: () => makeCommandsStep(() => [FocusSearchModeButton()]),
+  }),
+})
+
 export const SearchModeBinding = makeBinding(SearchModeControlBlock, {
   field: 'searchModeControl',
   init: {
@@ -104,7 +119,7 @@ export const SearchModeBinding = makeBinding(SearchModeControlBlock, {
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(SearchModeControlBlock, {
-    Selected: ({ value }) => makeChangeSearchModeStep(value),
+    Selected: ({ value }) => makeRequestSearchModeStep(value),
   }),
 })
 
@@ -181,6 +196,7 @@ export const SortListboxBinding = makeBinding(SortListboxBlock, {
 export const ApplicationComposition = makeComposition({
   bindings: [
     SearchModeBinding,
+    LiveWarningDialogBinding,
     ResultsListBinding,
     CartDialogBinding,
     FiltersDialogBinding,

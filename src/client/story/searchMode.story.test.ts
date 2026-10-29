@@ -4,9 +4,16 @@ import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 import { expect, test } from 'vitest'
 
+import { Dialog, DialogBlock } from '@foldkit/ui'
+
 import { Domain } from '../../shared/domain'
 import { SearchMode } from '../../shared/searchMode'
-import { DomainsQueryBinding, SearchModeBinding } from '../composition'
+import { FocusSearchModeButton } from '../command'
+import {
+  DomainsQueryBinding,
+  LiveWarningDialogBinding,
+  SearchModeBinding,
+} from '../composition'
 import {
   DomainsQuery,
   DomainsQueryArgs,
@@ -53,13 +60,38 @@ const searchModel = modifyFields(emptyModel, {
   route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
   tldFilter: () => 'Com',
 })
-const selectMode = (mode: SearchMode) =>
+const requestMode = (mode: SearchMode) =>
   message(
     toParentMessage(
       SearchModeBinding,
       SearchModeControlBlock.Message.SelectedItem({ item: mode }),
     ),
   )
+
+const closeLiveWarning = [
+  Command.resolve(
+    Dialog.test.CloseDialog,
+    DialogBlock.Message.CompletedCloseDialog(),
+  ),
+  Command.resolve(
+    FocusSearchModeButton,
+    Message.CompletedFocusSearchModeButton(),
+  ),
+]
+
+const selectMode = (mode: SearchMode) =>
+  mode === 'Live'
+    ? [
+        requestMode(mode),
+        Command.resolve(
+          Dialog.test.ShowDialog,
+          DialogBlock.Message.SucceededShowDialog(),
+        ),
+        message(Message.UpdatedLiveLatencyAcceptance({ isAccepted: true })),
+        message(Message.ClickedContinueToLive()),
+        ...closeLiveWarning,
+      ]
+    : [requestMode(mode)]
 
 test('switching modes cancels a pending lookup and rejects its late quotes and cooldown', () => {
   story(
@@ -75,7 +107,7 @@ test('switching modes cancels a pending lookup and rejects its late quotes and c
       }),
     ),
     Command.expectHas(makeDomainsFetch(demoArgs, 1)),
-    selectMode('Live'),
+    ...selectMode('Live'),
     resolveDomainsCancellation(demoArgs, 1),
     resolveSearchTime(1, 100),
     Command.expectHas(makeDomainsFetch(liveArgs, 3)),
@@ -124,7 +156,7 @@ test('mode-specific cached quotes and carts restore without fetching or changing
     update,
     given(cachedModel),
     message(Message.ClickedAddDomain({ domain: demoDomain })),
-    selectMode('Live'),
+    ...selectMode('Live'),
     resolveSearchTime(1, 100),
     model(model => {
       expect(searchPresentation(model)).toEqual(
@@ -133,7 +165,7 @@ test('mode-specific cached quotes and carts restore without fetching or changing
       expect(activeCart(model)).toEqual([])
     }),
     message(Message.ClickedAddDomain({ domain: liveDomain })),
-    selectMode('Demo'),
+    ...selectMode('Demo'),
     resolveSearchTime(2, 200),
     model(model => {
       expect(routeToQuery(model.route)).toBe('acme')
@@ -162,11 +194,11 @@ test('a live provider cooldown permits Demo requests and applies again after ret
         maybeSearchCooldown: () => Option.some(cooldown),
       }),
     ),
-    selectMode('Demo'),
+    ...selectMode('Demo'),
     resolveSearchTime(1, 100),
     Command.expectHas(makeDomainsFetch(demoArgs, 1)),
     resolveDomainsSuccess(demoArgs, 1, [demoDomain], 200),
-    selectMode('Live'),
+    ...selectMode('Live'),
     resolveSearchTime(2, 300),
     model(model => {
       expect(model.maybeSearchCooldown).toEqual(Option.some(cooldown))
@@ -174,6 +206,50 @@ test('a live provider cooldown permits Demo requests and applies again after ret
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
     resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('Live requires acknowledgment and cancellation leaves Demo active with fresh consent on reopening', () => {
+  story(
+    update,
+    given(searchModel),
+    requestMode('Live'),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      DialogBlock.Message.SucceededShowDialog(),
+    ),
+    message(Message.ClickedContinueToLive()),
+    model(model => {
+      expect(model.searchMode).toBe('Demo')
+      expect(model.liveWarningDialog.isOpen).toBe(true)
+      expect(model.isLiveLatencyAccepted).toBe(false)
+      expect(model.searchGeneration).toBe(0)
+    }),
+    message(Message.UpdatedLiveLatencyAcceptance({ isAccepted: true })),
+    message(
+      toParentMessage(
+        LiveWarningDialogBinding,
+        DialogBlock.Message.RequestedClose(),
+      ),
+    ),
+    ...closeLiveWarning,
+    model(model => {
+      expect(model.searchMode).toBe('Demo')
+      expect(model.liveWarningDialog.isOpen).toBe(false)
+      expect(model.isLiveLatencyAccepted).toBe(false)
+    }),
+    message(Message.ClickedContinueToLive()),
+    requestMode('Live'),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      DialogBlock.Message.SucceededShowDialog(),
+    ),
+    model(model => {
+      expect(model.isLiveLatencyAccepted).toBe(false)
+      expect(model.searchMode).toBe('Demo')
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
+    }),
     Command.expectNone(),
   )
 })

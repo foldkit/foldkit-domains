@@ -7,7 +7,12 @@ import { DialogBlock } from '@foldkit/ui'
 
 import { Domain, domainTlds, queryToMaybeDomainLabel } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
-import { CART_DIALOG_ID, FILTERS_DIALOG_ID, TLD_DIALOG_ID } from './composition'
+import {
+  CART_DIALOG_ID,
+  FILTERS_DIALOG_ID,
+  LIVE_WARNING_DIALOG_ID,
+  TLD_DIALOG_ID,
+} from './composition'
 import { DomainsQuery, DomainsQueryArgs } from './domainsQuery'
 import {
   AVAILABILITY_FILTER_ID,
@@ -29,6 +34,8 @@ export const emptyModel = Model.make({
   route: ApplicationRoute.Search({ q: Option.none() }),
   searchLayout: 'Landing',
   searchMode: 'Demo',
+  isLiveLatencyAccepted: false,
+  liveWarningDialog: DialogBlock.init({ id: LIVE_WARNING_DIALOG_ID }).model,
   searchModeControl: SearchModeControlBlock.init({
     id: SEARCH_MODE_CONTROL_ID,
     isAnimated: true,

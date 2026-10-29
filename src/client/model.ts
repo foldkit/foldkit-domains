@@ -27,6 +27,8 @@ export const Model = Schema.Struct({
   route: ApplicationRoute,
   searchLayout: SearchLayout,
   searchMode: SearchMode,
+  liveWarningDialog: DialogBlock.Model,
+  isLiveLatencyAccepted: Schema.Boolean,
   searchModeControl: SearchModeControlBlock.Model,
   searchGeneration: Schema.Number,
   searchPlanningTimeMillis: Schema.Number,

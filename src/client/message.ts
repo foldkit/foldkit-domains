@@ -35,6 +35,9 @@ export const Message = defineMessageUnion({
   ClickedAvailabilityOption: { value: AvailabilityFilter },
   ClickedSortOption: { value: SortOrder },
   ClickedRetrySearch: {},
+  UpdatedLiveLatencyAcceptance: { isAccepted: Schema.Boolean },
+  ClickedContinueToLive: {},
+  CompletedFocusSearchModeButton: {},
   CompletedReadSearchPlanningTime: {
     searchGeneration: Schema.Number,
     nowMillis: Schema.Number,

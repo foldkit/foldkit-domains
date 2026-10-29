@@ -1216,6 +1216,7 @@ for (const width of [320, 393, 1000, 1200, 1280, 1440]) {
     )
     await page.keyboard.press('Enter')
     await expect(panel).toBeHidden()
+    await Page.acknowledgeLiveWarning(page)
     const liveTrigger = page.getByRole('button', {
       name: 'Data source: Live',
       exact: true,
@@ -1242,3 +1243,53 @@ for (const width of [320, 393, 1000, 1200, 1280, 1440]) {
     await expect(livePanel).toBeHidden()
   })
 }
+
+test('Live warning gates requests, supports dismissal, and resets acknowledgment', async ({
+  page,
+}) => {
+  const liveRequests: Array<string> = []
+  await mockDomainSearch(page, (label, _range, mode) => {
+    if (mode === 'Live') {
+      liveRequests.push(label)
+    }
+    return Effect.succeed(makeDomainFixtures(label))
+  })
+  await page.goto('/?q=acme')
+  await expect(page.locator('.domain-card .price').first()).toBeVisible()
+  const trigger = page.getByRole('button', {
+    name: 'Data source: Demo',
+    exact: true,
+  })
+  const warning = page.getByRole('dialog', { name: 'Before you go Live' })
+  const checkbox = warning.getByRole('checkbox')
+  const continueButton = warning.getByRole('button', {
+    name: 'Continue to Live',
+  })
+
+  await trigger.click()
+  await page.getByRole('option', { name: /^Live/ }).click()
+  await expect(warning).toBeVisible()
+  await expect(continueButton).toBeDisabled()
+  expect(liveRequests).toEqual([])
+  await checkbox.click()
+  await expect(checkbox).toBeChecked()
+  await warning.getByRole('button', { name: 'Stay in Demo' }).click()
+  await expect(warning).toBeHidden()
+  await expect(trigger).toBeFocused()
+  expect(liveRequests).toEqual([])
+
+  await trigger.click()
+  await page.getByRole('option', { name: /^Live/ }).click()
+  await expect(checkbox).not.toBeChecked()
+  await expect(continueButton).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await expect(warning).toBeHidden()
+  await expect(trigger).toBeFocused()
+  expect(liveRequests).toEqual([])
+
+  await Page.chooseSearchMode(page, 'Live')
+  await expect.poll(() => liveRequests.length).toBeGreaterThan(0)
+  await expect(
+    page.getByRole('button', { name: 'Data source: Live', exact: true }),
+  ).toBeFocused()
+})

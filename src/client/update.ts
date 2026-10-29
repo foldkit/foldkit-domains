@@ -31,6 +31,7 @@ import { activeCart, updateActiveCart } from './model'
 import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
   clearSearchStep,
+  continueToLiveStep,
   loadQuotesForRangeStep,
   makeChangeAvailabilityFilterStep,
   makeChangeSearchQueryStep,
@@ -61,6 +62,16 @@ export const update = ApplicationComposition.makeUpdate({
     makeSearchQueryStep(true),
     makeCommandsStep(() => [DismissSearchKeyboard()]),
   ]),
+
+  UpdatedLiveLatencyAcceptance: makeFieldsStep.fromMessage(
+    ({ isAccepted }) => ({
+      isLiveLatencyAccepted: () => isAccepted,
+    }),
+  ),
+
+  ClickedContinueToLive: continueToLiveStep,
+
+  CompletedFocusSearchModeButton: makeNoopStep(),
 
   ClickedRetrySearch: Update.combineSteps([
     retrySearchStep,
