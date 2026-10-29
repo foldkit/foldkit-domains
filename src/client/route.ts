@@ -2,6 +2,8 @@ import { Option, Schema, String, pipe } from 'effect'
 import { Route } from 'foldkit'
 import { defineRouteUnion } from 'foldkit/route'
 
+import { SITE_ORIGIN } from './site'
+
 export const ApplicationRoute = defineRouteUnion({
   Search: { q: Schema.Option(Schema.String) },
   NotFound: { path: Schema.String },
@@ -30,3 +32,8 @@ export const searchHref = (query: string): string => {
   const q = Option.liftPredicate(query, String.isNonEmpty)
   return searchRouter({ q })
 }
+
+export const routeToCanonicalUrl = ApplicationRoute.match({
+  Search: () => `${SITE_ORIGIN}/`,
+  NotFound: ({ path }) => `${SITE_ORIGIN}${path}`,
+})

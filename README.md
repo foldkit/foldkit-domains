@@ -197,6 +197,17 @@ Requests with `x-domains-timing: 1` receive a `Server-Timing` header. Normal req
 
 `cache-hit`, `cache-miss`, and `cache-shared` are zero-duration outcome markers. A shared waiter records its lookup wait; provider timings belong to the request that started the shared work and may be absent from the waiter's response. Frontend cache hits produce no RPC. Next-frame measurements bracket browser presentation with animation frames; they are not a physical display latency measurement.
 
+## Social sharing assets
+
+The server-rendered HTML includes Open Graph and large-image card metadata for
+`https://domains.foldkit.dev`. Search URLs share the app’s canonical homepage
+and branded card. The 1200 × 630 sharing image lives at `public/og/domains.png`.
+
+Edit `assets/social-card.svg` or `public/favicon.svg`, then run
+`pnpm generate:social` to regenerate the PNG sharing image, favicon, and Apple
+touch icon. Commit the generated assets alongside their sources. Page metadata
+lives in `src/client/site.ts` and `src/client/entry.server.ts`.
+
 ## Framework source
 
 `repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `b75b14110d6ad3fc51c548c5d6c938dad2dc5016`. It supplies source, examples, and documentation matching the installed preview packages. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.

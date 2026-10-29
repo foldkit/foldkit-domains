@@ -20,7 +20,8 @@
     "test:e2e:preview": "playwright test --config playwright.preview.config.ts",
     "test:capacity": "playwright test --config playwright.capacity.config.ts",
     "diagnose:search": "playwright test --config playwright.timing.config.ts",
-    "test:live": "playwright test --config playwright.live.config.ts"
+    "test:live": "playwright test --config playwright.live.config.ts",
+    "generate:social": "node scripts/generate-social-assets.ts"
   },
   "dependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.84",
@@ -48,6 +49,7 @@
     "oxfmt": "^0.66.0",
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2003",
+    "sharp": "0.35.5",
     "tailwindcss": "4.3.3",
     "typescript": "7.1.0-beta",
     "vite": "^8.3.3",

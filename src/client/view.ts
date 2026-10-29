@@ -47,7 +47,12 @@ import {
   estimateDomainListingGroupHeightPx,
   groupDomainListings,
 } from './resultsList'
-import { ApplicationRoute, routeToQuery, searchHref } from './route'
+import {
+  ApplicationRoute,
+  routeToCanonicalUrl,
+  routeToQuery,
+  searchHref,
+} from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
 import { SEARCH_MODE_CONTROL_ID } from './searchModeControl'
 import { SearchPresentation, searchPresentation } from './searchPresentation'
@@ -1276,6 +1281,8 @@ const routeTitle = ApplicationRoute.match<string>({
 
 export const view = ApplicationComposition.makeView((model, h) => ({
   title: routeTitle(model.route),
+  canonical: routeToCanonicalUrl(model.route),
+  ogUrl: routeToCanonicalUrl(model.route),
   body: ApplicationRoute.match(model.route, {
     Search: () => searchPageView(model, h),
     NotFound: ({ path }) => notFoundView(path, h),
