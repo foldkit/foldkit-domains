@@ -1222,12 +1222,7 @@ const liveWarningView = (model: Model, h: ApplicationViewBuilder): Html =>
                                     ? [Icon.check()]
                                     : undefined,
                                 ),
-                                h.span(
-                                  [...attributes.label],
-                                  [
-                                    'I agree to give the CAFE stack a little grace.',
-                                  ],
-                                ),
+                                h.span([...attributes.label], ['I promise']),
                               ],
                             ),
                         },

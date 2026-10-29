@@ -916,7 +916,7 @@ test('the data source listbox requires acknowledgment before selecting Live and 
     expect(role('button', { name: 'Continue to Live' })).toBeDisabled(),
     click(
       role('checkbox', {
-        name: 'I agree to give the CAFE stack a little grace.',
+        name: 'I promise',
       }),
     ),
     expect(role('button', { name: 'Continue to Live' })).not.toBeDisabled(),

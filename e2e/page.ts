@@ -62,7 +62,7 @@ export const chooseFilterOption = async (
 export const acknowledgeLiveWarning = async (page: Page): Promise<void> => {
   const warning = page.getByRole('dialog', { name: 'Before you go Live' })
   const checkbox = warning.getByRole('checkbox', {
-    name: 'I agree to give the CAFE stack a little grace.',
+    name: 'I promise',
   })
   const continueButton = warning.getByRole('button', {
     name: 'Continue to Live',
