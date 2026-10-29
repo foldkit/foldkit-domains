@@ -17,7 +17,7 @@ import {
 } from '../definition'
 import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
-import { Message } from '../message'
+import type { CompletedReadSearchPlanningTimeMessage } from '../message'
 import { routeToQuery } from '../route'
 import { searchPresentation } from '../searchPresentation'
 import {
@@ -114,7 +114,7 @@ export const retrySearchStep = makeStep(model => {
 })
 
 export const loadQuotesForRangeStep = makeStep(
-  (model, message: typeof Message.CompletedReadSearchPlanningTime.Type) => {
+  (model, message: CompletedReadSearchPlanningTimeMessage) => {
     if (message.searchGeneration !== model.searchGeneration) {
       return { model }
     }

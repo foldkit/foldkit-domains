@@ -12,6 +12,7 @@ import {
 import { defineTaggedUnion } from 'foldkit/schema'
 
 import {
+  type AvailableDomain,
   Domain,
   DomainCandidateRange,
   DomainName,
@@ -161,7 +162,7 @@ export const visibleDomains = (
   )
   const priceOrder = Order.mapInput(
     Order.Number,
-    (domain: typeof Domain.Available.Type) => domain.price,
+    (domain: AvailableDomain) => domain.price,
   )
   const availableDomains = Array.filter(
     filteredDomains,
@@ -231,14 +232,10 @@ export const visibleDomainListings = (
 
 export const formatPrice = (price: number): string => `$${price.toFixed(2)}`
 
-export const formatRegistrationPrice = (
-  domain: typeof Domain.Available.Type,
-): string =>
+export const formatRegistrationPrice = (domain: AvailableDomain): string =>
   domain.years === 1
     ? formatPrice(domain.price)
     : `${formatPrice(domain.price)} / ${domain.years} years`
 
-export const formatRenewalPrice = (
-  domain: typeof Domain.Available.Type,
-): string =>
+export const formatRenewalPrice = (domain: AvailableDomain): string =>
   `Renews at ${formatPrice(domain.renewalPrice)} for ${domain.years === 1 ? '1 year' : `${domain.years} years`}`

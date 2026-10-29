@@ -24,6 +24,7 @@ export const Domain = defineTaggedUnion({
   Unconfirmed: DomainName.fields,
 })
 export type Domain = typeof Domain.Type
+export type AvailableDomain = typeof Domain.Available.Type
 
 const featuredTlds = [
   'com',

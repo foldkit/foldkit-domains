@@ -45,6 +45,7 @@ export const RESULTS_LIST_ID = 'domain-results'
 export const RESULTS_GROUP_HEIGHT_PX = 114
 export const RESULTS_OVERSCAN_GROUPS = 2
 export const ResultsListBlock = VirtualList.makeBlock<DomainListingGroup>()
+export type ResultsListModel = typeof ResultsListBlock.Model.Type
 
 export const resultsListConfig: VirtualList.InitConfig = {
   id: RESULTS_LIST_ID,
@@ -58,7 +59,7 @@ const MOBILE_RESULT_HEIGHT_PX = 61
 const DESKTOP_RESULT_HEIGHT_PX = 57
 
 export const estimateDomainListingGroupHeightPx = (
-  resultsList: typeof ResultsListBlock.Model.Type,
+  resultsList: ResultsListModel,
   listingCount = RESULTS_GROUP_SIZE,
 ): number => {
   if (resultsList.measurement._tag === 'Unmeasured') {

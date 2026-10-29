@@ -60,3 +60,8 @@ export const Message = defineMessageUnion({
   CompletedReleaseEarlySearchListeners: { isSearchStarted: Schema.Boolean },
 })
 export type Message = typeof Message.Type
+export type ChangedUrlMessage = typeof Message.ChangedUrl.Type
+export type ClickedRemoveCartDomainMessage =
+  typeof Message.ClickedRemoveCartDomain.Type
+export type CompletedReadSearchPlanningTimeMessage =
+  typeof Message.CompletedReadSearchPlanningTime.Type

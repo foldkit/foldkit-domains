@@ -7,19 +7,18 @@ import {
   queryToMaybeDomainLabel,
 } from '../../shared/domain'
 import { ReadSearchPlanningTime } from '../command'
-import { makeFieldsStep, makeStep } from '../definition'
+import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
 import {
   DomainListing,
   isCompleteCatalogRequired,
   tldToMaybeDomainCandidateRange,
 } from '../domain'
 import { DomainsQuery, DomainsQueryArgs } from '../domainsQuery'
-import { Model } from '../model'
 import {
   DomainListingGroup,
   RESULTS_GROUP_HEIGHT_PX,
   RESULTS_OVERSCAN_GROUPS,
-  ResultsListBlock,
+  type ResultsListModel,
   estimateDomainListingGroupHeightPx,
   groupDomainListings,
 } from '../resultsList'
@@ -63,25 +62,18 @@ export const makeRequestQuotesForRangeStep = (
   { offset, limit }: DomainCandidateRange,
   isForced = false,
 ) =>
-  makeStep(model => ({
-    model,
-    commands: [
-      ReadSearchPlanningTime({
-        searchGeneration: model.searchGeneration,
-        offset,
-        limit,
-        isForced,
-      }),
-    ],
-  }))
-
-type RequestQuotesForRangeReturn = ReturnType<
-  ReturnType<typeof makeRequestQuotesForRangeStep>
->
+  makeCommandsStep(model => [
+    ReadSearchPlanningTime({
+      searchGeneration: model.searchGeneration,
+      offset,
+      limit,
+      isForced,
+    }),
+  ])
 
 const findFirstPendingListingForViewport = (
   groups: ReadonlyArray<DomainListingGroup>,
-  resultsList: typeof ResultsListBlock.Model.Type,
+  resultsList: ResultsListModel,
 ) => {
   const groupHeightPx = (group: DomainListingGroup) =>
     Record.get(resultsList.measuredRowHeights, group.id).pipe(
@@ -126,7 +118,7 @@ const findFirstPendingListingForViewport = (
   )
 }
 
-const loadRequiredQuotes = (model: Model): RequestQuotesForRangeReturn => {
+export const loadRequiredQuotesStep = makeStep(model => {
   const search = searchPresentation(model)
 
   if (search._tag !== 'Ready' || search.quoteRequest._tag === 'Loading') {
@@ -185,6 +177,4 @@ const loadRequiredQuotes = (model: Model): RequestQuotesForRangeReturn => {
     onNone: () => ({ model }),
     onSome: range => makeRequestQuotesForRangeStep(range)(model),
   })
-}
-
-export const loadRequiredQuotesStep = makeStep(loadRequiredQuotes)
+})

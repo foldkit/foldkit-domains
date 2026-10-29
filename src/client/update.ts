@@ -26,7 +26,10 @@ import {
   makeNoopStep,
   makeStep,
 } from './definition'
-import { Message } from './message'
+import type {
+  ChangedUrlMessage,
+  ClickedRemoveCartDomainMessage,
+} from './message'
 import { activeCart, updateActiveCart } from './model'
 import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
@@ -94,7 +97,7 @@ export const update = ApplicationComposition.makeUpdate({
     makeCommandsStep(() => [FocusSearchInput()]),
   ]),
 
-  ChangedUrl: makeStep((model, { url }: typeof Message.ChangedUrl.Type) => {
+  ChangedUrl: makeStep((model, { url }: ChangedUrlMessage) => {
     const nextRoute = urlToApplicationRoute(url)
 
     const isSearchRefreshNeeded =
@@ -146,7 +149,7 @@ export const update = ApplicationComposition.makeUpdate({
   })),
 
   ClickedRemoveCartDomain: makeStep.fromMessage(
-    ({ name }: typeof Message.ClickedRemoveCartDomain.Type) =>
+    ({ name }: ClickedRemoveCartDomainMessage) =>
       Update.combineSteps([
         makeFieldsStep(model => ({
           carts: () =>

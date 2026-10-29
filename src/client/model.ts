@@ -2,7 +2,11 @@ import { Schema } from 'effect'
 
 import { DialogBlock } from '@foldkit/ui'
 
-import { Domain, DomainCandidateRange } from '../shared/domain'
+import {
+  type AvailableDomain,
+  Domain,
+  DomainCandidateRange,
+} from '../shared/domain'
 import { SearchMode } from '../shared/searchMode'
 import { AvailabilityFilter, SortOrder, TldFilter } from './domain'
 import { DomainsQuery } from './domainsQuery'
@@ -56,8 +60,8 @@ export const activeCart = (model: Model) => model.carts[model.searchMode]
 export const updateActiveCart = (
   model: Model,
   transform: (
-    cart: ReadonlyArray<typeof Domain.Available.Type>,
-  ) => ReadonlyArray<typeof Domain.Available.Type>,
+    cart: ReadonlyArray<AvailableDomain>,
+  ) => ReadonlyArray<AvailableDomain>,
 ): Carts => ({
   ...model.carts,
   [model.searchMode]: transform(activeCart(model)),
