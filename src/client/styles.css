@@ -680,7 +680,7 @@
   }
 
   .cart-panel {
-    @apply absolute inset-y-0 right-0 max-h-dvh w-[min(420px,100vw)] overflow-auto overscroll-contain border-l border-gray-700 bg-gray-950 p-6;
+    @apply absolute inset-y-0 right-0 max-h-dvh w-[min(420px,100vw)] overflow-auto overscroll-contain border-gray-700 bg-gray-950 p-6 min-[421px]:border-l;
   }
 
   .cart-heading {
