@@ -4,10 +4,14 @@ import { DialogBlock } from '@foldkit/ui'
 
 import {
   FocusCartButton,
+  FocusDataSourceButton,
   FocusFiltersButton,
-  FocusSearchModeButton,
   FocusTldFilterButton,
 } from './command'
+import {
+  DATA_SOURCE_CONTROL_ID,
+  DataSourceControlBlock,
+} from './dataSourceControl'
 import {
   makeBinding,
   makeCommandsStep,
@@ -27,19 +31,15 @@ import {
 } from './filterListboxes'
 import { ResultsListBlock, resultsListConfig } from './resultsList'
 import {
-  SEARCH_MODE_CONTROL_ID,
-  SearchModeControlBlock,
-} from './searchModeControl'
+  loadRequiredDomainsStep,
+  makeApplyDomainCompletionStep,
+} from './steps/domainLoading'
 import {
   makeChangeAvailabilityFilterStep,
   makeChangeSortOrderStep,
   makeChangeTldFilterStep,
 } from './steps/filters'
-import {
-  loadRequiredQuotesStep,
-  makeApplyQuoteCompletionStep,
-} from './steps/quoteLoading'
-import { makeRequestSearchModeStep } from './steps/search'
+import { makeRequestDataSourceStep } from './steps/search'
 
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
   field: 'resultsList',
@@ -48,9 +48,9 @@ export const ResultsListBinding = makeBinding(ResultsListBlock, {
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(ResultsListBlock, {
-    ObservedContainerScroll: () => loadRequiredQuotesStep,
+    ObservedContainerScroll: () => loadRequiredDomainsStep,
     ApproachedLoadedStart: makeNoopStep,
-    EndedContainerScroll: () => loadRequiredQuotesStep,
+    EndedContainerScroll: () => loadRequiredDomainsStep,
   }),
 })
 
@@ -103,18 +103,18 @@ export const LiveWarningDialogBinding = makeBinding(DialogBlock, {
     Opened: makeNoopStep,
     Closed: () =>
       makeFieldsStep(() => ({ isLiveLatencyAccepted: () => false })),
-    CompletedClose: () => makeCommandsStep(() => [FocusSearchModeButton()]),
+    CompletedClose: () => makeCommandsStep(() => [FocusDataSourceButton()]),
   }),
 })
 
-export const SearchModeBinding = makeBinding(SearchModeControlBlock, {
-  field: 'searchModeControl',
+export const DataSourceBinding = makeBinding(DataSourceControlBlock, {
+  field: 'dataSourceControl',
   init: {
-    contextToArgs: () => [{ id: SEARCH_MODE_CONTROL_ID, isAnimated: true }],
+    contextToArgs: () => [{ id: DATA_SOURCE_CONTROL_ID, isAnimated: true }],
   },
 }).withOutMessagePolicy({
-  fold: makeOutMessageFold(SearchModeControlBlock, {
-    Selected: ({ value }) => makeRequestSearchModeStep(value),
+  fold: makeOutMessageFold(DataSourceControlBlock, {
+    Selected: ({ value }) => makeRequestDataSourceStep(value),
   }),
 })
 
@@ -122,7 +122,7 @@ export const DomainsQueryBinding = makeBinding(DomainsQuery, {
   field: 'domainsQuery',
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DomainsQuery, {
-    CompletedFetch: makeApplyQuoteCompletionStep,
+    CompletedFetch: makeApplyDomainCompletionStep,
   }),
 })
 
@@ -161,7 +161,7 @@ export const SortListboxBinding = makeBinding(SortListboxBlock, {
 
 export const ApplicationComposition = makeComposition({
   bindings: [
-    SearchModeBinding,
+    DataSourceBinding,
     LiveWarningDialogBinding,
     ResultsListBinding,
     CartDialogBinding,

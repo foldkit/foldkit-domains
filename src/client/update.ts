@@ -35,21 +35,21 @@ import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
   clearSearchStep,
   continueToLiveStep,
-  loadQuotesForRangeStep,
+  loadDomainsForRangeStep,
   makeChangeAvailabilityFilterStep,
   makeChangeSearchQueryStep,
   makeChangeSortOrderStep,
   makeChangeTldFilterStep,
-  makeScheduleQuoteRequestStep,
-  makeSearchQueryStep,
+  makeScheduleDomainRequestStep,
+  makeSearchCurrentQueryStep,
   retrySearchStep,
-  searchQueryStep,
+  searchCurrentQueryStep,
 } from './steps/index'
 
 export const update = ApplicationComposition.makeUpdate({
   UpdatedSearch: (model, { value }) => makeChangeSearchQueryStep(value)(model),
 
-  RequestedSearch: searchQueryStep,
+  RequestedSearch: searchCurrentQueryStep,
 
   ReachedSearchCooldownExpiry: makeFieldsStep.fromMessage(({ nowMillis }) => ({
     maybeSearchCooldown: Option.filter(
@@ -57,12 +57,12 @@ export const update = ApplicationComposition.makeUpdate({
     ),
   })),
 
-  RequestedQuotes: makeStep.fromMessage(({ offset, limit }) =>
-    makeScheduleQuoteRequestStep({ offset, limit }),
+  RequestedDomains: makeStep.fromMessage(({ offset, limit }) =>
+    makeScheduleDomainRequestStep({ offset, limit }),
   ),
 
   SubmittedSearch: Update.combineSteps([
-    makeSearchQueryStep(true),
+    makeSearchCurrentQueryStep(true),
     makeCommandsStep(() => [DismissSearchKeyboard()]),
   ]),
 
@@ -74,7 +74,7 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedContinueToLive: continueToLiveStep,
 
-  CompletedFocusSearchModeButton: makeNoopStep(),
+  CompletedFocusDataSourceButton: makeNoopStep(),
 
   ClickedRetrySearch: Update.combineSteps([
     retrySearchStep,
@@ -105,7 +105,7 @@ export const update = ApplicationComposition.makeUpdate({
 
     return Update.combineSteps([
       makeFieldsStep(() => ({ route: () => nextRoute })),
-      isSearchRefreshNeeded ? searchQueryStep : makeNoopStep(),
+      isSearchRefreshNeeded ? searchCurrentQueryStep : makeNoopStep(),
       isSearchRefreshNeeded &&
       ApplicationRoute.isAnyOf(['Search'])(nextRoute) &&
       String.isEmpty(routeToQuery(nextRoute))
@@ -196,7 +196,7 @@ export const update = ApplicationComposition.makeUpdate({
     ]),
   ),
 
-  CompletedReadSearchPlanningTime: loadQuotesForRangeStep,
+  CompletedReadSearchPlanningTime: loadDomainsForRangeStep,
 
   ClickedDomainsHome: makeNoopStep(),
   ClickedSkipToMain: makeNoopStep(),

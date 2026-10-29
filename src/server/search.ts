@@ -68,18 +68,18 @@ export const SearchHandlersLayer = DomainsRpcs.toLayer(
 
     return {
       SearchDomains: ({
-        mode = 'Demo',
+        mode: dataSource = 'Demo',
         label,
         offset = 0,
         limit = domainTlds.length,
       }) =>
         Effect.gen(function* () {
-          if (mode === 'Demo') {
+          if (dataSource === 'Demo') {
             return yield* searchDemoDomains(label, { offset, limit })
           }
 
           const query = new SearchCacheKey({ label, offset, limit })
-          // NOTE: Workers requests cannot await another request's pending I/O; cache completed quotes only.
+          // NOTE: Workers requests cannot await another request's pending I/O; cache completed results only.
           const maybeCachedDomains = yield* Cache.getSuccess(cache, query).pipe(
             timeSearchPhase('cache'),
           )

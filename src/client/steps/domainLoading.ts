@@ -14,13 +14,13 @@ import {
   makeNoopStep,
   makeStep,
 } from '../definition'
+import { planRequiredDomainCandidateRange } from '../domainPlanning'
 import {
   DomainsQuery,
   DomainsQueryArgs,
   type DomainsQueryCompletedFetch,
 } from '../domainsQuery'
 import type { CompletedReadSearchPlanningTimeMessage } from '../message'
-import { planRequiredDomainCandidateRange } from '../quotePlanning'
 import { routeToQuery } from '../route'
 import { informResultsListStep } from './resultsList'
 
@@ -31,7 +31,7 @@ const makeTrackDomainCandidateRangeStep = (
 ) =>
   makeFieldsStep(() => ({
     searchPlanningTimeMillis: () => nowMillis,
-    domainCandidateRanges: ranges =>
+    activeDomainCandidateRanges: ranges =>
       Array.some(
         ranges,
         existing =>
@@ -49,34 +49,34 @@ const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
     args.limit === domainTlds.length &&
     AsyncData.isSuccess(DomainsQuery.read(model.domainsQuery, args))
       ? {
-          domainCandidateRanges: () => [
+          activeDomainCandidateRanges: () => [
             { offset: args.offset, limit: args.limit },
           ],
         }
       : {},
   )
 
-export const makeScheduleQuoteRequestStep = (
+export const makeScheduleDomainRequestStep = (
   { offset, limit }: DomainCandidateRange,
-  isForced = false,
+  isRefreshRequested = false,
 ) =>
   makeCommandsStep(model => [
     ReadSearchPlanningTime({
       searchGeneration: model.searchGeneration,
       offset,
       limit,
-      isForced,
+      isRefreshRequested,
     }),
   ])
 
-export const loadRequiredQuotesStep = makeStep(model =>
+export const loadRequiredDomainsStep = makeStep(model =>
   Option.match(planRequiredDomainCandidateRange(model), {
     onNone: () => ({ model }),
-    onSome: range => makeScheduleQuoteRequestStep(range)(model),
+    onSome: range => makeScheduleDomainRequestStep(range)(model),
   }),
 )
 
-export const loadQuotesForRangeStep = makeStep(
+export const loadDomainsForRangeStep = makeStep(
   (model, message: CompletedReadSearchPlanningTimeMessage) => {
     if (message.searchGeneration !== model.searchGeneration) {
       return { model }
@@ -92,7 +92,8 @@ export const loadQuotesForRangeStep = makeStep(
       Array.some(
         DomainsQuery.pendingArgs(model.domainsQuery),
         args =>
-          args.mode === model.searchMode && args.label === maybeLabel.value,
+          args.dataSource === model.dataSource &&
+          args.label === maybeLabel.value,
       )
     ) {
       return { model }
@@ -102,20 +103,24 @@ export const loadQuotesForRangeStep = makeStep(
       offset: message.offset,
       limit: message.limit,
     }
-    const args = { mode: model.searchMode, label: maybeLabel.value, ...range }
+    const args = {
+      dataSource: model.dataSource,
+      label: maybeLabel.value,
+      ...range,
+    }
     const isBlocked =
-      model.searchMode === 'Live' &&
-      (message.isForced ||
+      model.dataSource === 'Live' &&
+      (message.isRefreshRequested ||
         !DomainsQuery.isFresh(model.domainsQuery, args, message.nowMillis)) &&
       Option.exists(
         model.maybeSearchCooldown,
         cooldown => cooldown.expiresAtMillis > message.nowMillis,
       )
 
-    const loadQuotesStep = (() => {
+    const loadDomainsStep = (() => {
       if (isBlocked) {
         return makeNoopStep()
-      } else if (message.isForced) {
+      } else if (message.isRefreshRequested) {
         return DomainsQueryBinding.requestRevalidationOrLoad(args)
       } else {
         return DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis)
@@ -124,22 +129,22 @@ export const loadQuotesForRangeStep = makeStep(
 
     return Update.combineSteps([
       makeTrackDomainCandidateRangeStep(range, message.nowMillis, isBlocked),
-      loadQuotesStep,
+      loadDomainsStep,
       makeUseCompleteCatalogRangeStep(args),
-      loadRequiredQuotesStep,
+      loadRequiredDomainsStep,
       informResultsListStep,
     ])
   },
 )
 
-export const makeApplyQuoteCompletionStep = ({
+export const makeApplyDomainCompletionStep = ({
   args,
   result,
   completedAtMillis,
 }: DomainsQueryCompletedFetch) =>
   makeStep(model => {
     if (
-      args.mode !== model.searchMode ||
+      args.dataSource !== model.dataSource ||
       !Option.contains(
         queryToMaybeDomainLabel(routeToQuery(model.route)),
         args.label,
@@ -152,7 +157,7 @@ export const makeApplyQuoteCompletionStep = ({
       makeFieldsStep(() => ({
         searchPlanningTimeMillis: time => completedAtMillis ?? time,
         maybeSearchCooldown: maybeCooldown =>
-          model.searchMode === 'Live' && Result.isFailure(result)
+          model.dataSource === 'Live' && Result.isFailure(result)
             ? Option.orElse(
                 result.failure.maybeSearchCooldown,
                 () => maybeCooldown,
@@ -162,7 +167,7 @@ export const makeApplyQuoteCompletionStep = ({
       Result.isSuccess(result)
         ? makeUseCompleteCatalogRangeStep(args)
         : makeNoopStep(),
-      loadRequiredQuotesStep,
+      loadRequiredDomainsStep,
       informResultsListStep,
     ])
   })

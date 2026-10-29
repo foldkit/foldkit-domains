@@ -21,16 +21,16 @@ import { SearchError } from '../shared/domainsRpc'
 import { type CoordinatedSearch, CoordinatedSearchClient } from './coordination'
 import { recordSearchCacheResult, timeSearchPhase } from './searchTiming'
 
-const QUOTE_TTL_MILLISECONDS = 60_000
+const DOMAIN_RESULTS_TTL_MILLISECONDS = 60_000
 const MAX_CACHED_RANGES = 100
 const MAX_PENDING_RANGES = 16
 const MAX_WAITERS_PER_RANGE = 1000
 
-const CachedDomainQuotes = Schema.Struct({
+const CachedDomainResults = Schema.Struct({
   expiresAt: Schema.Number,
   domains: Schema.Array(Domain),
 })
-type CachedDomainQuotes = typeof CachedDomainQuotes.Type
+type CachedDomainResults = typeof CachedDomainResults.Type
 
 type PendingSearch = Readonly<{
   fiber: Fiber.Fiber<ReadonlyArray<Domain>, SearchError>
@@ -43,7 +43,7 @@ export class DomainSearch extends Context.Service<
     readonly search: (
       query: CoordinatedSearch,
     ) => Effect.Effect<ReadonlyArray<Domain>, SearchError>
-    readonly expireQuotes: Effect.Effect<void>
+    readonly expireCachedDomains: Effect.Effect<void>
   }
 >()('domains/DomainSearch') {}
 
@@ -59,13 +59,13 @@ export const makeDomainSearchLayer = (storage: DurableObjectStorage) =>
       const acquisitionLock = yield* Semaphore.make(1)
       const storageLock = yield* Semaphore.make(1)
 
-      const saveQuotes = (key: string, domains: ReadonlyArray<Domain>) =>
+      const saveDomains = (key: string, domains: ReadonlyArray<Domain>) =>
         storageLock
           .withPermit(
             Effect.gen(function* () {
               const nowMillis = yield* Clock.currentTimeMillis
               const entries = yield* Effect.promise(() =>
-                storage.list<CachedDomainQuotes>(),
+                storage.list<CachedDomainResults>(),
               )
               const expiredKeys = pipe(
                 Array.fromIterable(entries),
@@ -93,11 +93,11 @@ export const makeDomainSearchLayer = (storage: DurableObjectStorage) =>
                 yield* Effect.promise(() => storage.delete(obsoleteKeys))
               }
 
-              const expiresAt = nowMillis + QUOTE_TTL_MILLISECONDS
+              const expiresAt = nowMillis + DOMAIN_RESULTS_TTL_MILLISECONDS
               yield* Effect.promise(() =>
                 storage.put(
                   key,
-                  CachedDomainQuotes.make({ expiresAt, domains }),
+                  CachedDomainResults.make({ expiresAt, domains }),
                 ),
               )
               const alarm = yield* Effect.promise(() => storage.getAlarm())
@@ -118,7 +118,7 @@ export const makeDomainSearchLayer = (storage: DurableObjectStorage) =>
               storage.get<unknown>(key),
             )
             const maybeCached =
-              Schema.decodeUnknownOption(CachedDomainQuotes)(cached)
+              Schema.decodeUnknownOption(CachedDomainResults)(cached)
 
             if (
               Option.isSome(maybeCached) &&
@@ -173,7 +173,7 @@ export const makeDomainSearchLayer = (storage: DurableObjectStorage) =>
                 .search(query)
                 .pipe(
                   Effect.tap(domains =>
-                    saveQuotes(key, domains).pipe(
+                    saveDomains(key, domains).pipe(
                       timeSearchPhase('cache-write'),
                     ),
                   ),
@@ -224,11 +224,11 @@ export const makeDomainSearchLayer = (storage: DurableObjectStorage) =>
           }
         })
 
-      const expireQuotes = storageLock.withPermit(
+      const expireCachedDomains = storageLock.withPermit(
         Effect.gen(function* () {
           const nowMillis = yield* Clock.currentTimeMillis
           const entries = yield* Effect.promise(() =>
-            storage.list<CachedDomainQuotes>(),
+            storage.list<CachedDomainResults>(),
           )
           const expiredKeys = pipe(
             Array.fromIterable(entries),
@@ -261,7 +261,7 @@ export const makeDomainSearchLayer = (storage: DurableObjectStorage) =>
             ({ fiber }) => Fiber.join(fiber).pipe(timeSearchPhase('lookup')),
             releaseSearch,
           ),
-        expireQuotes,
+        expireCachedDomains,
       }
     }),
   )

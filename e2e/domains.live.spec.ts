@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test'
 
 import { DomainsClient, makeDomainsClientLayer } from '../src/client/rpc'
 import { DOMAINS_RPC_PATH, SearchError } from '../src/shared/domainsRpc'
-import { chooseSearchMode } from './page'
+import { chooseDataSource } from './page'
 
 const searchDomains = (baseURL: string | undefined, label: string) => {
   if (baseURL === undefined) {
@@ -33,7 +33,7 @@ test('loads live registrar quotes and keeps a registered name out of the demo ca
   const errors: Array<string> = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
-  await chooseSearchMode(page, 'Live')
+  await chooseDataSource(page, 'Live')
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   await expect(input).toBeEditable()
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
@@ -128,7 +128,7 @@ test.describe('live mobile scrolling', () => {
   }, testInfo) => {
     test.setTimeout(180_000)
     await page.goto('/')
-    await chooseSearchMode(page, 'Live')
+    await chooseDataSource(page, 'Live')
     await page
       .getByRole('searchbox', { name: 'Search domains' })
       .fill('devinjameson.com')

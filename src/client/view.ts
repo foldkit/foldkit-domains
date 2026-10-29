@@ -17,16 +17,17 @@ import {
   AvailabilityListboxBinding,
   CART_DIALOG_ID,
   CartDialogBinding,
+  DataSourceBinding,
   FILTERS_DIALOG_ID,
   FiltersDialogBinding,
   LiveWarningDialogBinding,
   ResultsListBinding,
-  SearchModeBinding,
   SortListboxBinding,
   TLD_DIALOG_ID,
   TldDialogBinding,
   TldListboxBinding,
 } from './composition'
+import { DATA_SOURCE_CONTROL_ID } from './dataSourceControl'
 import {
   AvailabilityFilter,
   DomainListing,
@@ -42,6 +43,7 @@ import {
 import * as Icon from './icon'
 import { Message } from './message'
 import { Model, activeCart } from './model'
+import { resultListings } from './resultListings'
 import {
   RESULTS_LIST_ID,
   RESULTS_OVERSCAN_GROUPS,
@@ -56,9 +58,7 @@ import {
   searchHref,
 } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
-import { SEARCH_MODE_CONTROL_ID } from './searchModeControl'
 import { SearchPresentation, searchPresentation } from './searchPresentation'
-import { visibleResultListings } from './visibleResultListings'
 
 const PREVIEW_RESULT_COUNT = 36
 
@@ -112,47 +112,47 @@ const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
   )
 }
 
-const searchModeView = (model: Model, h: ApplicationViewBuilder): Html =>
+const dataSourceView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.block(
-    SearchModeBinding.embedView({
-      slotId: SEARCH_MODE_CONTROL_ID,
-      model: model.searchModeControl,
+    DataSourceBinding.embedView({
+      slotId: DATA_SOURCE_CONTROL_ID,
+      model: model.dataSourceControl,
       viewInputs: {
         items: ['Demo', 'Live'],
-        maybeSelectedValue: Option.some(model.searchMode),
-        ariaLabel: `Data source: ${model.searchMode}`,
+        maybeSelectedValue: Option.some(model.dataSource),
+        ariaLabel: `Data source: ${model.dataSource}`,
         anchor: { placement: 'bottom-end', gap: 8, padding: 16, portal: true },
-        className: 'search-mode',
-        buttonClassName: 'button search-mode-trigger',
+        className: 'data-source',
+        buttonClassName: 'button data-source-trigger',
         buttonAttributes: childAttributes([
-          h.AriaDescribedBy('search-mode-description'),
+          h.AriaDescribedBy('data-source-description'),
         ]),
-        itemsClassName: 'search-mode-options',
+        itemsClassName: 'data-source-options',
         backdropClassName: 'filter-backdrop',
         buttonContent: h.span(
-          [h.Class('search-mode-trigger-content')],
+          [h.Class('data-source-trigger-content')],
           [
             h.span(
-              [h.Class('search-mode-trigger-copy')],
+              [h.Class('data-source-trigger-copy')],
               [
-                h.span([h.Class('search-mode-caption')], ['Data source ']),
-                h.span([h.Class('search-mode-current')], [model.searchMode]),
+                h.span([h.Class('data-source-caption')], ['Data source ']),
+                h.span([h.Class('data-source-current')], [model.dataSource]),
               ],
             ),
             Icon.chevronDown(),
           ],
         ),
         itemToConfig: value => ({
-          className: 'search-mode-option',
+          className: 'data-source-option',
           content: h.span(
-            [h.Class('search-mode-option-content')],
+            [h.Class('data-source-option-content')],
             [
               h.span(
-                [h.Class('search-mode-option-copy')],
+                [h.Class('data-source-option-copy')],
                 [
-                  h.span([h.Class('search-mode-option-label')], [value]),
+                  h.span([h.Class('data-source-option-label')], [value]),
                   h.span(
-                    [h.Class('search-mode-option-description')],
+                    [h.Class('data-source-option-description')],
                     [
                       value === 'Demo'
                         ? 'Sample prices and availability.'
@@ -161,7 +161,7 @@ const searchModeView = (model: Model, h: ApplicationViewBuilder): Html =>
                   ),
                 ],
               ),
-              h.span([h.Class('search-mode-option-check')], [Icon.check()]),
+              h.span([h.Class('data-source-option-check')], [Icon.check()]),
             ],
           ),
         }),
@@ -210,7 +210,7 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
       h.div(
         [h.Class('ml-auto flex items-center gap-2 max-[700px]:gap-1.5')],
         [
-          searchModeView(model, h),
+          dataSourceView(model, h),
           h.button(
             [
               h.Id('cart-button'),
@@ -929,7 +929,7 @@ const resultsGridView = (
           h.h2([], ['Top Results']),
           h.span(
             [h.Class('data-source-label')],
-            [model.searchMode === 'Demo' ? 'Sample data' : 'Live · Vercel'],
+            [model.dataSource === 'Demo' ? 'Sample data' : 'Live · Vercel'],
           ),
         ],
       ),
@@ -973,7 +973,7 @@ const resultCountText = (
 
 const searchResultsView = (model: Model, h: ApplicationViewBuilder): Html => {
   const search = searchPresentation(model)
-  const results = visibleResultListings(model)
+  const results = resultListings(model)
   const domains = SearchPresentation.match(search, {
     Idle: () => queryToPendingDomainListings(routeToQuery(model.route)),
     Loading: () => queryToPendingDomainListings(routeToQuery(model.route)),
@@ -991,12 +991,12 @@ const searchResultsView = (model: Model, h: ApplicationViewBuilder): Html => {
           h.AriaBusy(
             search._tag === 'Loading' ||
               (search._tag === 'Ready' &&
-                search.quoteRequest._tag === 'Loading'),
+                search.domainRequest._tag === 'Loading'),
           ),
         ],
         [resultsGridView(domains, results, model, h)],
       ),
-      search._tag === 'Ready' && search.quoteRequest._tag === 'Failed'
+      search._tag === 'Ready' && search.domainRequest._tag === 'Failed'
         ? h.div(
             [
               h.Class(
@@ -1005,7 +1005,7 @@ const searchResultsView = (model: Model, h: ApplicationViewBuilder): Html => {
               h.Role('alert'),
             ],
             [
-              h.p([], [search.quoteRequest.error]),
+              h.p([], [search.domainRequest.error]),
               h.button(
                 [h.Class('button'), h.OnClick(Message.ClickedRetrySearch())],
                 ['Try again'],
@@ -1139,7 +1139,7 @@ const cartPanelView = (
       h.p(
         [...render.description, h.Class('demo-note')],
         [
-          model.searchMode === 'Demo'
+          model.dataSource === 'Demo'
             ? 'Demo cart with sample prices and availability. No domains are reserved. No purchases are made.'
             : 'Demo cart. Live registrar quotes may change; adding a domain does not reserve it. No purchases are made.',
         ],
@@ -1266,7 +1266,7 @@ const footerView = (model: Model, h: ApplicationViewBuilder): Html =>
       h.span(
         [],
         [
-          model.searchMode === 'Demo'
+          model.dataSource === 'Demo'
             ? 'Sample data · Demo cart'
             : 'Live data from Vercel · Demo cart',
         ],
@@ -1283,7 +1283,7 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
     [
       h.Id('domains-app'),
       h.Class('app'),
-      h.DataAttribute('search-mode', model.searchMode),
+      h.DataAttribute('data-source', model.dataSource),
       h.DataAttribute('search-layout', model.searchLayout),
       h.DataAttribute(
         'search',
@@ -1305,14 +1305,14 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
       headerView(model, h),
       h.p(
         [
-          h.Id('search-mode-description'),
+          h.Id('data-source-description'),
           h.Class('sr-only'),
           h.AriaLive('polite'),
         ],
         [
-          model.searchMode === 'Demo'
-            ? 'Demo mode uses sample prices and availability. No live domain checks are made.'
-            : 'Live mode checks prices and availability with Vercel. The cart is a demo.',
+          model.dataSource === 'Demo'
+            ? 'Demo dataSource uses sample prices and availability. No live domain checks are made.'
+            : 'Live dataSource checks prices and availability with Vercel. The cart is a demo.',
         ],
       ),
       h.main(

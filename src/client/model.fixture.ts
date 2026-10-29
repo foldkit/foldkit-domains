@@ -13,6 +13,10 @@ import {
   LIVE_WARNING_DIALOG_ID,
   TLD_DIALOG_ID,
 } from './composition'
+import {
+  DATA_SOURCE_CONTROL_ID,
+  DataSourceControlBlock,
+} from './dataSourceControl'
 import { DomainsQuery, DomainsQueryArgs } from './domainsQuery'
 import {
   AVAILABILITY_FILTER_ID,
@@ -25,24 +29,20 @@ import {
 import { Model } from './model'
 import { ResultsListBlock, resultsListConfig } from './resultsList'
 import { ApplicationRoute } from './route'
-import {
-  SEARCH_MODE_CONTROL_ID,
-  SearchModeControlBlock,
-} from './searchModeControl'
 
 export const emptyModel = Model.make({
   route: ApplicationRoute.Search({ q: Option.none() }),
   searchLayout: 'Landing',
-  searchMode: 'Demo',
+  dataSource: 'Demo',
   isLiveLatencyAccepted: false,
   liveWarningDialog: DialogBlock.init({ id: LIVE_WARNING_DIALOG_ID }).model,
-  searchModeControl: SearchModeControlBlock.init({
-    id: SEARCH_MODE_CONTROL_ID,
+  dataSourceControl: DataSourceControlBlock.init({
+    id: DATA_SOURCE_CONTROL_ID,
     isAnimated: true,
   }).model,
   searchGeneration: 0,
   searchPlanningTimeMillis: 0,
-  domainCandidateRanges: [],
+  activeDomainCandidateRanges: [],
   domainsQuery: DomainsQuery.init().model,
   maybeBlockedDomainCandidateRange: Option.none(),
   maybeSearchCooldown: Option.none(),
@@ -96,7 +96,7 @@ export const withDomainsForRange = (
   return modifyFields(model, {
     domainsQuery: () => domainsCompletion.model,
     searchPlanningTimeMillis: () => completedAtMillis,
-    domainCandidateRanges: ranges =>
+    activeDomainCandidateRanges: ranges =>
       Array.some(
         ranges,
         range => range.offset === args.offset && range.limit === args.limit,
@@ -114,7 +114,7 @@ export const readyModel = (query: string): Model =>
       searchLayout: () => 'Search',
     }),
     {
-      mode: 'Demo',
+      dataSource: 'Demo',
       label: Option.getOrThrow(queryToMaybeDomainLabel(query)),
       offset: 0,
       limit: domainTlds.length,

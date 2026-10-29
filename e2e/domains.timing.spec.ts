@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test'
 
 import { parseSearchTimings } from '../src/server/searchTiming'
 import { observeSearchPresentationTiming } from './fixtures/searchPresentationTiming'
-import { chooseSearchMode } from './page'
+import { chooseDataSource } from './page'
 
 const RpcPayload = Schema.Struct({
   payload: Schema.Struct({ offset: Schema.Number, limit: Schema.Number }),
@@ -60,7 +60,7 @@ test('reports cold, frontend-cache, and backend-cache search latency', async ({
   await page.addInitScript(observeSearchPresentationTiming)
   recordResponses(page)
   await page.goto('/')
-  await chooseSearchMode(page, 'Live')
+  await chooseDataSource(page, 'Live')
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   const samples: Array<unknown> = []
@@ -123,7 +123,7 @@ test('reports cold, frontend-cache, and backend-cache search latency', async ({
   recordResponses(cachePage)
   try {
     await cachePage.goto('/')
-    await chooseSearchMode(cachePage, 'Live')
+    await chooseDataSource(cachePage, 'Live')
     await cachePage
       .getByRole('searchbox', { name: 'Search domains' })
       .fill(firstLabel)

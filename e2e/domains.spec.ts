@@ -454,12 +454,12 @@ for (const width of [1440, 900, 390, 320]) {
     await page.setViewportSize({ width, height: 900 })
 
     for (const label of ['acme', 'foldkit', 'a-long-domain-name-for-layout']) {
-      let releaseQuotes = () => {}
-      const quotesGate = new Promise<void>(resolve => {
-        releaseQuotes = resolve
+      let releaseDomains = () => {}
+      const domainsGate = new Promise<void>(resolve => {
+        releaseDomains = resolve
       })
       await mockDomainSearch(page, query =>
-        Effect.promise(() => quotesGate).pipe(
+        Effect.promise(() => domainsGate).pipe(
           Effect.as(
             Array.map(makeDomainFixtures(query), domain =>
               domain._tag === 'Available' && domain.tld === 'io'
@@ -537,7 +537,7 @@ for (const width of [1440, 900, 390, 320]) {
         await page.screenshot({
           path: testInfo.outputPath(`${label}-pending.png`),
         })
-        releaseQuotes()
+        releaseDomains()
         await expect(page.locator('.domain-card .skeleton-action')).toHaveCount(
           0,
         )
@@ -578,7 +578,7 @@ for (const width of [1440, 900, 390, 320]) {
           path: testInfo.outputPath(`${label}-loaded.png`),
         })
       } finally {
-        releaseQuotes()
+        releaseDomains()
       }
     }
   })
@@ -858,7 +858,7 @@ test('recovers from a registrar rate limit through retry without showing stale q
     }),
   )
   await page.goto('/')
-  await Page.chooseSearchMode(page, 'Live')
+  await Page.chooseDataSource(page, 'Live')
   await page
     .getByRole('searchbox', { name: 'Search domains' })
     .fill('retry-idea')
@@ -990,16 +990,16 @@ for (const width of [1440, 390]) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 })
-    let releaseQuotes = () => {}
+    let releaseDomains = () => {}
     let isSearchStarted = false
-    const quotesGate = new Promise<void>(resolve => {
-      releaseQuotes = resolve
+    const domainsGate = new Promise<void>(resolve => {
+      releaseDomains = resolve
     })
     await mockDomainSearch(page, label =>
       Effect.gen(function* () {
         if (label === 'devtools-search') {
           isSearchStarted = true
-          yield* Effect.promise(() => quotesGate)
+          yield* Effect.promise(() => domainsGate)
         }
 
         return makeDomainFixtures(label)
@@ -1023,22 +1023,22 @@ for (const width of [1440, 390]) {
       await badge.click()
       await expect(panel).toBeVisible()
       await expect(panel).toContainText('while the app stays live.')
-      const quoteMessages = panel
+      const domainMessages = panel
         .locator('.message-list')
         .getByText('GotDomainsQueryMessage', { exact: true })
-      const previousQuoteMessages = await quoteMessages.count()
-      await quoteMessages.first().click()
+      const previousDomainMessages = await domainMessages.count()
+      await domainMessages.first().click()
       await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
       await expect(page.locator('.dt-interaction-blocker')).toHaveCount(0)
       await expect(input).toHaveValue('devtools-search')
       await expect(page.locator('.domain-card').first()).toContainText(
         'devtools-search.com',
       )
-      releaseQuotes()
+      releaseDomains()
       await expect(page.locator('.result-count')).toHaveText(
         '60 of 556 domains checked · Registration prices in USD',
       )
-      await expect(quoteMessages).toHaveCount(previousQuoteMessages + 2)
+      await expect(domainMessages).toHaveCount(previousDomainMessages + 2)
       await expect(panel.locator('header')).toContainText(/Inspecting \(\d+\)/)
       await expect(input).toHaveValue('devtools-search')
       await expect(page).toHaveURL(/q=devtools-search/)
@@ -1063,7 +1063,7 @@ for (const width of [1440, 390]) {
       )
       await expect(page.locator('.domain-card .price').first()).toBeVisible()
     } finally {
-      releaseQuotes()
+      releaseDomains()
     }
   })
 }
@@ -1072,15 +1072,15 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   page,
 }) => {
   const requests: Array<string> = []
-  await mockDomainSearch(page, (label, range, mode) => {
-    requests.push(`${mode}:${range.offset}`)
+  await mockDomainSearch(page, (label, range, dataSource) => {
+    requests.push(`${dataSource}:${range.offset}`)
     return Effect.succeed(
       Array.map(makeDomainFixtures(label), domain =>
-        domain._tag === 'Available' && mode === 'Live'
+        domain._tag === 'Available' && dataSource === 'Live'
           ? Domain.Available({ ...domain, price: domain.price + 100 })
           : domain,
       ),
-    ).pipe(Effect.delay(mode === 'Live' ? '300 millis' : '0 millis'))
+    ).pipe(Effect.delay(dataSource === 'Live' ? '300 millis' : '0 millis'))
   })
   await page.setViewportSize({ width: 393, height: 852 })
   await page.goto('/?q=acme')
@@ -1097,7 +1097,7 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   const demoRequests = requests.filter(request =>
     request.startsWith('Demo:'),
   ).length
-  await Page.chooseSearchMode(page, 'Live')
+  await Page.chooseDataSource(page, 'Live')
   await expect(topCard.locator('.price')).toBeHidden()
   await expect(
     page.getByRole('button', { name: 'Cart, 0 domains' }),
@@ -1110,7 +1110,7 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   await expect(topCard.locator('.price')).toHaveText('$112.00')
   await expect(page.locator('.data-source-label')).toHaveText('Live · Vercel')
   await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
-  await Page.chooseSearchMode(page, 'Demo')
+  await Page.chooseDataSource(page, 'Demo')
   await expect(topCard.locator('.price')).toHaveText('$12.00')
   await expect(
     page.getByRole('button', { name: 'Cart, 1 domains' }),
@@ -1121,7 +1121,7 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   await topCard
     .getByRole('button', { name: 'Remove acme.com from cart' })
     .click()
-  await Page.chooseSearchMode(page, 'Live')
+  await Page.chooseDataSource(page, 'Live')
   await expect(topCard.locator('.price')).toHaveText('$112.00')
   await expect(
     page.getByRole('button', { name: 'Cart, 1 domains' }),
@@ -1132,8 +1132,8 @@ test('switching away from pending Live quotes leaves cached Demo results usable'
   page,
 }) => {
   let liveRequests = 0
-  await mockDomainSearch(page, (label, _range, mode) => {
-    if (mode === 'Live') {
+  await mockDomainSearch(page, (label, _range, dataSource) => {
+    if (dataSource === 'Live') {
       liveRequests += 1
       return Effect.sleep('600 millis').pipe(
         Effect.andThen(
@@ -1151,9 +1151,9 @@ test('switching away from pending Live quotes leaves cached Demo results usable'
   await page.goto('/?q=acme')
   const price = page.locator('.domain-card .price').first()
   await expect(price).toHaveText('$12.00')
-  await Page.chooseSearchMode(page, 'Live')
+  await Page.chooseDataSource(page, 'Live')
   await expect.poll(() => liveRequests).toBe(1)
-  await Page.chooseSearchMode(page, 'Demo')
+  await Page.chooseDataSource(page, 'Demo')
   await expect(price).toHaveText('$12.00')
   await page.waitForTimeout(800)
   await expect(price).toHaveText('$12.00')
@@ -1212,7 +1212,7 @@ for (const width of [320, 393, 1000, 1200, 1280, 1440]) {
     await page.keyboard.press('ArrowDown')
     await expect(panel).toHaveAttribute(
       'aria-activedescendant',
-      'search-mode-item-1',
+      'data-source-item-1',
     )
     await page.keyboard.press('Enter')
     await expect(panel).toBeHidden()
@@ -1248,8 +1248,8 @@ test('Live warning gates requests, supports dismissal, and resets acknowledgment
   page,
 }) => {
   const liveRequests: Array<string> = []
-  await mockDomainSearch(page, (label, _range, mode) => {
-    if (mode === 'Live') {
+  await mockDomainSearch(page, (label, _range, dataSource) => {
+    if (dataSource === 'Live') {
       liveRequests.push(label)
     }
     return Effect.succeed(makeDomainFixtures(label))
@@ -1287,7 +1287,7 @@ test('Live warning gates requests, supports dismissal, and resets acknowledgment
   await expect(trigger).toBeFocused()
   expect(liveRequests).toEqual([])
 
-  await Page.chooseSearchMode(page, 'Live')
+  await Page.chooseDataSource(page, 'Live')
   await expect.poll(() => liveRequests.length).toBeGreaterThan(0)
   await expect(
     page.getByRole('button', { name: 'Data source: Live', exact: true }),

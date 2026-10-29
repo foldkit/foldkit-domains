@@ -20,7 +20,7 @@ describe('startup', () => {
           searchGeneration: 1,
           offset: 0,
           limit: 4,
-          isForced: false,
+          isRefreshRequested: false,
         },
       ],
     },
@@ -39,7 +39,7 @@ describe('startup', () => {
       expect(applicationInit.model.searchLayout).toBe(
         query ? 'Search' : 'Landing',
       )
-      expect(applicationInit.model.searchMode).toBe('Demo')
+      expect(applicationInit.model.dataSource).toBe('Demo')
       expect(applicationInit.model.carts).toEqual({ Demo: [], Live: [] })
       expect(routeToQuery(applicationInit.model.route)).toBe(query)
       expect(searchPresentation(applicationInit.model)._tag).toBe(

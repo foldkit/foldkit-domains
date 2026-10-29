@@ -234,12 +234,12 @@ for (const width of [1440, 390, 320]) {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 })
-    let releaseQuotes = () => {}
-    const quotesGate = new Promise<void>(resolve => {
-      releaseQuotes = resolve
+    let releaseDomains = () => {}
+    const domainsGate = new Promise<void>(resolve => {
+      releaseDomains = resolve
     })
     await mockDomainSearch(page, label =>
-      Effect.promise(() => quotesGate).pipe(
+      Effect.promise(() => domainsGate).pipe(
         Effect.as(makeDomainFixtures(label)),
       ),
     )
@@ -251,7 +251,7 @@ for (const width of [1440, 390, 320]) {
         page.getByRole('status', { name: 'Searching domains' }),
       ).toBeVisible()
       await checkAccessibility(page, testInfo, 'pending')
-      releaseQuotes()
+      releaseDomains()
       await expect(page.locator('.domain-card .price').first()).toBeVisible()
       await mockDomainSearch(page, () => Effect.fail(SearchError.Unavailable()))
       await page
@@ -260,7 +260,7 @@ for (const width of [1440, 390, 320]) {
       await expect(page.getByRole('alert')).toBeVisible()
       await checkAccessibility(page, testInfo, 'search-failure')
     } finally {
-      releaseQuotes()
+      releaseDomains()
     }
   })
 }
@@ -519,12 +519,14 @@ test('loading announcements retain their node outside the busy region and respec
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
-  let releaseQuotes = () => {}
-  const quotesGate = new Promise<void>(resolve => {
-    releaseQuotes = resolve
+  let releaseDomains = () => {}
+  const domainsGate = new Promise<void>(resolve => {
+    releaseDomains = resolve
   })
   await mockDomainSearch(page, label =>
-    Effect.promise(() => quotesGate).pipe(Effect.as(makeDomainFixtures(label))),
+    Effect.promise(() => domainsGate).pipe(
+      Effect.as(makeDomainFixtures(label)),
+    ),
   )
   try {
     await page.goto('/?q=acme')
@@ -539,7 +541,7 @@ test('loading announcements retain their node outside the busy region and respec
       'animation-name',
       'none',
     )
-    releaseQuotes()
+    releaseDomains()
     await expect(page.locator('.result-count')).toContainText(
       '60 of 556 domains checked',
     )
@@ -549,7 +551,7 @@ test('loading announcements retain their node outside the busy region and respec
       ),
     ).toBe(true)
   } finally {
-    releaseQuotes()
+    releaseDomains()
   }
 })
 

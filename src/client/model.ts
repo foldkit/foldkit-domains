@@ -2,12 +2,13 @@ import { Schema } from 'effect'
 
 import { DialogBlock } from '@foldkit/ui'
 
+import { DataSource } from '../shared/dataSource'
 import {
   type AvailableDomain,
   Domain,
   DomainCandidateRange,
 } from '../shared/domain'
-import { SearchMode } from '../shared/searchMode'
+import { DataSourceControlBlock } from './dataSourceControl'
 import { AvailabilityFilter, SortOrder, TldFilter } from './domain'
 import { DomainsQuery } from './domainsQuery'
 import {
@@ -19,7 +20,6 @@ import { ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
 import { SearchCooldown } from './searchCooldown'
 import { SearchLayout } from './searchInput'
-import { SearchModeControlBlock } from './searchModeControl'
 
 export const Carts = Schema.Struct({
   Demo: Schema.Array(Domain.Available),
@@ -30,13 +30,13 @@ export type Carts = typeof Carts.Type
 export const Model = Schema.Struct({
   route: ApplicationRoute,
   searchLayout: SearchLayout,
-  searchMode: SearchMode,
+  dataSource: DataSource,
   liveWarningDialog: DialogBlock.Model,
   isLiveLatencyAccepted: Schema.Boolean,
-  searchModeControl: SearchModeControlBlock.Model,
+  dataSourceControl: DataSourceControlBlock.Model,
   searchGeneration: Schema.Number,
   searchPlanningTimeMillis: Schema.Number,
-  domainCandidateRanges: Schema.Array(DomainCandidateRange),
+  activeDomainCandidateRanges: Schema.Array(DomainCandidateRange),
   domainsQuery: DomainsQuery.Model,
   maybeBlockedDomainCandidateRange: Schema.Option(DomainCandidateRange),
   maybeSearchCooldown: Schema.Option(SearchCooldown),
@@ -55,7 +55,7 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
-export const activeCart = (model: Model) => model.carts[model.searchMode]
+export const activeCart = (model: Model) => model.carts[model.dataSource]
 
 export const updateActiveCart = (
   model: Model,
@@ -64,5 +64,5 @@ export const updateActiveCart = (
   ) => ReadonlyArray<AvailableDomain>,
 ): Carts => ({
   ...model.carts,
-  [model.searchMode]: transform(activeCart(model)),
+  [model.dataSource]: transform(activeCart(model)),
 })

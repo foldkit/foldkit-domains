@@ -4,16 +4,16 @@ export {
   makeChangeSortOrderStep,
 } from './filters'
 export {
-  loadRequiredQuotesStep,
-  makeScheduleQuoteRequestStep,
-  loadQuotesForRangeStep,
-} from './quoteLoading'
+  loadRequiredDomainsStep,
+  makeScheduleDomainRequestStep,
+  loadDomainsForRangeStep,
+} from './domainLoading'
 export { informResultsListStep } from './resultsList'
 export {
   clearSearchStep,
   continueToLiveStep,
   makeChangeSearchQueryStep,
   retrySearchStep,
-  searchQueryStep,
-  makeSearchQueryStep,
+  searchCurrentQueryStep,
+  makeSearchCurrentQueryStep,
 } from './search'

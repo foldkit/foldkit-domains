@@ -3,12 +3,12 @@ import { Dom, Render } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
 import { DomainCandidateRange } from '../shared/domain'
+import { DATA_SOURCE_CONTROL_ID } from './dataSourceControl'
 import { ApplicationDefinition } from './definition'
 import { Message } from './message'
 import { PageScrollKey, RESULTS_LIST_ID } from './resultsList'
 import { searchRouter } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
-import { SEARCH_MODE_CONTROL_ID } from './searchModeControl'
 import { subscriptions } from './subscription'
 
 export const ReadSearchPlanningTime = ApplicationDefinition.makeCommand(
@@ -17,7 +17,7 @@ export const ReadSearchPlanningTime = ApplicationDefinition.makeCommand(
     args: {
       searchGeneration: Schema.Number,
       ...DomainCandidateRange.fields,
-      isForced: Schema.Boolean,
+      isRefreshRequested: Schema.Boolean,
     },
     messages: [Message.CompletedReadSearchPlanningTime],
     handler: function* () {
@@ -123,17 +123,17 @@ export const FocusTldFilterButton = ApplicationDefinition.makeCommand(
   },
 )
 
-export const FocusSearchModeButton = ApplicationDefinition.makeCommand(
-  'FocusSearchModeButton',
+export const FocusDataSourceButton = ApplicationDefinition.makeCommand(
+  'FocusDataSourceButton',
   {
-    messages: [Message.CompletedFocusSearchModeButton],
+    messages: [Message.CompletedFocusDataSourceButton],
     handler: function* () {
       return () =>
-        Dom.focus(`#${SEARCH_MODE_CONTROL_ID}-button`, {
+        Dom.focus(`#${DATA_SOURCE_CONTROL_ID}-button`, {
           preventScroll: true,
         }).pipe(
           Effect.ignore,
-          Effect.as(Message.CompletedFocusSearchModeButton()),
+          Effect.as(Message.CompletedFocusDataSourceButton()),
         )
     },
   },
@@ -274,7 +274,7 @@ export const EffectsLayer = Layer.mergeAll(
   FocusFiltersButton.layer,
   FocusTldFilterButton.layer,
   FocusCartCloseButton.layer,
-  FocusSearchModeButton.layer,
+  FocusDataSourceButton.layer,
   ScrollPage.layer,
   ScrollPageToTop.layer,
   RevealResultsListStart.layer,

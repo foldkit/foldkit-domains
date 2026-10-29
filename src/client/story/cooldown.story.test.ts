@@ -11,8 +11,8 @@ import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 import { expect, test } from 'vitest'
 
+import { DataSource } from '../../shared/dataSource'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
-import { SearchMode } from '../../shared/searchMode'
 import {
   DismissSearchKeyboard,
   FocusSearchInput,
@@ -29,7 +29,7 @@ import {
 import { ApplicationRoute } from '../route'
 import { SearchCooldown } from '../searchCooldown'
 import {
-  QuoteRequestPresentation,
+  DomainRequestPresentation,
   SearchPresentation,
   searchPresentation,
 } from '../searchPresentation'
@@ -45,7 +45,7 @@ import {
   resolveSearchTime,
 } from './test'
 
-const emptyModel = modifyFields(defaultModel, { searchMode: () => 'Live' })
+const emptyModel = modifyFields(defaultModel, { dataSource: () => 'Live' })
 
 const cooldown = SearchCooldown.make({
   source: 'Registrar',
@@ -59,13 +59,13 @@ const cooldownFailure = DomainsQueryFailure.make({
 
 test('a canceled completion stays silent before the route event, while the current completion installs its cooldown', () => {
   const acmeArgs = {
-    mode: SearchMode.make('Live'),
+    dataSource: DataSource.make('Live'),
     label: 'acme',
     offset: 0,
     limit: 4,
   }
   const otherArgs = {
-    mode: SearchMode.make('Live'),
+    dataSource: DataSource.make('Live'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -122,7 +122,7 @@ test('a canceled completion stays silent before the route event, while the curre
 
 test('fresh navigation passes cooldown preflight, forced refresh waits for the exact deadline', () => {
   const args = {
-    mode: SearchMode.make('Live'),
+    dataSource: DataSource.make('Live'),
     label: 'acme',
     offset: 0,
     limit: 4,
@@ -139,7 +139,7 @@ test('fresh navigation passes cooldown preflight, forced refresh waits for the e
     ),
     {
       route: () => ApplicationRoute.Search({ q: Option.some('other') }),
-      domainCandidateRanges: () => [],
+      activeDomainCandidateRanges: () => [],
       maybeSearchCooldown: () => maybeCooldown,
     },
   )
@@ -170,7 +170,7 @@ test('fresh navigation passes cooldown preflight, forced refresh waits for the e
       expect(searchPresentation(model)).toEqual(
         SearchPresentation.Ready({
           domains,
-          quoteRequest: QuoteRequestPresentation.Failed({
+          domainRequest: DomainRequestPresentation.Failed({
             offset: 0,
             limit: 4,
             error:

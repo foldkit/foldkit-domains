@@ -2,8 +2,8 @@ import { Schema } from 'effect'
 import { Rpc, RpcGroup } from 'effect/rpc'
 import { defineTaggedUnion } from 'foldkit/schema'
 
+import { DataSource } from './dataSource'
 import { Domain, DomainCandidateRange, DomainLabel } from './domain'
-import { SearchMode } from './searchMode'
 
 export const DOMAINS_RPC_PATH = '/rpc'
 
@@ -26,7 +26,7 @@ export type SearchError = typeof SearchError.Type
 export const DomainsRpcs = RpcGroup.make(
   Rpc.make('SearchDomains', {
     payload: {
-      mode: Schema.optionalKey(SearchMode),
+      mode: Schema.optionalKey(DataSource),
       label: DomainLabel,
       offset: Schema.optionalKey(DomainCandidateRange.fields.offset),
       limit: Schema.optionalKey(DomainCandidateRange.fields.limit),

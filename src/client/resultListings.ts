@@ -1,16 +1,14 @@
 import { Match } from 'effect'
 
-import { DomainListing, visibleDomainListings } from './domain'
+import { DomainListing, filterAndSortDomainListings } from './domain'
 import { Model } from './model'
 import { routeToQuery } from './route'
 import { searchPresentation } from './searchPresentation'
 
-export const visibleResultListings = (
-  model: Model,
-): ReadonlyArray<DomainListing> =>
+export const resultListings = (model: Model): ReadonlyArray<DomainListing> =>
   Match.value(searchPresentation(model)).pipe(
     Match.tag('Idle', 'Loading', () =>
-      visibleDomainListings(
+      filterAndSortDomainListings(
         routeToQuery(model.route),
         [],
         model.tldFilter,
@@ -19,7 +17,7 @@ export const visibleResultListings = (
       ),
     ),
     Match.tag('Ready', ({ domains }) =>
-      visibleDomainListings(
+      filterAndSortDomainListings(
         routeToQuery(model.route),
         domains,
         model.tldFilter,

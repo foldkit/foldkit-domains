@@ -13,21 +13,21 @@ import type { Model } from './model'
 import { routeToQuery } from './route'
 import { formatRateLimitMessage } from './searchCooldown'
 
-export const QuoteRequestPresentation = defineTaggedUnion({
+export const DomainRequestPresentation = defineTaggedUnion({
   Idle: {},
   Loading: DomainCandidateRange.fields,
   Failed: { ...DomainCandidateRange.fields, error: Schema.String },
 })
-export type QuoteRequestPresentation = typeof QuoteRequestPresentation.Type
+export type DomainRequestPresentation = typeof DomainRequestPresentation.Type
 
 export const SearchPresentation = defineTaggedUnion({
   Idle: {},
   Loading: {},
   Ready: {
     domains: Schema.Array(Domain),
-    quoteRequest: QuoteRequestPresentation.pipe(
+    domainRequest: DomainRequestPresentation.pipe(
       Schema.withConstructorDefault(
-        Effect.succeed(QuoteRequestPresentation.Idle()),
+        Effect.succeed(DomainRequestPresentation.Idle()),
       ),
     ),
   },
@@ -51,10 +51,10 @@ export const searchPresentation = (model: Model): SearchPresentation => {
     })
   }
 
-  const rangeQueries = Array.map(model.domainCandidateRanges, range => ({
+  const rangeQueries = Array.map(model.activeDomainCandidateRanges, range => ({
     range,
     data: DomainsQuery.read(model.domainsQuery, {
-      mode: model.searchMode,
+      dataSource: model.dataSource,
       label: maybeLabel.value,
       ...range,
     }),
@@ -62,12 +62,12 @@ export const searchPresentation = (model: Model): SearchPresentation => {
   const domains = Array.reduce(
     rangeQueries,
     Array.empty<Domain>(),
-    (quotes, { data }) =>
+    (checkedDomains, { data }) =>
       AsyncData.isPending(data)
-        ? quotes
+        ? checkedDomains
         : Option.match(AsyncData.getData(data), {
-            onNone: () => quotes,
-            onSome: incoming => mergeDomainsByName(quotes, incoming),
+            onNone: () => checkedDomains,
+            onSome: incoming => mergeDomainsByName(checkedDomains, incoming),
           }),
   )
   const maybePendingRangeQuery = Array.findFirst(rangeQueries, ({ data }) =>
@@ -117,14 +117,14 @@ export const searchPresentation = (model: Model): SearchPresentation => {
     })
   }
 
-  const quoteRequest = Option.match(maybePendingRangeQuery, {
-    onSome: ({ range }) => QuoteRequestPresentation.Loading(range),
+  const domainRequest = Option.match(maybePendingRangeQuery, {
+    onSome: ({ range }) => DomainRequestPresentation.Loading(range),
     onNone: () =>
       Option.match(maybeFailure, {
-        onNone: QuoteRequestPresentation.Idle,
-        onSome: failure => QuoteRequestPresentation.Failed(failure),
+        onNone: DomainRequestPresentation.Idle,
+        onSome: failure => DomainRequestPresentation.Failed(failure),
       }),
   })
 
-  return SearchPresentation.Ready({ domains, quoteRequest })
+  return SearchPresentation.Ready({ domains, domainRequest })
 }

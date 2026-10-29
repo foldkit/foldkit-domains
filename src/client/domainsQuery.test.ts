@@ -13,9 +13,9 @@ import { TestClock } from 'effect/testing'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { DomainsRpcRoutes } from '../server/rpc'
+import { DataSource } from '../shared/dataSource'
 import { Domain, DomainCandidateRange, domainTlds } from '../shared/domain'
 import { DomainsRpcs, SearchError } from '../shared/domainsRpc'
-import { SearchMode } from '../shared/searchMode'
 import {
   DomainsQuery,
   DomainsQueryArgs,
@@ -35,7 +35,7 @@ const availableDomain = Domain.Available({
   isPremium: false,
 })
 const args = DomainsQueryArgs.make({
-  mode: SearchMode.make('Demo'),
+  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 0,
   limit: 60,
@@ -54,6 +54,7 @@ const rpcTransport = (
   search: (
     label: string,
     range: DomainCandidateRange,
+    dataSource: DataSource,
   ) => Effect.Effect<ReadonlyArray<Domain>, SearchError>,
   context = Context.empty(),
 ): typeof fetch => {
@@ -61,8 +62,12 @@ const rpcTransport = (
     DomainsRpcRoutes.pipe(
       HttpRouter.provideRequest(
         DomainsRpcs.toLayer({
-          SearchDomains: ({ label, offset = 0, limit = domainTlds.length }) =>
-            search(label, { offset, limit }),
+          SearchDomains: ({
+            mode: dataSource = 'Demo',
+            label,
+            offset = 0,
+            limit = domainTlds.length,
+          }) => search(label, { offset, limit }, dataSource),
         }),
       ),
     ),
@@ -77,37 +82,44 @@ afterEach(async () => {
 })
 
 describe('fetching domain results for candidate ranges', () => {
-  test('the Query wires a debounced lookup to its originating request', async () => {
-    let calls = 0
-    const transport = rpcTransport((label, range) => {
-      calls += 1
-      expect(label).toBe('acme')
-      expect(range).toEqual({ offset: 0, limit: 60 })
-      return Effect.succeed([availableDomain])
-    })
-    const completed = await Effect.runPromise(
-      Effect.gen(function* () {
-        const fetch = yield* Effect.forkChild(makeDomainsFetch(args, 42).effect)
+  test.each(DataSource.literals)(
+    'the Query wires a debounced %s lookup to its originating request',
+    async dataSource => {
+      const requestArgs = DomainsQueryArgs.make({ ...args, dataSource })
+      let calls = 0
+      const transport = rpcTransport((label, range, receivedDataSource) => {
+        expect(receivedDataSource).toBe(dataSource)
+        calls += 1
+        expect(label).toBe('acme')
+        expect(range).toEqual({ offset: 0, limit: 60 })
+        return Effect.succeed([availableDomain])
+      })
+      const completed = await Effect.runPromise(
+        Effect.gen(function* () {
+          const fetch = yield* Effect.forkChild(
+            makeDomainsFetch(requestArgs, 42).effect,
+          )
 
-        yield* TestClock.adjust('149 millis')
-        expect(calls).toBe(0)
+          yield* TestClock.adjust('149 millis')
+          expect(calls).toBe(0)
 
-        yield* TestClock.adjust('1 millis')
-        return yield* Fiber.join(fetch)
-      }).pipe(Effect.provide([queryLayer(transport), TestClock.layer()])),
-    )
+          yield* TestClock.adjust('1 millis')
+          return yield* Fiber.join(fetch)
+        }).pipe(Effect.provide([queryLayer(transport), TestClock.layer()])),
+      )
 
-    expect(calls).toBe(1)
-    expect(completed).toEqual(
-      DomainsQuery.Message.CompletedFetch({
-        args,
-        generation: 42,
-        requestKey: domainsRequestKey(args),
-        result: Result.succeed([availableDomain]),
-        completedAtMillis: 150,
-      }),
-    )
-  })
+      expect(calls).toBe(1)
+      expect(completed).toEqual(
+        DomainsQuery.Message.CompletedFetch({
+          args: requestArgs,
+          generation: 42,
+          requestKey: domainsRequestKey(requestArgs),
+          result: Result.succeed([availableDomain]),
+          completedAtMillis: 150,
+        }),
+      )
+    },
+  )
 
   test('changing a query during debounce cancels the lookup before any RPC', async () => {
     let calls = 0
@@ -137,7 +149,7 @@ describe('fetching domain results for candidate ranges', () => {
     })
     const domains = await Effect.runPromise(
       fetchDomains({
-        mode: SearchMode.make('Demo'),
+        dataSource: DataSource.make('Demo'),
         label: 'acme',
         offset: 4,
         limit: 56,

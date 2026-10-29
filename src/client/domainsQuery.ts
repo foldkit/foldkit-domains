@@ -1,8 +1,8 @@
 import { Cause, Clock, Duration, Effect, Option, Schema } from 'effect'
 import * as Query from 'foldkit/experimental/query'
 
+import { DataSource } from '../shared/dataSource'
 import { Domain, DomainCandidateRange, DomainLabel } from '../shared/domain'
-import { SearchMode } from '../shared/searchMode'
 import { DomainsClient } from './rpc'
 import { SearchCooldown, formatRateLimitMessage } from './searchCooldown'
 
@@ -10,7 +10,7 @@ const SEARCH_DEBOUNCE = '150 millis'
 const SEARCH_TIMEOUT = '20 seconds'
 
 export const DomainsQueryArgs = Schema.Struct({
-  mode: SearchMode,
+  dataSource: DataSource,
   label: DomainLabel,
   ...DomainCandidateRange.fields,
 })
@@ -35,7 +35,12 @@ export const fetchDomains = (args: DomainsQueryArgs) => {
       yield* Effect.sleep(SEARCH_DEBOUNCE)
     }
 
-    return yield* client.SearchDomains(args)
+    return yield* client.SearchDomains({
+      mode: args.dataSource,
+      label: args.label,
+      offset: args.offset,
+      limit: args.limit,
+    })
   }).pipe(
     Effect.timeout(SEARCH_TIMEOUT),
     Effect.catchTags({
@@ -68,7 +73,7 @@ export const fetchDomains = (args: DomainsQueryArgs) => {
     ),
     Effect.catchDefect(defect =>
       Effect.logError(
-        'Domain quote lookup failed unexpectedly',
+        'Domain lookup failed unexpectedly',
         Cause.die(defect),
       ).pipe(
         Effect.andThen(

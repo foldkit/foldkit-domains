@@ -19,13 +19,13 @@ export const makeCoordinatedSearchHandlersLayer = (
 
       return {
         SearchDomains: ({
-          mode = 'Demo',
+          mode: dataSource = 'Demo',
           label,
           offset = 0,
           limit = domainTlds.length,
         }) =>
           Effect.gen(function* () {
-            if (mode === 'Demo') {
+            if (dataSource === 'Demo') {
               return yield* searchDemoDomains(label, { offset, limit })
             }
 

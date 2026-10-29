@@ -3,8 +3,8 @@ import { Command, type StorySimulation, message, steps } from 'foldkit/story'
 
 import { VirtualList } from '@foldkit/ui'
 
+import { DataSource } from '../../shared/dataSource'
 import { Domain } from '../../shared/domain'
-import { SearchMode } from '../../shared/searchMode'
 import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
 import {
   DomainsQuery,
@@ -43,16 +43,21 @@ export const resolveSearchTime = (
   nowMillis: number,
   offset = 0,
   limit = 4,
-  isForced = false,
+  isRefreshRequested = false,
 ) =>
   Command.resolve(
-    ReadSearchPlanningTime({ searchGeneration, offset, limit, isForced }),
+    ReadSearchPlanningTime({
+      searchGeneration,
+      offset,
+      limit,
+      isRefreshRequested,
+    }),
     Message.CompletedReadSearchPlanningTime({
       searchGeneration,
       nowMillis,
       offset,
       limit,
-      isForced,
+      isRefreshRequested,
     }),
   )
 
@@ -104,7 +109,7 @@ export const resolveRemainingFirstPageDomains = (
   steps(
     resolveSearchTime(searchGeneration, nowMillis, 4, 56),
     resolveDomainsSuccess(
-      { mode: SearchMode.make('Demo'), label, offset: 4, limit: 56 },
+      { dataSource: DataSource.make('Demo'), label, offset: 4, limit: 56 },
       generation,
       domains,
       nowMillis,

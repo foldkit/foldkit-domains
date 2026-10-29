@@ -11,7 +11,7 @@ export const Message = defineMessageUnion({
   UpdatedSearch: { value: Schema.String },
   SubmittedSearch: {},
   RequestedSearch: {},
-  RequestedQuotes: DomainCandidateRange.fields,
+  RequestedDomains: DomainCandidateRange.fields,
   ReachedSearchCooldownExpiry: { nowMillis: Schema.Number },
   PressedEscape: {},
   FocusedResultsList: {},
@@ -37,12 +37,12 @@ export const Message = defineMessageUnion({
   ClickedRetrySearch: {},
   UpdatedLiveLatencyAcceptance: { isAccepted: Schema.Boolean },
   ClickedContinueToLive: {},
-  CompletedFocusSearchModeButton: {},
+  CompletedFocusDataSourceButton: {},
   CompletedReadSearchPlanningTime: {
     searchGeneration: Schema.Number,
     nowMillis: Schema.Number,
     ...DomainCandidateRange.fields,
-    isForced: Schema.Boolean,
+    isRefreshRequested: Schema.Boolean,
   },
 
   CompletedReplaceSearchUrl: {},

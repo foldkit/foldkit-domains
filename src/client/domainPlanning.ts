@@ -12,17 +12,17 @@ import {
 } from './domain'
 import { DomainsQuery } from './domainsQuery'
 import type { Model } from './model'
+import { resultListings } from './resultListings'
 import { findFirstPendingListingInViewport } from './resultsList'
 import { routeToQuery } from './route'
 import { searchPresentation } from './searchPresentation'
-import { visibleResultListings } from './visibleResultListings'
 
 export const planRequiredDomainCandidateRange = (
   model: Model,
 ): Option.Option<DomainCandidateRange> => {
   const search = searchPresentation(model)
 
-  if (search._tag !== 'Ready' || search.quoteRequest._tag === 'Loading') {
+  if (search._tag !== 'Ready' || search.domainRequest._tag === 'Loading') {
     return Option.none()
   }
 
@@ -38,7 +38,7 @@ export const planRequiredDomainCandidateRange = (
       label =>
         AsyncData.hasError(
           DomainsQuery.read(model.domainsQuery, {
-            mode: model.searchMode,
+            dataSource: model.dataSource,
             label,
             offset: 0,
             limit: domainTlds.length,
@@ -59,15 +59,12 @@ export const planRequiredDomainCandidateRange = (
     return Option.some({ offset: 0, limit: domainTlds.length })
   }
 
-  if (search.quoteRequest._tag === 'Failed') {
+  if (search.domainRequest._tag === 'Failed') {
     return Option.none()
   }
 
   return pipe(
-    findFirstPendingListingInViewport(
-      visibleResultListings(model),
-      model.resultsList,
-    ),
+    findFirstPendingListingInViewport(resultListings(model), model.resultsList),
     Option.flatMap(listing => tldToMaybeDomainCandidateRange(listing.tld)),
   )
 }

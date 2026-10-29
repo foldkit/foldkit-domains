@@ -70,7 +70,7 @@ const domainNameLengthOrder = Order.combine(
 )
 
 export const TOP_RESULT_COUNT = 4
-export const QUOTE_PAGE_SIZE = 60
+export const DOMAIN_PAGE_SIZE = 60
 
 export const tldToMaybeDomainCandidateRange = (
   tld: string,
@@ -81,17 +81,17 @@ export const tldToMaybeDomainCandidateRange = (
     Option.map(index => {
       if (index < TOP_RESULT_COUNT) {
         return DomainCandidateRange.make({ offset: 0, limit: TOP_RESULT_COUNT })
-      } else if (index < QUOTE_PAGE_SIZE) {
+      } else if (index < DOMAIN_PAGE_SIZE) {
         return DomainCandidateRange.make({
           offset: TOP_RESULT_COUNT,
-          limit: QUOTE_PAGE_SIZE - TOP_RESULT_COUNT,
+          limit: DOMAIN_PAGE_SIZE - TOP_RESULT_COUNT,
         })
       } else {
-        const offset = Math.floor(index / QUOTE_PAGE_SIZE) * QUOTE_PAGE_SIZE
+        const offset = Math.floor(index / DOMAIN_PAGE_SIZE) * DOMAIN_PAGE_SIZE
 
         return DomainCandidateRange.make({
           offset,
-          limit: Math.min(QUOTE_PAGE_SIZE, domainTlds.length - offset),
+          limit: Math.min(DOMAIN_PAGE_SIZE, domainTlds.length - offset),
         })
       }
     }),
@@ -117,10 +117,10 @@ export const queryToDomainListings = (
   query: string,
   domains: ReadonlyArray<Domain>,
 ) => {
-  const quotesByName = Record.fromIterableBy(domains, domain => domain.name)
+  const domainsByName = Record.fromIterableBy(domains, domain => domain.name)
 
   return Array.map(queryToPendingDomainListings(query), pending =>
-    Record.get(quotesByName, pending.name).pipe(
+    Record.get(domainsByName, pending.name).pipe(
       Option.match({ onNone: () => pending, onSome: domainToReadyListing }),
     ),
   )
@@ -147,7 +147,7 @@ const matchesAvailabilityFilter =
       Match.exhaustive,
     )
 
-export const visibleDomains = (
+export const filterAndSortDomains = (
   domains: ReadonlyArray<Domain>,
   tldFilter: TldFilter,
   availabilityFilter: AvailabilityFilter,
@@ -197,7 +197,7 @@ export const visibleDomains = (
   )
 }
 
-export const visibleDomainListings = (
+export const filterAndSortDomainListings = (
   query: string,
   domains: ReadonlyArray<Domain>,
   tldFilter: TldFilter,
@@ -220,7 +220,12 @@ export const visibleDomainListings = (
     Match.whenOr('PriceAscending', 'PriceDescending', () =>
       Array.appendAll(
         Array.map(
-          visibleDomains(domains, tldFilter, availabilityFilter, sortOrder),
+          filterAndSortDomains(
+            domains,
+            tldFilter,
+            availabilityFilter,
+            sortOrder,
+          ),
           domainToReadyListing,
         ),
         Array.filter(listings, DomainListing.isAnyOf(['Pending'])),

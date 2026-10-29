@@ -77,17 +77,17 @@ export const acknowledgeLiveWarning = async (page: Page): Promise<void> => {
   await expect(warning).toBeHidden()
 }
 
-export const chooseSearchMode = async (
+export const chooseDataSource = async (
   page: Page,
-  mode: 'Demo' | 'Live',
+  dataSource: 'Demo' | 'Live',
 ): Promise<void> => {
   const trigger = page.getByRole('button', { name: /^Data source:/ })
   await trigger.click()
-  await page.getByRole('option', { name: new RegExp(`^${mode}`) }).click()
+  await page.getByRole('option', { name: new RegExp(`^${dataSource}`) }).click()
   await expect(
     page.getByRole('listbox', { name: /^Data source:/ }),
   ).toBeHidden()
-  if (mode === 'Live') {
+  if (dataSource === 'Live') {
     await acknowledgeLiveWarning(page)
   }
   await expect(trigger).toBeFocused()

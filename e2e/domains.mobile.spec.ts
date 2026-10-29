@@ -685,9 +685,9 @@ for (const phase of ['before hydration', 'after hydration']) {
     const bundleGate = new Promise<void>(resolve => {
       releaseBundle = resolve
     })
-    let releaseQuotes = () => {}
+    let releaseDomains = () => {}
     const quoteGate = new Promise<void>(resolve => {
-      releaseQuotes = resolve
+      releaseDomains = resolve
     })
     await mockDomainSearch(page, label =>
       Effect.promise(() => quoteGate).pipe(
@@ -740,7 +740,7 @@ for (const phase of ['before hydration', 'after hydration']) {
       ).toBeAttached()
       await expect(heading).toBeInViewport()
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
-      releaseQuotes()
+      releaseDomains()
       await expect(page.locator('.domain-card .price').first()).toBeVisible()
       await expect(heading).toBeInViewport()
       await input.pressSequentially('v')
@@ -764,7 +764,7 @@ for (const phase of ['before hydration', 'after hydration']) {
       ).toBe(0)
     } finally {
       releaseBundle()
-      releaseQuotes()
+      releaseDomains()
       await context.close()
     }
   })

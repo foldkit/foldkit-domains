@@ -4,15 +4,15 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
+import { DataSource } from '../../shared/dataSource'
 import { domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
-import { SearchMode } from '../../shared/searchMode'
 import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, withDomainsForRange } from '../model.fixture'
 import { ApplicationRoute } from '../route'
 import {
-  QuoteRequestPresentation,
+  DomainRequestPresentation,
   SearchPresentation,
   searchPresentation,
 } from '../searchPresentation'
@@ -29,13 +29,13 @@ import {
 
 test('a normalized fresh label restores after another label fails', () => {
   const acmeArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
   }
   const otherArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -78,13 +78,13 @@ test('a normalized fresh label restores after another label fails', () => {
 
 test('a fresh hit touches recency without extending the completion deadline', () => {
   const acmeArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
   }
   const otherArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -125,19 +125,19 @@ test('a fresh hit touches recency without extending the completion deadline', ()
 
 test('label, offset, and limit isolate candidate ranges used by the application', () => {
   const firstArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 60,
   }
   const secondArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 60,
     limit: 60,
   }
   const catalogArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: domainTlds.length,
@@ -159,7 +159,7 @@ test('label, offset, and limit isolate candidate ranges used by the application'
   story(
     update,
     given(partialModel),
-    message(Message.RequestedQuotes({ offset: 60, limit: 60 })),
+    message(Message.RequestedDomains({ offset: 60, limit: 60 })),
     resolveSearchTime(1, 10, 60, 60),
     Command.expectHas(makeDomainsFetch(secondArgs, 2)),
     resolveDomainsSuccess(secondArgs, 2, secondPageDomains, 20),
@@ -185,19 +185,19 @@ test('label, offset, and limit isolate candidate ranges used by the application'
 
 test('global criteria reuse a fresh catalog and prune an active failed page', () => {
   const firstArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 60,
   }
   const secondArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 60,
     limit: 60,
   }
   const catalogArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: domainTlds.length,
@@ -219,7 +219,7 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
       firstPageDomains,
       100,
     ),
-    { domainCandidateRanges: () => [{ offset: 0, limit: 60 }] },
+    { activeDomainCandidateRanges: () => [{ offset: 0, limit: 60 }] },
   )
   const pageFailure = DomainsQueryFailure.make({
     error: 'Provider busy',
@@ -229,14 +229,14 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
   story(
     update,
     given(cachedModel),
-    message(Message.RequestedQuotes({ offset: 60, limit: 60 })),
+    message(Message.RequestedDomains({ offset: 60, limit: 60 })),
     resolveSearchTime(1, 110, 60, 60),
     resolveDomainsFailure(secondArgs, 3, pageFailure, 115),
     model(model => {
       expect(searchPresentation(model)).toEqual(
         SearchPresentation.Ready({
           domains: firstPageDomains,
-          quoteRequest: QuoteRequestPresentation.Failed({
+          domainRequest: DomainRequestPresentation.Failed({
             offset: 60,
             limit: 60,
             error: pageFailure.error,
@@ -251,13 +251,13 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
       expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
         'Failure',
       )
-      expect(model.domainCandidateRanges).toEqual([
+      expect(model.activeDomainCandidateRanges).toEqual([
         { offset: 0, limit: domainTlds.length },
       ])
       expect(searchPresentation(model)).toEqual(
         SearchPresentation.Ready({
           domains: allDomains,
-          quoteRequest: QuoteRequestPresentation.Idle(),
+          domainRequest: DomainRequestPresentation.Idle(),
         }),
       )
     }),
@@ -275,7 +275,12 @@ test('backspacing to a fresh query reuses Top Results and the visible candidate 
     given(emptyModel),
     changeSearchQuery('acme', 2, 0),
     resolveDomainsSuccess(
-      { mode: SearchMode.make('Demo'), label: 'acme', offset: 0, limit: 4 },
+      {
+        dataSource: DataSource.make('Demo'),
+        label: 'acme',
+        offset: 0,
+        limit: 4,
+      },
       1,
       Array.take(acmeDomains, 4),
       100,
@@ -289,7 +294,12 @@ test('backspacing to a fresh query reuses Top Results and the visible candidate 
     ),
     changeSearchQuery('acmes', 4, 200),
     resolveDomainsSuccess(
-      { mode: SearchMode.make('Demo'), label: 'acmes', offset: 0, limit: 4 },
+      {
+        dataSource: DataSource.make('Demo'),
+        label: 'acmes',
+        offset: 0,
+        limit: 4,
+      },
       3,
       Array.take(acmesDomains, 4),
       300,

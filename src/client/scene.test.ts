@@ -34,16 +34,16 @@ import {
   VirtualList,
 } from '@foldkit/ui'
 
+import { DataSource } from '../shared/dataSource'
 import { Domain, domainCandidates, domainTlds } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
-import { SearchMode } from '../shared/searchMode'
 import {
   DismissSearchKeyboard,
   FocusCartButton,
   FocusCartCloseButton,
+  FocusDataSourceButton,
   FocusFiltersButton,
   FocusSearchInput,
-  FocusSearchModeButton,
   FocusTldFilterButton,
   ReadSearchPlanningTime,
   ReplaceSearchUrl,
@@ -55,17 +55,17 @@ import {
   LIVE_WARNING_DIALOG_ID,
   TLD_DIALOG_ID,
 } from './composition'
-import { QUOTE_PAGE_SIZE, TOP_RESULT_COUNT } from './domain'
+import {
+  DATA_SOURCE_CONTROL_ID,
+  DataSourceControlBlock,
+} from './dataSourceControl'
+import { DOMAIN_PAGE_SIZE, TOP_RESULT_COUNT } from './domain'
 import { DomainsQuery, DomainsQueryFailure } from './domainsQuery'
 import { SortListboxBlock, TldListboxBlock } from './filterListboxes'
 import { Message } from './message'
 import { emptyModel, readyModel, withDomainsForRange } from './model.fixture'
 import { PageScrollKey, RESULTS_LIST_ID, ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
-import {
-  SEARCH_MODE_CONTROL_ID,
-  SearchModeControlBlock,
-} from './searchModeControl'
 import { update } from './update'
 import { view } from './view'
 
@@ -242,11 +242,11 @@ const resolveRemainingFirstPageDomains = resolveDomains(
   Result.succeed(
     Array.take(
       Array.drop(makeDomainFixtures('acme'), TOP_RESULT_COUNT),
-      QUOTE_PAGE_SIZE - TOP_RESULT_COUNT,
+      DOMAIN_PAGE_SIZE - TOP_RESULT_COUNT,
     ),
   ),
   TOP_RESULT_COUNT,
-  QUOTE_PAGE_SIZE - TOP_RESULT_COUNT,
+  DOMAIN_PAGE_SIZE - TOP_RESULT_COUNT,
 )
 
 const measureResultsList = Mount.resolve(
@@ -706,7 +706,7 @@ test('multi-year quotes display and sort by the full registration price', () => 
   const quotedModel = withDomainsForRange(
     readyModel('acme'),
     {
-      mode: SearchMode.make('Demo'),
+      dataSource: DataSource.make('Demo'),
       label: 'acme',
       offset: 0,
       limit: domainTlds.length,
@@ -857,8 +857,8 @@ test('the data source listbox requires acknowledgment before selecting Live and 
     measureResultsList,
     ...openFilterListbox(
       'Data source',
-      SEARCH_MODE_CONTROL_ID,
-      SearchModeControlBlock.Message,
+      DATA_SOURCE_CONTROL_ID,
+      DataSourceControlBlock.Message,
     ),
     Command.resolveAll(
       [
@@ -884,8 +884,8 @@ test('the data source listbox requires acknowledgment before selecting Live and 
     ),
     click(role('option', { name: /^Live/ })),
     Command.resolve(
-      Listbox.test.FocusListboxButton({ id: SEARCH_MODE_CONTROL_ID }),
-      SearchModeControlBlock.Message.CompletedFocusListboxButton(),
+      Listbox.test.FocusListboxButton({ id: DATA_SOURCE_CONTROL_ID }),
+      DataSourceControlBlock.Message.CompletedFocusListboxButton(),
     ),
     Command.resolve(
       Animation.test.WaitForPaint,
@@ -893,7 +893,7 @@ test('the data source listbox requires acknowledgment before selecting Live and 
     ),
     Command.resolve(
       Listbox.test.DetectListboxMovementOrAnimationEnd,
-      SearchModeControlBlock.Message.CompletedDetectListboxMovementOrAnimationEnd(
+      DataSourceControlBlock.Message.CompletedDetectListboxMovementOrAnimationEnd(
         { generation: 2 },
       ),
     ),
@@ -926,8 +926,8 @@ test('the data source listbox requires acknowledgment before selecting Live and 
       DialogBlock.Message.CompletedCloseDialog(),
     ),
     Command.resolve(
-      FocusSearchModeButton,
-      Message.CompletedFocusSearchModeButton(),
+      FocusDataSourceButton,
+      Message.CompletedFocusDataSourceButton(),
     ),
     Mount.expectEnded(Dialog.test.AcquireResources),
     resolveSearchPlanningTime(),

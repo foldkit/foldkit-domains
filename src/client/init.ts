@@ -4,7 +4,7 @@ import { Url } from 'foldkit'
 import { ReleaseEarlySearchListeners } from './command'
 import { ApplicationComposition } from './composition'
 import { routeToQuery, urlToApplicationRoute } from './route'
-import { searchQueryStep } from './steps/index'
+import { searchCurrentQueryStep } from './steps/index'
 
 export const init = ApplicationComposition.makeInit((url: Url.Url) => {
   const route = urlToApplicationRoute(url)
@@ -15,11 +15,11 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
       searchLayout: String.isNonEmpty(routeToQuery(route))
         ? 'Search'
         : 'Landing',
-      searchMode: 'Demo',
+      dataSource: 'Demo',
       isLiveLatencyAccepted: false,
       searchGeneration: 0,
       searchPlanningTimeMillis: 0,
-      domainCandidateRanges: [],
+      activeDomainCandidateRanges: [],
       maybeBlockedDomainCandidateRange: Option.none(),
       maybeSearchCooldown: Option.none(),
       tldFilter: 'All',
@@ -29,6 +29,6 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
       carts: { Demo: [], Live: [] },
     },
     commands: [ReleaseEarlySearchListeners()],
-    steps: [searchQueryStep],
+    steps: [searchCurrentQueryStep],
   }
 })

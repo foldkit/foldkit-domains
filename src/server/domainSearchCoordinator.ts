@@ -20,7 +20,7 @@ export const makeDomainSearchCoordinatorImplementation = (
 
       return {
         fetch: handleCoordinatorRequest(search.search, 'quotes'),
-        alarm: () => search.expireQuotes,
+        alarm: () => search.expireCachedDomains,
       }
     }).pipe(
       Effect.provide(

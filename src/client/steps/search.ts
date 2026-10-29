@@ -1,8 +1,8 @@
 import { Array, Number, Option, String } from 'effect'
 import { Update } from 'foldkit'
 
+import { DataSource } from '../../shared/dataSource'
 import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
-import { SearchMode } from '../../shared/searchMode'
 import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
 import { DomainsQueryBinding, LiveWarningDialogBinding } from '../composition'
 import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
@@ -10,7 +10,7 @@ import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
 import { routeToQuery } from '../route'
 import { searchPresentation } from '../searchPresentation'
-import { makeScheduleQuoteRequestStep } from './quoteLoading'
+import { makeScheduleDomainRequestStep } from './domainLoading'
 import { informResultsListStep, resetResultsListStep } from './resultsList'
 
 export const cancelSearchStep = makeStep(model =>
@@ -21,7 +21,7 @@ export const cancelSearchStep = makeStep(model =>
   ),
 )
 
-export const makeSearchQueryStep = (isForced = false) =>
+export const makeSearchCurrentQueryStep = (isRefreshRequested = false) =>
   makeStep(model => {
     const nextSearchGeneration = Number.increment(model.searchGeneration)
     const maybeLabel = queryToMaybeDomainLabel(routeToQuery(model.route))
@@ -34,7 +34,7 @@ export const makeSearchQueryStep = (isForced = false) =>
           String.isNonEmpty(routeToQuery(model.route))
             ? 'Search'
             : currentLayout,
-        domainCandidateRanges: () => [],
+        activeDomainCandidateRanges: () => [],
         maybeBlockedDomainCandidateRange: () => Option.none(),
       })),
       makeCommandsStep(() =>
@@ -45,7 +45,7 @@ export const makeSearchQueryStep = (isForced = false) =>
               searchGeneration: nextSearchGeneration,
               offset: 0,
               limit: TOP_RESULT_COUNT,
-              isForced,
+              isRefreshRequested,
             }),
           ],
         }),
@@ -56,7 +56,7 @@ export const makeSearchQueryStep = (isForced = false) =>
     ])
   })
 
-export const searchQueryStep = makeSearchQueryStep()
+export const searchCurrentQueryStep = makeSearchCurrentQueryStep()
 
 export const makeChangeSearchQueryStep = (query: string) =>
   makeStep(model => {
@@ -84,41 +84,41 @@ export const clearSearchStep = makeChangeSearchQueryStep('')
 export const retrySearchStep = makeStep(model => {
   const search = searchPresentation(model)
 
-  if (search._tag === 'Ready' && search.quoteRequest._tag === 'Failed') {
+  if (search._tag === 'Ready' && search.domainRequest._tag === 'Failed') {
     const range = isCompleteCatalogRequired(
       model.availabilityFilter,
       model.sortOrder,
     )
       ? { offset: 0, limit: domainTlds.length }
-      : search.quoteRequest
+      : search.domainRequest
 
-    return makeScheduleQuoteRequestStep(range, true)
+    return makeScheduleDomainRequestStep(range, true)
   } else {
-    return makeSearchQueryStep(true)
+    return makeSearchCurrentQueryStep(true)
   }
 })
 
-export const makeChangeSearchModeStep = (mode: SearchMode) =>
+export const makeChangeDataSourceStep = (dataSource: DataSource) =>
   makeStep(model => {
-    if (mode === model.searchMode) {
+    if (dataSource === model.dataSource) {
       return { model }
     }
 
     return Update.combineSteps([
-      makeFieldsStep(() => ({ searchMode: () => mode })),
-      searchQueryStep,
+      makeFieldsStep(() => ({ dataSource: () => dataSource })),
+      searchCurrentQueryStep,
     ])
   })
 
-export const makeRequestSearchModeStep = (mode: SearchMode) =>
+export const makeRequestDataSourceStep = (dataSource: DataSource) =>
   makeStep(model => {
-    if (mode === 'Live' && model.searchMode === 'Demo') {
+    if (dataSource === 'Live' && model.dataSource === 'Demo') {
       return Update.combineSteps([
         makeFieldsStep(() => ({ isLiveLatencyAccepted: () => false })),
         LiveWarningDialogBinding.requestOpen(),
       ])
     } else {
-      return makeChangeSearchModeStep(mode)
+      return makeChangeDataSourceStep(dataSource)
     }
   })
 
@@ -126,13 +126,13 @@ export const continueToLiveStep = makeStep(model => {
   if (
     !model.liveWarningDialog.isOpen ||
     !model.isLiveLatencyAccepted ||
-    model.searchMode !== 'Demo'
+    model.dataSource !== 'Demo'
   ) {
     return { model }
   }
 
   return Update.combineSteps([
-    makeChangeSearchModeStep('Live'),
+    makeChangeDataSourceStep('Live'),
     LiveWarningDialogBinding.requestClose(),
   ])
 })

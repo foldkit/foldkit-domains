@@ -4,6 +4,7 @@ import { HttpRouter } from 'effect/http'
 import type { Page } from '@playwright/test'
 
 import { DomainsRpcRoutes } from '../src/server/rpc'
+import { DataSource } from '../src/shared/dataSource'
 import {
   Domain,
   DomainCandidateRange,
@@ -16,14 +17,13 @@ import {
   DomainsRpcs,
   SearchError,
 } from '../src/shared/domainsRpc'
-import { SearchMode } from '../src/shared/searchMode'
 
 export const mockDomainSearch = async (
   page: Page,
   search: (
     label: string,
     range: DomainCandidateRange,
-    mode: SearchMode,
+    dataSource: DataSource,
   ) => Effect.Effect<ReadonlyArray<Domain>, SearchError> = label =>
     Effect.succeed(makeDomainFixtures(label)),
 ): Promise<void> => {
@@ -32,12 +32,12 @@ export const mockDomainSearch = async (
       HttpRouter.provideRequest(
         DomainsRpcs.toLayer({
           SearchDomains: ({
-            mode = 'Demo',
+            mode: dataSource = 'Demo',
             label,
             offset = 0,
             limit = domainTlds.length,
           }) =>
-            search(label, { offset, limit }, mode).pipe(
+            search(label, { offset, limit }, dataSource).pipe(
               Effect.map(domains =>
                 Array.map(
                   Array.take(

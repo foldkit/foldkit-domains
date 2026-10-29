@@ -6,14 +6,15 @@ import { expect, test } from 'vitest'
 
 import { Dialog, DialogBlock } from '@foldkit/ui'
 
+import { DataSource } from '../../shared/dataSource'
 import { Domain } from '../../shared/domain'
-import { SearchMode } from '../../shared/searchMode'
-import { FocusSearchModeButton } from '../command'
+import { FocusDataSourceButton } from '../command'
 import {
+  DataSourceBinding,
   DomainsQueryBinding,
   LiveWarningDialogBinding,
-  SearchModeBinding,
 } from '../composition'
+import { DataSourceControlBlock } from '../dataSourceControl'
 import {
   DomainsQuery,
   DomainsQueryArgs,
@@ -24,7 +25,6 @@ import { activeCart } from '../model'
 import { emptyModel, withDomainsForRange } from '../model.fixture'
 import { ApplicationRoute, routeToQuery } from '../route'
 import { SearchCooldown } from '../searchCooldown'
-import { SearchModeControlBlock } from '../searchModeControl'
 import { SearchPresentation, searchPresentation } from '../searchPresentation'
 import { update } from '../update'
 import {
@@ -37,12 +37,12 @@ import {
 } from './test'
 
 const demoArgs = DomainsQueryArgs.make({
-  mode: 'Demo',
+  dataSource: 'Demo',
   label: 'acme',
   offset: 0,
   limit: 4,
 })
-const liveArgs = DomainsQueryArgs.make({ ...demoArgs, mode: 'Live' })
+const liveArgs = DomainsQueryArgs.make({ ...demoArgs, dataSource: 'Live' })
 const demoDomain = Domain.Available({
   name: 'acme.com',
   tld: 'com',
@@ -60,11 +60,11 @@ const searchModel = modifyFields(emptyModel, {
   route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
   tldFilter: () => 'Com',
 })
-const requestMode = (mode: SearchMode) =>
+const requestDataSource = (dataSource: DataSource) =>
   message(
     toParentMessage(
-      SearchModeBinding,
-      SearchModeControlBlock.Message.SelectedItem({ item: mode }),
+      DataSourceBinding,
+      DataSourceControlBlock.Message.SelectedItem({ item: dataSource }),
     ),
   )
 
@@ -74,15 +74,15 @@ const closeLiveWarning = [
     DialogBlock.Message.CompletedCloseDialog(),
   ),
   Command.resolve(
-    FocusSearchModeButton,
-    Message.CompletedFocusSearchModeButton(),
+    FocusDataSourceButton,
+    Message.CompletedFocusDataSourceButton(),
   ),
 ]
 
-const selectMode = (mode: SearchMode) =>
-  mode === 'Live'
+const selectDataSource = (dataSource: DataSource) =>
+  dataSource === 'Live'
     ? [
-        requestMode(mode),
+        requestDataSource(dataSource),
         Command.resolve(
           Dialog.test.ShowDialog,
           DialogBlock.Message.SucceededShowDialog(),
@@ -91,9 +91,9 @@ const selectMode = (mode: SearchMode) =>
         message(Message.ClickedContinueToLive()),
         ...closeLiveWarning,
       ]
-    : [requestMode(mode)]
+    : [requestDataSource(dataSource)]
 
-test('switching modes cancels a pending lookup and rejects its late quotes and cooldown', () => {
+test('switching data sources cancels a pending lookup and rejects its late quotes and cooldown', () => {
   story(
     update,
     given(searchModel),
@@ -102,12 +102,12 @@ test('switching modes cancels a pending lookup and rejects its late quotes and c
         searchGeneration: 0,
         offset: 0,
         limit: 4,
-        isForced: false,
+        isRefreshRequested: false,
         nowMillis: 0,
       }),
     ),
     Command.expectHas(makeDomainsFetch(demoArgs, 1)),
-    ...selectMode('Live'),
+    ...selectDataSource('Live'),
     resolveDomainsCancellation(demoArgs, 1),
     resolveSearchTime(1, 100),
     Command.expectHas(makeDomainsFetch(liveArgs, 3)),
@@ -121,7 +121,7 @@ test('switching modes cancels a pending lookup and rejects its late quotes and c
           completedAtMillis: 200,
           result: Result.fail(
             DomainsQueryFailure.make({
-              error: 'Old mode failed',
+              error: 'Old data source failed',
               maybeSearchCooldown: Option.some(
                 SearchCooldown.make({
                   source: 'Registrar',
@@ -134,7 +134,7 @@ test('switching modes cancels a pending lookup and rejects its late quotes and c
       ),
     ),
     model(model => {
-      expect(model.searchMode).toBe('Live')
+      expect(model.dataSource).toBe('Live')
       expect(routeToQuery(model.route)).toBe('acme')
       expect(model.maybeSearchCooldown).toEqual(Option.none())
       expect(searchPresentation(model)).toEqual(SearchPresentation.Loading())
@@ -146,7 +146,7 @@ test('switching modes cancels a pending lookup and rejects its late quotes and c
   )
 })
 
-test('mode-specific cached quotes and carts restore without fetching or changing the query', () => {
+test('data-source-specific cached results and carts restore without fetching or changing the query', () => {
   const cachedModel = withDomainsForRange(
     withDomainsForRange(searchModel, demoArgs, [demoDomain]),
     liveArgs,
@@ -156,7 +156,7 @@ test('mode-specific cached quotes and carts restore without fetching or changing
     update,
     given(cachedModel),
     message(Message.ClickedAddDomain({ domain: demoDomain })),
-    ...selectMode('Live'),
+    ...selectDataSource('Live'),
     resolveSearchTime(1, 100),
     model(model => {
       expect(searchPresentation(model)).toEqual(
@@ -165,7 +165,7 @@ test('mode-specific cached quotes and carts restore without fetching or changing
       expect(activeCart(model)).toEqual([])
     }),
     message(Message.ClickedAddDomain({ domain: liveDomain })),
-    ...selectMode('Demo'),
+    ...selectDataSource('Demo'),
     resolveSearchTime(2, 200),
     model(model => {
       expect(routeToQuery(model.route)).toBe('acme')
@@ -190,15 +190,15 @@ test('a live provider cooldown permits Demo requests and applies again after ret
     update,
     given(
       modifyFields(searchModel, {
-        searchMode: () => 'Live',
+        dataSource: () => 'Live',
         maybeSearchCooldown: () => Option.some(cooldown),
       }),
     ),
-    ...selectMode('Demo'),
+    ...selectDataSource('Demo'),
     resolveSearchTime(1, 100),
     Command.expectHas(makeDomainsFetch(demoArgs, 1)),
     resolveDomainsSuccess(demoArgs, 1, [demoDomain], 200),
-    ...selectMode('Live'),
+    ...selectDataSource('Live'),
     resolveSearchTime(2, 300),
     model(model => {
       expect(model.maybeSearchCooldown).toEqual(Option.some(cooldown))
@@ -214,14 +214,14 @@ test('Live requires acknowledgment and cancellation leaves Demo active with fres
   story(
     update,
     given(searchModel),
-    requestMode('Live'),
+    requestDataSource('Live'),
     Command.resolve(
       Dialog.test.ShowDialog,
       DialogBlock.Message.SucceededShowDialog(),
     ),
     message(Message.ClickedContinueToLive()),
     model(model => {
-      expect(model.searchMode).toBe('Demo')
+      expect(model.dataSource).toBe('Demo')
       expect(model.liveWarningDialog.isOpen).toBe(true)
       expect(model.isLiveLatencyAccepted).toBe(false)
       expect(model.searchGeneration).toBe(0)
@@ -235,19 +235,19 @@ test('Live requires acknowledgment and cancellation leaves Demo active with fres
     ),
     ...closeLiveWarning,
     model(model => {
-      expect(model.searchMode).toBe('Demo')
+      expect(model.dataSource).toBe('Demo')
       expect(model.liveWarningDialog.isOpen).toBe(false)
       expect(model.isLiveLatencyAccepted).toBe(false)
     }),
     message(Message.ClickedContinueToLive()),
-    requestMode('Live'),
+    requestDataSource('Live'),
     Command.resolve(
       Dialog.test.ShowDialog,
       DialogBlock.Message.SucceededShowDialog(),
     ),
     model(model => {
       expect(model.isLiveLatencyAccepted).toBe(false)
-      expect(model.searchMode).toBe('Demo')
+      expect(model.dataSource).toBe('Demo')
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
     Command.expectNone(),

@@ -6,9 +6,9 @@ import { describe, expect, test } from 'vitest'
 
 import { VirtualList } from '@foldkit/ui'
 
+import { DataSource } from '../../shared/dataSource'
 import { Domain } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
-import { SearchMode } from '../../shared/searchMode'
 import {
   FocusSearchInput,
   LoadExternal,
@@ -35,7 +35,7 @@ import {
 
 test('typing synchronizes the URL before the route starts its domain request', () => {
   const args = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'fresh',
     offset: 0,
     limit: 4,
@@ -95,7 +95,12 @@ describe('domain validation', () => {
     { query: 'a', label: 'a' },
     { query: 'a'.repeat(63), label: 'a'.repeat(63) },
   ])('searches the normalized label for $query', ({ query, label }) => {
-    const args = { mode: SearchMode.make('Demo'), label, offset: 0, limit: 4 }
+    const args = {
+      dataSource: DataSource.make('Demo'),
+      label,
+      offset: 0,
+      limit: 4,
+    }
 
     story(
       update,
@@ -155,7 +160,7 @@ describe('domain validation', () => {
 
 test('an unchanged input keeps its active Query request', () => {
   const args = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
@@ -198,7 +203,7 @@ test('an unchanged input keeps its active Query request', () => {
 
 test('a planning Clock from the previous route cannot start domain lookups', () => {
   const otherArgs = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -240,7 +245,7 @@ test('a planning Clock from the previous route cannot start domain lookups', () 
 
 test('leaving search cancels its pending Query key', () => {
   const args = {
-    mode: SearchMode.make('Demo'),
+    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,

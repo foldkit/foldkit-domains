@@ -6,24 +6,24 @@ import { describe, expect, test } from 'vitest'
 
 import { VirtualList } from '@foldkit/ui'
 
+import { DataSource } from '../../shared/dataSource'
 import { domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
-import { SearchMode } from '../../shared/searchMode'
 import { FocusSearchInput, ReadSearchPlanningTime } from '../command'
 import { ResultsListBinding } from '../composition'
 import { DomainListing, SortOrder } from '../domain'
 import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, urlOrThrow, withDomainsForRange } from '../model.fixture'
+import { resultListings } from '../resultListings'
 import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute } from '../route'
 import {
-  QuoteRequestPresentation,
+  DomainRequestPresentation,
   SearchPresentation,
   searchPresentation,
 } from '../searchPresentation'
 import { update } from '../update'
-import { visibleResultListings } from '../visibleResultListings'
 import {
   makeDomainsFetch,
   resolveDomainsFailure,
@@ -33,25 +33,25 @@ import {
 } from './test'
 
 const firstArgs = {
-  mode: SearchMode.make('Demo'),
+  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 0,
   limit: 60,
 }
 const secondArgs = {
-  mode: SearchMode.make('Demo'),
+  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 60,
   limit: 60,
 }
 const laterArgs = {
-  mode: SearchMode.make('Demo'),
+  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 180,
   limit: 60,
 }
 const catalogArgs = {
-  mode: SearchMode.make('Demo'),
+  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 0,
   limit: domainTlds.length,
@@ -108,13 +108,13 @@ describe('progressive domain results', () => {
     '%s sorts pending names immediately and retries only the visible candidate range',
     sortOrder => {
       const topArgs = {
-        mode: SearchMode.make('Demo'),
+        dataSource: DataSource.make('Demo'),
         label: 'acme',
         offset: 0,
         limit: 4,
       }
       const remainingArgs = {
-        mode: SearchMode.make('Demo'),
+        dataSource: DataSource.make('Demo'),
         label: 'acme',
         offset: 4,
         limit: 56,
@@ -138,7 +138,7 @@ describe('progressive domain results', () => {
         given(loadingModel),
         message(Message.UpdatedSortOrder({ value: sortOrder })),
         model(model => {
-          const listings = visibleResultListings(model)
+          const listings = resultListings(model)
 
           expect(
             Array.map(Array.take(listings, 5), listing => listing.name),
@@ -154,7 +154,7 @@ describe('progressive domain results', () => {
         Command.expectHas(makeDomainsFetch(topArgs, 1)),
         resolveDomainsSuccess(topArgs, 1, Array.take(allDomains, 4), 5),
         model(model => {
-          const listings = visibleResultListings(model)
+          const listings = resultListings(model)
 
           expect(
             Array.map(Array.take(listings, 5), listing => listing.name),
@@ -180,7 +180,7 @@ describe('progressive domain results', () => {
             searchGeneration: 1,
             offset: 4,
             limit: 56,
-            isForced: false,
+            isRefreshRequested: false,
           }),
         ),
         resolveSearchTime(1, 10, 4, 56),
@@ -195,7 +195,7 @@ describe('progressive domain results', () => {
             searchGeneration: 1,
             offset: 4,
             limit: 56,
-            isForced: true,
+            isRefreshRequested: true,
           }),
         ),
         resolveSearchTime(1, 30, 4, 56, true),
@@ -210,13 +210,13 @@ describe('progressive domain results', () => {
 
   test('shows Top Results before the rest of the first page and ignores a duplicate planning Clock while pending', () => {
     const topArgs = {
-      mode: SearchMode.make('Demo'),
+      dataSource: DataSource.make('Demo'),
       label: 'acme',
       offset: 0,
       limit: 4,
     }
     const remainingArgs = {
-      mode: SearchMode.make('Demo'),
+      dataSource: DataSource.make('Demo'),
       label: 'acme',
       offset: 4,
       limit: 56,
@@ -231,7 +231,7 @@ describe('progressive domain results', () => {
       ),
       resolveSearchTime(1, 0),
       Command.expectHas(makeDomainsFetch(topArgs, 1)),
-      message(Message.RequestedQuotes({ offset: 0, limit: 4 })),
+      message(Message.RequestedDomains({ offset: 0, limit: 4 })),
       resolveSearchTime(1, 1),
       Command.expectHas(makeDomainsFetch(topArgs, 1)),
       resolveDomainsSuccess(topArgs, 1, topDomains, 10),
@@ -246,7 +246,7 @@ describe('progressive domain results', () => {
         expect(searchPresentation(model)).toEqual(
           SearchPresentation.Ready({
             domains: topDomains,
-            quoteRequest: QuoteRequestPresentation.Loading({
+            domainRequest: DomainRequestPresentation.Loading({
               offset: 4,
               limit: 56,
             }),
@@ -283,7 +283,7 @@ describe('progressive domain results', () => {
           searchGeneration: 1,
           offset: 180,
           limit: 60,
-          isForced: false,
+          isRefreshRequested: false,
         }),
       ),
       resolveSearchTime(1, 30, 180, 60),
@@ -295,7 +295,7 @@ describe('progressive domain results', () => {
 
         if (presentation._tag === 'Ready') {
           expect(presentation.domains).toHaveLength(180)
-          expect(presentation.quoteRequest._tag).toBe('Idle')
+          expect(presentation.domainRequest._tag).toBe('Idle')
         }
       }),
       resolveResultsListScrolls,
@@ -314,7 +314,7 @@ describe('progressive domain results', () => {
         expect(searchPresentation(model)).toEqual(
           SearchPresentation.Ready({
             domains: firstPageDomains,
-            quoteRequest: QuoteRequestPresentation.Failed({
+            domainRequest: DomainRequestPresentation.Failed({
               offset: 60,
               limit: 60,
               error: 'Provider busy',
@@ -382,7 +382,7 @@ describe('progressive domain results', () => {
             searchGeneration: 1,
             offset: 0,
             limit: domainTlds.length,
-            isForced: false,
+            isRefreshRequested: false,
           }),
         ),
         resolveSearchTime(1, 30, 0, domainTlds.length),
@@ -391,13 +391,13 @@ describe('progressive domain results', () => {
           expect(searchPresentation(model)).toEqual(
             SearchPresentation.Ready({
               domains: firstPageDomains,
-              quoteRequest: QuoteRequestPresentation.Loading({
+              domainRequest: DomainRequestPresentation.Loading({
                 offset: 0,
                 limit: domainTlds.length,
               }),
             }),
           )
-          expect(model.domainCandidateRanges).toEqual([
+          expect(model.activeDomainCandidateRanges).toEqual([
             { offset: 0, limit: 60 },
             { offset: 60, limit: 60 },
             { offset: 0, limit: domainTlds.length },
@@ -405,7 +405,7 @@ describe('progressive domain results', () => {
         }),
         resolveDomainsSuccess(catalogArgs, 3, allDomains, 40),
         model(model => {
-          expect(model.domainCandidateRanges).toEqual([
+          expect(model.activeDomainCandidateRanges).toEqual([
             { offset: 0, limit: domainTlds.length },
           ])
           expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
@@ -432,7 +432,7 @@ describe('progressive domain results', () => {
         expect(searchPresentation(model)).toEqual(
           SearchPresentation.Ready({
             domains: firstPageDomains,
-            quoteRequest: QuoteRequestPresentation.Failed({
+            domainRequest: DomainRequestPresentation.Failed({
               offset: 0,
               limit: domainTlds.length,
               error: pageFailure.error,
@@ -449,7 +449,7 @@ describe('progressive domain results', () => {
       Command.expectHas(makeDomainsFetch(catalogArgs, 3)),
       resolveDomainsSuccess(catalogArgs, 3, allDomains, 40),
       model(model => {
-        expect(model.domainCandidateRanges).toEqual([
+        expect(model.activeDomainCandidateRanges).toEqual([
           { offset: 0, limit: domainTlds.length },
         ])
         expect(searchPresentation(model)).toEqual(
