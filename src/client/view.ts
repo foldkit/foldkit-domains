@@ -133,7 +133,7 @@ const searchModeView = (model: Model, h: ApplicationViewBuilder): Html =>
             h.span(
               [h.Class('search-mode-trigger-copy')],
               [
-                h.span([h.Class('search-mode-caption')], ['Data source']),
+                h.span([h.Class('search-mode-caption')], ['Data source ']),
                 h.span([h.Class('search-mode-current')], [model.searchMode]),
               ],
             ),

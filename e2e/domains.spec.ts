@@ -920,7 +920,9 @@ test('shows multi-year registration and renewal quotes without treating an uncon
   await expect(cart.locator('.cart-total')).toHaveText(
     'Registration total$160.00',
   )
-  await expect(cart).toContainText('does not reserve it')
+  await expect(cart).toContainText(
+    'No domains are reserved. No purchases are made.',
+  )
 })
 
 test('loads quotes for the visible catalog pages and preserves prices when a later page needs retry', async ({

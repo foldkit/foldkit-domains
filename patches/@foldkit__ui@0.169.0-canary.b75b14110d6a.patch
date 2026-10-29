@@ -1,8 +1,18 @@
 diff --git a/dist/virtualList/virtualList.js b/dist/virtualList/virtualList.js
-index 04e32135222626a6f348cac9209266440cb6b316..717777184b5a6d3ebc2e61c687b5d9e4f20b1e8c 100644
+index 75695856e28a9714043b730da332fe62b62994b4..5a5b9d42908b7a113724376fd820ec805a08ba10 100644
 --- a/dist/virtualList/virtualList.js
 +++ b/dist/virtualList/virtualList.js
-@@ -857,6 +857,7 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
+@@ -523,6 +523,9 @@ const applyScrollSnapshot = (model, snapshot) => __foldkitBrandViewResult((modif
+         if (snapshot.layoutVersion !== undefined &&
+             snapshot.layoutVersion !== model.layoutVersion &&
+             nextAnchor._tag !== 'End') {
++            if (snapshot.origin?._tag === 'Native') {
++                return __foldkitBrandViewResult((ViewportAnchor.Offset({ scrollTop: snapshot.scrollTop })), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
++            }
+             return __foldkitBrandViewResult((model.viewportAnchor), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
+         }
+         return __foldkitBrandViewResult((nextAnchor), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
+@@ -857,6 +860,7 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
          : registerExternalViewport(viewport);
      const scrollOwner = viewport?.owner ?? element;
      let previousScrollTop = element.scrollTop;
@@ -10,7 +20,7 @@ index 04e32135222626a6f348cac9209266440cb6b316..717777184b5a6d3ebc2e61c687b5d9e4
      let previousDistanceFromEnd = Math.max(0, element.scrollHeight - element.clientHeight - element.scrollTop);
      let lastApproachedPageVersion;
      let scrollSettleTimeout;
-@@ -907,22 +908,28 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
+@@ -907,22 +911,28 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
              emitEndedContainerScroll();
          }, SCROLL_SETTLE_FALLBACK_MS);
      };

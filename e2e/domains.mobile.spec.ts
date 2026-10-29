@@ -520,6 +520,7 @@ for (const { name, width, height } of PHONE_VIEWPORTS.filter(
 
 test('mobile results use page scrolling beneath the pinned navigation', async ({
   page,
+  browserName,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/?q=acme')
@@ -530,15 +531,20 @@ test('mobile results use page scrolling beneath the pinned navigation', async ({
     .poll(() => results.evaluate(element => element.clientHeight))
     .toBeGreaterThan(844)
   await page.mouse.move(195, 500)
-  await page.mouse.wheel(0, 500)
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(0)
-  const firstScroll = await page.evaluate(() => window.scrollY)
-  await page.mouse.wheel(0, 400)
-  await expect
-    .poll(() => page.evaluate(() => window.scrollY))
-    .toBeGreaterThan(firstScroll)
+  for (const distancePx of [500, 400]) {
+    const previousScrollTopPx = await page.evaluate(() => window.scrollY)
+
+    // NOTE: Linux WebKit drops wheel scrolling with overscroll-behavior: none on the root.
+    if (browserName === 'webkit' && process.platform === 'linux') {
+      await page.keyboard.press('PageDown')
+    } else {
+      await page.mouse.wheel(0, distancePx)
+    }
+
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY))
+      .toBeGreaterThan(previousScrollTopPx)
+  }
   await expect
     .poll(() => results.evaluate(element => element.scrollTop))
     .toBe(0)
