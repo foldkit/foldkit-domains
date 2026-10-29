@@ -1,5 +1,5 @@
 import { DurableObject as NativeDurableObject } from 'cloudflare:workers'
-import { Array, Clock, Effect, Schema } from 'effect'
+import { Array, Clock, Duration, Effect, Schema } from 'effect'
 import { HttpServerResponse } from 'effect/http'
 
 import { DurableObject } from '@alchemy.run/cloudflare/Workers/DurableObject'
@@ -17,6 +17,7 @@ import {
 import type { SearchEnvironment } from '../../src/server/coordination'
 import { makeDomainSearchCoordinatorImplementation } from '../../src/server/domainSearchCoordinator'
 import { makeRegistrarCoordinatorImplementation } from '../../src/server/registrarCoordinator'
+import { RegistrarQueueDuration } from '../../src/server/registrarSearch'
 import { makeCoordinatedDomainsRpc } from '../../src/server/rpc'
 
 const RegistrarRequest = Schema.Struct({ domains: Schema.Array(Schema.String) })
@@ -108,7 +109,9 @@ const makeFixtureDomainSearchImplementation = (
 const makeFixtureRegistrarImplementation = (environment: SearchEnvironment) =>
   Effect.gen(function* () {
     const state = yield* DurableObjectState
+    const maximumQueueDuration = yield* RegistrarQueueDuration
     const stats = {
+      maximumQueueMilliseconds: Duration.toMillis(maximumQueueDuration),
       instanceId: crypto.randomUUID(),
       calls: 0,
       inFlight: 0,
@@ -231,7 +234,11 @@ const fixtureEntrypoint = Worker(
     )
     yield* DurableObject(
       'REGISTRAR_BUDGET',
-      Effect.succeed(makeFixtureRegistrarImplementation(environment)),
+      Effect.succeed(
+        makeFixtureRegistrarImplementation(environment).pipe(
+          Effect.provideService(RegistrarQueueDuration, Duration.seconds(10)),
+        ),
+      ),
     )
     yield* DurableObject(
       'LOW_QUOTES',

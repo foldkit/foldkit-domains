@@ -29,11 +29,15 @@ import {
 import { timeSearchPhase } from './searchTiming'
 
 const MAX_QUEUED_BATCHES = 300
-const MAX_QUEUE_MILLISECONDS = 2000
 const CLIENT_BATCHES_PER_MINUTE = 30
 const MAX_CLIENT_COUNTERS = 2000
 const SECOND_MILLISECONDS = 1000
 const MINUTE_MILLISECONDS = 60_000
+
+export const RegistrarQueueDuration = Context.Reference(
+  'domains/RegistrarQueueDuration',
+  { defaultValue: () => Duration.seconds(2) },
+)
 
 const BudgetWindow = Schema.Struct({
   startsAt: Schema.Number,
@@ -125,6 +129,8 @@ export const makeRegistrarSearchLayer = (
         8,
         100,
       )
+      const maximumQueueDuration = yield* RegistrarQueueDuration
+      const maximumQueueMilliseconds = Duration.toMillis(maximumQueueDuration)
       const nowMillis = yield* Clock.currentTimeMillis
       const stored = yield* Effect.promise(() => storage.get<unknown>('budget'))
       const budgetRef = yield* Ref.make(
@@ -325,7 +331,7 @@ export const makeRegistrarSearchLayer = (
         Effect.scoped(
           Effect.gen(function* () {
             const startedAtMillis = yield* Clock.currentTimeMillis
-            const deadlineMillis = startedAtMillis + MAX_QUEUE_MILLISECONDS
+            const deadlineMillis = startedAtMillis + maximumQueueMilliseconds
             const queueKey = yield* Effect.acquireRelease(joinQueue, key =>
               Ref.update(queuedRef, HashSet.remove(key)),
             )
@@ -333,7 +339,7 @@ export const makeRegistrarSearchLayer = (
               yield* Effect.acquireRelease(
                 concurrency.take(1).pipe(
                   Effect.timeoutOrElse({
-                    duration: Duration.millis(MAX_QUEUE_MILLISECONDS),
+                    duration: maximumQueueDuration,
                     orElse: () => Effect.fail(applicationLimit()),
                   }),
                 ),

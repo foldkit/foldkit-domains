@@ -21,6 +21,7 @@ import { SearchError } from '../src/shared/domainsRpc'
 const CLIENT_COUNT = 300
 const Stats = Schema.Struct({
   instanceId: Schema.String,
+  maximumQueueMilliseconds: Schema.Number,
   calls: Schema.Int,
   inFlight: Schema.Int,
   maximumInFlight: Schema.Int,
@@ -175,7 +176,7 @@ test('300 identical cold-range clients share one provider lookup and reuse compl
   })
 })
 
-test('300 distinct-query clients complete within the configured provider budget', async ({
+test('300 distinct-query clients complete within the controlled stress-test admission policy', async ({
   baseURL,
 }, testInfo) => {
   const before = await readStats(baseURL)
@@ -221,6 +222,7 @@ test('300 distinct-query clients complete within the configured provider budget'
       medianMilliseconds: Option.getOrThrow(Array.get(durations, 149)),
       p95Milliseconds: Option.getOrThrow(Array.get(durations, 284)),
       maximumProviderConcurrency: after.maximumInFlight,
+      configuredMaximumQueueMilliseconds: before.maximumQueueMilliseconds,
       configuredProviderRequestsPerSecond: 1000,
       configuredProviderRequestsPerMinute: 60000,
       controlledProviderLatencyMilliseconds: 50,
@@ -304,6 +306,7 @@ test('shared admission meters every batch and rejects excess work within a bound
   baseURL,
 }) => {
   const before = await readStats(baseURL, '/low/stats')
+  expect(before.maximumQueueMilliseconds).toBe(2000)
   const results = await Effect.runPromise(
     Effect.forEach(
       Array.range(1, 12),
