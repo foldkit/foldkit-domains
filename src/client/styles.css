@@ -77,7 +77,15 @@
 @layer components {
   .app {
     --header-height: 65px;
-    --hero-top: 130px;
+    --hero-content-height: calc(
+      var(--hero-title-size) * var(--hero-title-line-height) * 2 +
+        var(--hero-subtitle-gap) + var(--hero-subtitle-height) +
+        var(--hero-search-gap) + var(--search-height)
+    );
+    --hero-top: max(
+      48px,
+      calc(50svh - var(--header-height) - var(--hero-content-height) / 2)
+    );
     --hero-title-size: 46px;
     --hero-title-line-height: 1.18;
     --hero-subtitle-gap: 20px;
@@ -232,9 +240,8 @@
   .search {
     @apply absolute left-1/2 flex h-[var(--search-height)] items-center gap-2.5 rounded-lg border border-gray-600 bg-gray-950 px-3 text-left shadow-[0_1px_2px_#000];
     top: calc(
-      var(--header-height) + var(--hero-top) + var(--hero-title-size) *
-        var(--hero-title-line-height) * 2 + var(--hero-subtitle-gap) +
-        var(--hero-subtitle-height) + var(--hero-search-gap)
+      var(--header-height) + var(--hero-top) + var(--hero-content-height) -
+        var(--search-height)
     );
     transform: translateX(-50%);
     width: min(520px, calc(100vw - 48px));
