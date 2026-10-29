@@ -26,7 +26,6 @@ export const Message = defineMessageUnion({
   BlurredInput: {},
   ChangedSelect: { value: Schema.String },
 })
-
 export type Message = typeof Message.Type
 
 // INIT

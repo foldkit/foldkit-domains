@@ -3,7 +3,8 @@ import { defineConfig } from 'vite'
 import { foldkit } from '@foldkit/vite-plugin'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig({
+export default defineConfig(({ command, isPreview }) => ({
+  define: { 'globalThis.__ALCHEMY_RUNTIME__': 'true' },
   plugins: [
     tailwindcss(),
     {
@@ -14,12 +15,21 @@ export default defineConfig({
       },
     },
     foldkit({
+      // NOTE: This preview assigns separate dev identities to client and SSR environments; use one shared development identity.
+      ...(command === 'serve' && !isPreview ? { buildId: 'development' } : {}),
       ssr: {
-        serverEntry: '/src/entry.server.ts',
-        clientEntry: '/src/entry.ts',
+        serverEntry: '/src/server/entry.ts',
+        clientEntry: '/src/client/entry.ts',
         build: { prerender: true },
       },
     }),
   ],
-  optimizeDeps: { entries: ['src/entry.ts'] },
-})
+  ssr: {
+    external: ['cloudflare:workers'],
+    noExternal: [/^alchemy(?:\/|$)/, /^@alchemy\.run\//],
+  },
+  environments: {
+    ssr: { build: { rolldownOptions: { external: ['cloudflare:workers'] } } },
+  },
+  optimizeDeps: { entries: ['src/client/entry.ts'] },
+}))

@@ -40,6 +40,7 @@ const patch = init([
 const Message = defineMessageUnion({
   MountedRoot: {},
 })
+type Message = typeof Message.Type
 
 const WAIT_FOR_INTERRUPT_PROPAGATION_MS = 50
 

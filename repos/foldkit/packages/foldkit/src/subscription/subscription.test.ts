@@ -1562,10 +1562,12 @@ describe('aggregate', () => {
     _tag: Schema.Literal('ChangedTheme'),
     isDark: Schema.Boolean,
   })
+  type ThemeMessageSchema = typeof ThemeMessageSchema.Type
   const ViewportMessageSchema = Schema.Struct({
     _tag: Schema.Literal('ResizedViewport'),
     width: Schema.Number,
   })
+  type ViewportMessageSchema = typeof ViewportMessageSchema.Type
 
   const themeSubscriptions = make<ThemeModel, ThemeMessage>()(entry => ({
     systemTheme: entry(

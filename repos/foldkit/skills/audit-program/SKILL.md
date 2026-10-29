@@ -198,7 +198,11 @@ Use `Definition.makeFieldsStep(producer)` for owning field transformations, `Def
 
 Check the helper's authoring boundary. A split `definition.ts` exports the Step helpers its implementation uses, and implementation modules named-import them from that file. A colocated feature destructures helpers beside its Definition. Definition-qualified calls remain appropriate when several Definitions in one module need visible ownership. Feature barrels keep these helpers private and export the completed Block.
 
+Put reusable parent Steps shared by update, composition, or init in the owning Block's `steps.ts`, or in responsibility modules such as `steps/search.ts` with an explicit `steps/index.ts` barrel. Ownership follows the Model being transformed. Keep Message routing in update and Binding registration and child OutMessage policy in composition; colocate Steps used by only one responsibility. Preserve the `Step` suffix and defer cyclic Binding access until the producer is applied.
+
 All three take callbacks, evaluated when the Step or handler is applied. An ordinary producer receives the current Model and, when authored as a Message-dependent handler, its exact Message. Use `.fromMessage(message => value)` for payload-only producers and `() => value` for fixed producers. Commands-only and OutMessage-only helpers preserve the incoming Model identity. `makeNoopStep()` stays unchanged; in an OutMessage fold, pass its factory point-free when appropriate.
+
+Use `makeStep.fromMessage(message => stepOrResult)` when only the Message is needed to select or construct a composed Step or initialization recipe. The returned handler stays Model-first, evaluates the producer on application, and passes the incoming Model to a returned Step. Keep ordinary `makeStep` for Model-aware producers and additional operation arguments. Close over dispatch context through `makeUpdate.withContext`.
 
 Pass compatible Steps directly as handler-record values. Extracted Message-dependent producers need a precise Message variant contract when no surrounding handler record supplies it. Map payloads explicitly when constructing a different Message or OutMessage; do not pass a constructor that could forward the incoming `_tag`. Keep cohesive mixed transitions as direct results, and use the owning `makeStep` helper for reusable mixed, connected, initialization, delegated, or composed operations. Local branches mixed with connected recipes still need canonical Definition-owned results.
 
@@ -212,7 +216,11 @@ A Binding's `write` or `writeAt` places the next child Model into parent storage
 
 Check both direct-field writer coordination caught by `foldkit/no-binding-write-coordination` and complex writers outside its conservative coverage. Do not flag legitimate wrapper metadata, keyed replacement, or absence checks merely because a custom writer touches several fields.
 
-Review child retention, rendering, and activity separately. Route-driven deletion should have a product reason. When editors are retained by identity, view must select the active child from the Route; hidden save completions must still reach their occurrence. Check that route-wide delivery gates do not discard those results. Require interaction cleanup only when the product actually needs it; do not add exhaustive navigation/interleaving policy to a normal example application. Name conditional initialization `initialize...IfMissing` and pure transitions for their actual Model change; vague `sync` or `observe` helpers can conceal several responsibilities.
+Review child retention, rendering, and activity separately. Route-driven deletion should have a product reason. When editors are retained by identity, view must select the active child from the Route; hidden save completions must still reach their occurrence. Check that route-wide delivery gates do not discard those results. Require interaction cleanup only when the product actually needs it; do not add exhaustive navigation/interleaving policy to a normal example application. Use `init` in initialization function, helper, Step and file names, with `init...IfMissingStep` for conditional creation. Name pure transitions for their actual Model change; vague `sync` or `observe` helpers can conceal several responsibilities.
+
+Record/HashMap Bindings come from `ParentDefinition.makeMapBinding(ChildBlock, config)`
+or a destructured factory imported from the owning feature's `definition.ts`.
+Check that the child relationship and key contract come from that parent Definition.
 
 Review dynamic initialization for the optional `foldkit/bindingInit` helpers:
 `initAndSet` for singular direct storage or exact key/child Option wrappers,
@@ -224,6 +232,13 @@ presence decisions and handles duplicate-key rejection. Retain explicit
 custom relationships, array/map replacement, or whole tagged variants. Do not
 require a startup policy solely to enable a helper. Reinitializing the same
 occurrence does not reset lifecycle generations or cancel pending work.
+
+For retained direct-value Record/HashMap children, prefer
+`makeInitIfMissingStep(Binding, { key, args })` over repeated field selectors and
+membership checks. It uses the Binding's storage and checks presence when the
+connected Step is applied. Verify that existing children retain Model identity
+and emit no init Commands, and that both paths retain the Binding registration.
+Keep entity lookup and reasonable handling of unknown URL IDs in app code.
 
 For Block, Binding, Composition, OutMessage, startup, handler Layer, and root
 Service review, read
@@ -359,7 +374,7 @@ Blind spots are named by their slug in [`../generate-program/blindSpots.md`](../
 | `subscriptions` | A + subscription-specific (`Subscription.make` shape, name-only entries for always-active Layer-backed Streams, message mapping inside `Stream.map`) | `state-machine-edges`                                                                                                                                                                                           |
 | `testing`       | E                                                                                                                                                    | `missing-scene-test`                                                                                                                                                                                            |
 | `blocks`        | A + block-specific (generated delivery policy, optional `outMessage` returns, parent ↔ child Message isolation)                                      | `manual-update-return-unpacking`, `authored-child-delivery-message`, `view-named-after-namespace`                                                                                                               |
-| `types`         | (inline) type-shape and aliasing                                                                                                                     | `manual-update-return-unpacking`, `array-type-syntax`, `unearned-type-aliases`, `hand-rolled-async-state`                                                                                                       |
+| `types`         | (inline) type-shape and aliasing                                                                                                                     | `manual-update-return-unpacking`, `array-type-syntax`, `schema-type-aliases`, `hand-rolled-async-state`                                                                                                         |
 
 For focused audits, skip Phase 4's full grep block and run only the greps relevant to the focus (e.g. for `a11y`, run `label without For`, `outline-none without focus-visible`, and the `_blank` scan, reading each hit's attribute block for `Rel`).
 

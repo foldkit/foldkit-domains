@@ -1,0 +1,321 @@
+import { Array, Option } from 'effect'
+import { AsyncData } from 'foldkit'
+import { Command, given, message, model, story } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
+import { expect, test } from 'vitest'
+
+import { domainTlds } from '../../shared/domain'
+import { makeDomainFixtures } from '../../shared/domain.fixture'
+import { SearchMode } from '../../shared/searchMode'
+import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
+import { Message } from '../message'
+import { emptyModel, withDomainsForRange } from '../model.fixture'
+import { ApplicationRoute } from '../route'
+import {
+  QuoteRequestPresentation,
+  SearchPresentation,
+  searchPresentation,
+} from '../searchPresentation'
+import { update } from '../update'
+import {
+  changeSearchQuery,
+  makeDomainsFetch,
+  resolveDomainsFailure,
+  resolveDomainsSuccess,
+  resolveRemainingFirstPageDomains,
+  resolveResultsListScrolls,
+  resolveSearchTime,
+} from './test'
+
+test('a normalized fresh label restores after another label fails', () => {
+  const acmeArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 4,
+  }
+  const otherArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'other',
+    offset: 0,
+    limit: 4,
+  }
+  const acmeDomains = Array.take(makeDomainFixtures('acme'), 4)
+
+  story(
+    update,
+    given(modifyFields(emptyModel, { tldFilter: () => 'Com' })),
+    changeSearchQuery('Acme.dev', 2, 0),
+    resolveDomainsSuccess(acmeArgs, 1, acmeDomains, 100),
+    changeSearchQuery('other.dev', 4, 200),
+    resolveDomainsFailure(
+      otherArgs,
+      2,
+      DomainsQueryFailure.make({
+        error: 'Provider unavailable',
+        maybeSearchCooldown: Option.none(),
+      }),
+      220,
+    ),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Failed({ error: 'Provider unavailable' }),
+      )
+    }),
+    changeSearchQuery('Acme.de', 6, 300),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Ready({ domains: acmeDomains }),
+      )
+      expect(DomainsQuery.read(model.domainsQuery, otherArgs)._tag).toBe(
+        'Failure',
+      )
+    }),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('a fresh hit touches recency without extending the completion deadline', () => {
+  const acmeArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 4,
+  }
+  const otherArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'other',
+    offset: 0,
+    limit: 4,
+  }
+  const acmeDomains = Array.take(makeDomainFixtures('acme'), 4)
+  const otherDomains = Array.take(makeDomainFixtures('other'), 4)
+
+  story(
+    update,
+    given(modifyFields(emptyModel, { tldFilter: () => 'Com' })),
+    changeSearchQuery('acme', 2, 0),
+    resolveDomainsSuccess(acmeArgs, 1, acmeDomains, 100),
+    changeSearchQuery('other', 4, 1_000),
+    resolveDomainsSuccess(otherArgs, 2, otherDomains, 1_000),
+    changeSearchQuery('acme', 6, 60_099),
+    model(model => {
+      expect(DomainsQuery.isFresh(model.domainsQuery, acmeArgs, 60_099)).toBe(
+        true,
+      )
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Ready({ domains: acmeDomains }),
+      )
+    }),
+    changeSearchQuery('other', 8, 60_099),
+    changeSearchQuery('acme', 10, 60_100),
+    Command.expectHas(makeDomainsFetch(acmeArgs, 3)),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(SearchPresentation.Loading())
+      expect(DomainsQuery.read(model.domainsQuery, acmeArgs)._tag).toBe(
+        'Refreshing',
+      )
+    }),
+    resolveDomainsSuccess(acmeArgs, 3, acmeDomains, 60_120),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('label, offset, and limit isolate candidate ranges used by the application', () => {
+  const firstArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 60,
+  }
+  const secondArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 60,
+    limit: 60,
+  }
+  const catalogArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: domainTlds.length,
+  }
+  const firstPageDomains = Array.take(makeDomainFixtures('acme'), 60)
+  const secondPageDomains = Array.take(
+    Array.drop(makeDomainFixtures('acme'), 60),
+    60,
+  )
+  const partialModel = withDomainsForRange(
+    modifyFields(emptyModel, {
+      route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
+      searchGeneration: () => 1,
+    }),
+    firstArgs,
+    firstPageDomains,
+  )
+
+  story(
+    update,
+    given(partialModel),
+    message(Message.RequestedQuotes({ offset: 60, limit: 60 })),
+    resolveSearchTime(1, 10, 60, 60),
+    Command.expectHas(makeDomainsFetch(secondArgs, 2)),
+    resolveDomainsSuccess(secondArgs, 2, secondPageDomains, 20),
+    message(Message.UpdatedSortOrder({ value: 'PriceAscending' })),
+    resolveSearchTime(1, 30, 0, domainTlds.length),
+    Command.expectHas(makeDomainsFetch(catalogArgs, 3)),
+    model(model => {
+      expect(DomainsQuery.read(model.domainsQuery, firstArgs)).toEqual(
+        AsyncData.Success({ data: firstPageDomains }),
+      )
+      expect(DomainsQuery.read(model.domainsQuery, secondArgs)).toEqual(
+        AsyncData.Success({ data: secondPageDomains }),
+      )
+      expect(DomainsQuery.read(model.domainsQuery, catalogArgs)._tag).toBe(
+        'Loading',
+      )
+    }),
+    resolveDomainsSuccess(catalogArgs, 3, makeDomainFixtures('acme'), 40),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('global criteria reuse a fresh catalog and prune an active failed page', () => {
+  const firstArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 60,
+  }
+  const secondArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 60,
+    limit: 60,
+  }
+  const catalogArgs = {
+    mode: SearchMode.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: domainTlds.length,
+  }
+  const allDomains = makeDomainFixtures('acme')
+  const firstPageDomains = Array.take(allDomains, 60)
+  const cachedModel = modifyFields(
+    withDomainsForRange(
+      withDomainsForRange(
+        modifyFields(emptyModel, {
+          route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
+          searchGeneration: () => 1,
+        }),
+        catalogArgs,
+        allDomains,
+        100,
+      ),
+      firstArgs,
+      firstPageDomains,
+      100,
+    ),
+    { domainCandidateRanges: () => [{ offset: 0, limit: 60 }] },
+  )
+  const pageFailure = DomainsQueryFailure.make({
+    error: 'Provider busy',
+    maybeSearchCooldown: Option.none(),
+  })
+
+  story(
+    update,
+    given(cachedModel),
+    message(Message.RequestedQuotes({ offset: 60, limit: 60 })),
+    resolveSearchTime(1, 110, 60, 60),
+    resolveDomainsFailure(secondArgs, 3, pageFailure, 115),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Ready({
+          domains: firstPageDomains,
+          quoteRequest: QuoteRequestPresentation.Failed({
+            offset: 60,
+            limit: 60,
+            error: pageFailure.error,
+          }),
+        }),
+      )
+    }),
+    message(Message.UpdatedAvailabilityFilter({ value: 'Available' })),
+    resolveSearchTime(1, 120, 0, domainTlds.length),
+    model(model => {
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
+      expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
+        'Failure',
+      )
+      expect(model.domainCandidateRanges).toEqual([
+        { offset: 0, limit: domainTlds.length },
+      ])
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Ready({
+          domains: allDomains,
+          quoteRequest: QuoteRequestPresentation.Idle(),
+        }),
+      )
+    }),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('backspacing to a fresh query reuses Top Results and the visible candidate range without fetching', () => {
+  const acmeDomains = Array.take(makeDomainFixtures('acme'), 60)
+  const acmesDomains = Array.take(makeDomainFixtures('acmes'), 60)
+
+  story(
+    update,
+    given(emptyModel),
+    changeSearchQuery('acme', 2, 0),
+    resolveDomainsSuccess(
+      { mode: SearchMode.make('Demo'), label: 'acme', offset: 0, limit: 4 },
+      1,
+      Array.take(acmeDomains, 4),
+      100,
+    ),
+    resolveRemainingFirstPageDomains(
+      'acme',
+      2,
+      2,
+      Array.drop(acmeDomains, 4),
+      100,
+    ),
+    changeSearchQuery('acmes', 4, 200),
+    resolveDomainsSuccess(
+      { mode: SearchMode.make('Demo'), label: 'acmes', offset: 0, limit: 4 },
+      3,
+      Array.take(acmesDomains, 4),
+      300,
+    ),
+    resolveRemainingFirstPageDomains(
+      'acmes',
+      4,
+      4,
+      Array.drop(acmesDomains, 4),
+      300,
+    ),
+    changeSearchQuery('acme', 6, 400),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Ready({ domains: Array.take(acmeDomains, 4) }),
+      )
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
+    }),
+    resolveSearchTime(6, 400, 4, 56),
+    model(model => {
+      expect(searchPresentation(model)).toEqual(
+        SearchPresentation.Ready({ domains: acmeDomains }),
+      )
+      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
+    }),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})

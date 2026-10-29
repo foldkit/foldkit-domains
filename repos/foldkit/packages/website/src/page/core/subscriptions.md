@@ -99,7 +99,7 @@ The [websocket-chat example](/example-apps/websocket-chat) shows a more involved
 
 The declared Message Schemas constrain the Stream returned by both the attached handler and an external `toLayer` implementation. Emitting an undeclared Message is a type error. Scene uses these Schemas to validate `Subscription.emit(entry, message)` against the composed source, including its generated delivery through parents. An empty declaration requires a `Stream<never>` for work that emits no Messages.
 
-An external generic Stream helper can infer its result Message from one callback and then reject a different, valid variant returned by another callback. If the error compares two declared Message variants, inspect the helper's callback inference. Give the callback that determines the generic result an explicit return type for the union this entry declares. Use `typeof Message.Type` when the entry declares the full Message union. The entry's `messages` declaration still checks every variant the resulting Stream may emit.
+An external generic Stream helper can infer its result Message from one callback and then reject a different, valid variant returned by another callback. If the error compares two declared Message variants, inspect the helper's callback inference. Give the callback that determines the generic result an explicit return type for the union this entry declares. Use the `Message` alias when the entry declares the full Message union. The entry's `messages` declaration still checks every variant the resulting Stream may emit.
 
 ### Handler Construction and Layers
 

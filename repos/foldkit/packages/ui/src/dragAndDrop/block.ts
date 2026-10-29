@@ -32,21 +32,25 @@ import { attributeSelector } from '../internal/selectors.js'
 // MODEL
 
 const Orientation = Schema.Literals(['Horizontal', 'Vertical'])
+type Orientation = typeof Orientation.Type
 
 const ScreenPoint = Schema.Struct({
   screenX: Schema.Number,
   screenY: Schema.Number,
 })
+type ScreenPoint = typeof ScreenPoint.Type
 
 const ClientPoint = Schema.Struct({
   clientX: Schema.Number,
   clientY: Schema.Number,
 })
+type ClientPoint = typeof ClientPoint.Type
 
 const DropTarget = Schema.Struct({
   containerId: Schema.String,
   index: Schema.Number,
 })
+type DropTarget = typeof DropTarget.Type
 
 /** Schema for the current pointer or keyboard drag phase. */
 export const DragState = defineTaggedUnion({
@@ -84,7 +88,6 @@ export const Model = Schema.Struct({
   keyboardDragGeneration: Schema.Number,
   dragState: DragState,
 })
-
 export type Model = typeof Model.Type
 
 // MESSAGE
@@ -131,8 +134,9 @@ export const Message = defineMessageUnion({
   AdvancedAutoScrollFrame: {},
   CompletedFocusItem: {},
 })
-
 export type Message = typeof Message.Type
+type CompletedResolveKeyboardMove =
+  typeof Message.CompletedResolveKeyboardMove.Type
 
 // OUT MESSAGE
 
@@ -162,6 +166,7 @@ export const OutMessage = defineMessageUnion({
   },
   Cancelled: {},
 })
+export type OutMessage = typeof OutMessage.Type
 
 const DragAndDropDefinition = Block.makeDefinition('DragAndDrop', {
   Model,
@@ -218,7 +223,7 @@ const resolveWithinContainer = (
     isForward: boolean
     keyboardDragGeneration: number
   }>,
-): typeof Message.CompletedResolveKeyboardMove.Type => {
+): CompletedResolveKeyboardMove => {
   const container = document.querySelector(
     attributeSelector('data-droppable-id', config.containerId),
   )
@@ -254,7 +259,7 @@ const resolveBetweenContainers = (
     isForward: boolean
     keyboardDragGeneration: number
   }>,
-): typeof Message.CompletedResolveKeyboardMove.Type => {
+): CompletedResolveKeyboardMove => {
   const allContainers = Array.fromIterable(
     document.querySelectorAll<HTMLElement>('[data-droppable-id]'),
   )
@@ -289,10 +294,10 @@ const resolveKeyboardMoveTarget = (
     direction: Direction
     keyboardDragGeneration: number
   }>,
-): Effect.Effect<typeof Message.CompletedResolveKeyboardMove.Type> =>
+): Effect.Effect<CompletedResolveKeyboardMove> =>
   Effect.sync(() =>
     Match.value(config.direction).pipe(
-      Match.withReturnType<typeof Message.CompletedResolveKeyboardMove.Type>(),
+      Match.withReturnType<CompletedResolveKeyboardMove>(),
       Match.whenOr('Down', 'Right', () =>
         resolveWithinContainer({
           itemId: config.itemId,
@@ -344,6 +349,7 @@ export const ResolveKeyboardMoveArgs = Schema.Struct({
   ]),
   keyboardDragGeneration: Schema.Number,
 })
+export type ResolveKeyboardMoveArgs = typeof ResolveKeyboardMoveArgs.Type
 
 /** Resolves the next keyboard drag position by querying the DOM for adjacent sortable items and containers. */
 export const ResolveKeyboardMove = DragAndDropDefinition.makeCommand(
@@ -556,14 +562,17 @@ export const update = DragAndDropComposition.makeUpdate({
 // SUBSCRIPTION
 
 const DragActivity = Schema.Literals(['Idle', 'Active'])
+type DragActivity = typeof DragActivity.Type
 const PointerDragActivity = Schema.Literals(['Idle', 'Active'])
+type PointerDragActivity = typeof PointerDragActivity.Type
 const KeyboardDragActivity = Schema.Literals(['Idle', 'Active'])
+type KeyboardDragActivity = typeof KeyboardDragActivity.Type
 
 const resolveDropTarget = (
   clientX: number,
   clientY: number,
-  orientation: typeof Orientation.Type,
-): Option.Option<typeof DropTarget.Type> => {
+  orientation: Orientation,
+): Option.Option<DropTarget> => {
   const maybeContainer = pipe(
     document.elementsFromPoint(clientX, clientY),
     Array.fromIterable,
@@ -618,27 +627,23 @@ const autoScroll = (clientY: number): void => {
   }
 }
 
-const pointerDragActivityFromModel = (
-  model: Model,
-): typeof PointerDragActivity.Type =>
+const pointerDragActivityFromModel = (model: Model): PointerDragActivity =>
   Match.value(model.dragState).pipe(
-    Match.withReturnType<typeof PointerDragActivity.Type>(),
+    Match.withReturnType<PointerDragActivity>(),
     Match.tag('Pending', 'Dragging', () => 'Active'),
     Match.orElse(() => 'Idle'),
   )
 
-const dragActivityFromModel = (model: Model): typeof DragActivity.Type =>
+const dragActivityFromModel = (model: Model): DragActivity =>
   Match.value(model.dragState).pipe(
-    Match.withReturnType<typeof DragActivity.Type>(),
+    Match.withReturnType<DragActivity>(),
     Match.tag('Idle', () => 'Idle'),
     Match.orElse(() => 'Active'),
   )
 
-const keyboardDragActivityFromModel = (
-  model: Model,
-): typeof KeyboardDragActivity.Type =>
+const keyboardDragActivityFromModel = (model: Model): KeyboardDragActivity =>
   Match.value(model.dragState).pipe(
-    Match.withReturnType<typeof KeyboardDragActivity.Type>(),
+    Match.withReturnType<KeyboardDragActivity>(),
     Match.tag('KeyboardDragging', () => 'Active'),
     Match.orElse(() => 'Idle'),
   )
@@ -975,9 +980,7 @@ export const maybeDraggedItemId = (model: Model): Option.Option<string> =>
   )
 
 /** Returns the current drop target, if any. Populated during pointer drag (from collision detection) and keyboard drag (from resolved position). */
-export const maybeDropTarget = (
-  model: Model,
-): Option.Option<typeof DropTarget.Type> =>
+export const maybeDropTarget = (model: Model): Option.Option<DropTarget> =>
   Match.value(model.dragState).pipe(
     Match.tag('Dragging', dragging => dragging.maybeDropTarget),
     Match.tag('KeyboardDragging', keyboardDragging =>

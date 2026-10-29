@@ -10,7 +10,12 @@ if (!baseURL) {
 
 export default defineConfig({
   ...productionConfig,
-  testMatch: ['**/domains.spec.ts', '**/domains.worker.spec.ts'],
+  testMatch: [
+    '**/domains.spec.ts',
+    '**/domains.a11y.spec.ts',
+    '**/domains.mobile.spec.ts',
+    '**/domains.worker.spec.ts',
+  ],
   use: { ...productionConfig.use, baseURL },
   webServer: [],
 })

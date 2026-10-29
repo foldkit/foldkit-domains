@@ -12,7 +12,13 @@ import type { Mount } from 'foldkit'
 import playgroundTypes from 'virtual:playground-types'
 
 import { reasonFromError } from '../playgroundWebContainer'
-import { Message, PlaygroundDefinition } from './definition'
+import {
+  type EditedPlaygroundFile,
+  type FailedMountPlaygroundEditor,
+  Message,
+  PlaygroundDefinition,
+  type SucceededMountPlaygroundEditor,
+} from './definition'
 
 const monacoLanguageForPath = (path: string): string =>
   pipe(
@@ -122,9 +128,9 @@ const configureMonaco = async () => {
 }
 
 type PlaygroundEditorMessage =
-  | typeof Message.SucceededMountPlaygroundEditor.Type
-  | typeof Message.FailedMountPlaygroundEditor.Type
-  | typeof Message.EditedPlaygroundFile.Type
+  | SucceededMountPlaygroundEditor
+  | FailedMountPlaygroundEditor
+  | EditedPlaygroundFile
 
 type PlaygroundEditorResource = Readonly<{
   editor: import('monaco-editor').editor.IStandaloneCodeEditor

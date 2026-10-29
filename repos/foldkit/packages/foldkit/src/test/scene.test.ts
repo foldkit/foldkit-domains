@@ -3309,6 +3309,7 @@ const silentFeedSubscriptions = SubscriptionDefinition.make<
 const PositiveCount = Schema.Int.check(
   Schema.isBetween({ minimum: 1, maximum: 10 }),
 )
+type PositiveCount = typeof PositiveCount.Type
 
 const PayloadMessage = defineMessageUnion({
   ReceivedCount: { count: PositiveCount },
@@ -3333,6 +3334,7 @@ const SmallPositiveReceivedCount = Schema.Struct({
   _tag: Schema.Literal('ReceivedCount'),
   count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
 })
+type SmallPositiveReceivedCount = typeof SmallPositiveReceivedCount.Type
 
 const overlappingPayloadSubscriptions = SubscriptionDefinition.make<
   CounterModel,
@@ -4258,7 +4260,6 @@ const InteractionMessage = defineMessageUnion({
   ReceivedRowSignal: {},
   ObservedBackgroundActivity: {},
 })
-
 type InteractionMessage = typeof InteractionMessage.Type
 
 const InteractionOutMessage = defineMessageUnion({
@@ -4268,7 +4269,6 @@ const InteractionOutMessage = defineMessageUnion({
   RequestedSelection: {},
   RequestedSubmission: {},
 })
-
 type InteractionOutMessage = typeof InteractionOutMessage.Type
 
 const multipleOutMessagesUpdate = (
@@ -4385,7 +4385,7 @@ const multipleMountOutMessagesUpdate = (
 
 describe('Scene OutMessage assertions', () => {
   test('retains the explicit generic call shape', () => {
-    Scene.scene<CounterModel, typeof CounterMessage.Type>(
+    Scene.scene<CounterModel, CounterMessage>(
       { update: counterUpdate, view: counterView },
       Scene.given(counterInitialModel),
     )
@@ -4426,22 +4426,20 @@ describe('Scene OutMessage assertions', () => {
   })
 
   test('validates the data-first update contract', () => {
-    const missingModel = (
-      _model: CounterModel,
-      _message: typeof CounterMessage.Type,
-    ) => ({ status: 'Done' })
-    const wrongModel = (
-      _model: CounterModel,
-      _message: typeof CounterMessage.Type,
-    ) => ({ model: { status: 'Done' } })
+    const missingModel = (_model: CounterModel, _message: CounterMessage) => ({
+      status: 'Done',
+    })
+    const wrongModel = (_model: CounterModel, _message: CounterMessage) => ({
+      model: { status: 'Done' },
+    })
     const requiredContext = (
       model: CounterModel,
-      _message: typeof CounterMessage.Type,
+      _message: CounterMessage,
       _context: string,
     ) => ({ model })
     const optionalContext = (
       model: CounterModel,
-      _message: typeof CounterMessage.Type,
+      _message: CounterMessage,
       _context?: string,
     ) => ({ model })
 

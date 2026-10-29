@@ -37,7 +37,7 @@ const resolveDialogResources = Mount.resolve(
   DialogBlock.Message.SucceededAcquireResources(),
 )
 
-const createTestModel = (): typeof Model.Type => ({
+const createTestModel = (): Model => ({
   grid: createEmptyGrid(4),
   undoStack: [],
   redoStack: [],
@@ -61,12 +61,12 @@ const createTestModel = (): typeof Model.Type => ({
     .model,
 })
 
-const createPaintedModel = (): typeof Model.Type =>
+const createPaintedModel = (): Model =>
   modifyFields(createTestModel(), {
     grid: () =>
       createEmptyGrid(4).map((row, y) =>
         row.map((cell, x) =>
-          x === 0 && y === 0 ? Option.some<typeof PaletteIndex.Type>(0) : cell,
+          x === 0 && y === 0 ? Option.some<PaletteIndex>(0) : cell,
         ),
       ),
   })
@@ -201,20 +201,15 @@ describe('history panel', () => {
   })
 
   test('undo enables after painting and re-disables after undoing', () => {
-    const modelWithHistory: typeof Model.Type = modifyFields(
-      createTestModel(),
-      {
-        grid: () =>
-          createEmptyGrid(4).map((row, y) =>
-            row.map((cell, x) =>
-              x === 0 && y === 0
-                ? Option.some<typeof PaletteIndex.Type>(0)
-                : cell,
-            ),
+    const modelWithHistory: Model = modifyFields(createTestModel(), {
+      grid: () =>
+        createEmptyGrid(4).map((row, y) =>
+          row.map((cell, x) =>
+            x === 0 && y === 0 ? Option.some<PaletteIndex>(0) : cell,
           ),
-        undoStack: () => [createEmptyGrid(4)],
-      },
-    )
+        ),
+      undoStack: () => [createEmptyGrid(4)],
+    })
 
     scene(
       { update, view },
