@@ -198,5 +198,10 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedScrollPageToTop: makeNoopStep(),
   CompletedRevealResultsListStart: makeNoopStep(),
   CompletedDismissSearchKeyboard: makeNoopStep(),
-  CompletedReleaseEarlySearchListeners: makeNoopStep(),
+  CompletedReleaseEarlySearchListeners: makeFieldsStep.fromMessage(
+    ({ isSearchStarted }) => ({
+      searchLayout: currentLayout =>
+        isSearchStarted ? 'Search' : currentLayout,
+    }),
+  ),
 })

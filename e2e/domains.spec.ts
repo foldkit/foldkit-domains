@@ -858,7 +858,7 @@ test('recovers from a registrar rate limit through retry without showing stale q
     }),
   )
   await page.goto('/')
-  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await Page.chooseSearchMode(page, 'Live')
   await page
     .getByRole('searchbox', { name: 'Search domains' })
     .fill('retry-idea')
@@ -1086,8 +1086,8 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   const inputNode = await input.elementHandle()
   const topCard = page.locator('.domain-card').first()
   await expect(
-    page.getByRole('radio', { name: 'Demo', exact: true }),
-  ).toBeChecked()
+    page.getByRole('button', { name: 'Data source: Demo', exact: true }),
+  ).toBeVisible()
   await expect(topCard.locator('.price')).toHaveText('$12.00')
   await expect(page.locator('.data-source-label')).toHaveText('Sample data')
   await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
@@ -1095,7 +1095,7 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   const demoRequests = requests.filter(request =>
     request.startsWith('Demo:'),
   ).length
-  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await Page.chooseSearchMode(page, 'Live')
   await expect(topCard.locator('.price')).toBeHidden()
   await expect(
     page.getByRole('button', { name: 'Cart, 0 domains' }),
@@ -1108,7 +1108,7 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   await expect(topCard.locator('.price')).toHaveText('$112.00')
   await expect(page.locator('.data-source-label')).toHaveText('Live · Vercel')
   await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
-  await page.getByRole('radio', { name: 'Demo', exact: true }).click()
+  await Page.chooseSearchMode(page, 'Demo')
   await expect(topCard.locator('.price')).toHaveText('$12.00')
   await expect(
     page.getByRole('button', { name: 'Cart, 1 domains' }),
@@ -1119,7 +1119,7 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   await topCard
     .getByRole('button', { name: 'Remove acme.com from cart' })
     .click()
-  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await Page.chooseSearchMode(page, 'Live')
   await expect(topCard.locator('.price')).toHaveText('$112.00')
   await expect(
     page.getByRole('button', { name: 'Cart, 1 domains' }),
@@ -1149,9 +1149,9 @@ test('switching away from pending Live quotes leaves cached Demo results usable'
   await page.goto('/?q=acme')
   const price = page.locator('.domain-card .price').first()
   await expect(price).toHaveText('$12.00')
-  await page.getByRole('radio', { name: 'Live', exact: true }).click()
+  await Page.chooseSearchMode(page, 'Live')
   await expect.poll(() => liveRequests).toBe(1)
-  await page.getByRole('radio', { name: 'Demo', exact: true }).click()
+  await Page.chooseSearchMode(page, 'Demo')
   await expect(price).toHaveText('$12.00')
   await page.waitForTimeout(800)
   await expect(price).toHaveText('$12.00')
@@ -1162,3 +1162,81 @@ test('switching away from pending Live quotes leaves cached Demo results usable'
   )
   await expect(price).toHaveText('$12.00')
 })
+
+for (const width of [320, 393, 1000, 1200, 1280, 1440]) {
+  test(`data source menu matches the cart height and supports keyboard selection at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/?q=acme')
+    const trigger = page.getByRole('button', {
+      name: 'Data source: Demo',
+      exact: true,
+    })
+    const cart = page.getByRole('button', { name: 'Cart, 0 domains' })
+    const triggerBounds = await trigger.boundingBox()
+    const cartBounds = await cart.boundingBox()
+    const brandBounds = await page
+      .getByRole('link', { name: 'Domains home' })
+      .boundingBox()
+    expect(triggerBounds?.height).toBe(cartBounds?.height)
+    expect(triggerBounds?.y).toBe(cartBounds?.y)
+    expect(triggerBounds?.x).toBeGreaterThanOrEqual(
+      (brandBounds?.x ?? 0) + (brandBounds?.width ?? 0),
+    )
+    expect((cartBounds?.x ?? 0) + (cartBounds?.width ?? 0)).toBeLessThanOrEqual(
+      width,
+    )
+    if (width > 700) {
+      const searchBounds = await page.locator('form.search').boundingBox()
+      expect(
+        (searchBounds?.x ?? 0) + (searchBounds?.width ?? 0),
+      ).toBeLessThanOrEqual(triggerBounds?.x ?? 0)
+      expect(searchBounds?.x).toBeGreaterThanOrEqual(
+        (brandBounds?.x ?? 0) + (brandBounds?.width ?? 0),
+      )
+    }
+    await trigger.focus()
+    await page.keyboard.press('ArrowDown')
+    const panel = page.getByRole('listbox', { name: 'Data source: Demo' })
+    await expect(panel).toBeVisible()
+    await expect(panel).toBeFocused()
+    await expect(panel.getByRole('option', { name: /^Demo/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    await expect(panel).toContainText('Sample prices and availability.')
+    await expect(panel).toContainText('Real quotes from Vercel.')
+    await page.keyboard.press('ArrowDown')
+    await expect(panel).toHaveAttribute(
+      'aria-activedescendant',
+      'search-mode-item-1',
+    )
+    await page.keyboard.press('Enter')
+    await expect(panel).toBeHidden()
+    const liveTrigger = page.getByRole('button', {
+      name: 'Data source: Live',
+      exact: true,
+    })
+    await expect(liveTrigger).toBeFocused()
+    await expect(
+      page.getByRole('searchbox', { name: 'Search domains' }),
+    ).toHaveValue('acme')
+    await liveTrigger.click()
+    const livePanel = page.getByRole('listbox', { name: 'Data source: Live' })
+    await expect(
+      livePanel.getByRole('option', { name: /^Live/ }),
+    ).toHaveAttribute('aria-selected', 'true')
+    await page.keyboard.press('Escape')
+    await expect(livePanel).toBeHidden()
+    await expect(liveTrigger).toBeFocused()
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await liveTrigger.click()
+    await expect(livePanel).toBeVisible()
+    await expect(livePanel).toHaveCSS('transition-duration', '0s')
+    await page
+      .getByRole('searchbox', { name: 'Search domains' })
+      .click({ force: true })
+    await expect(livePanel).toBeHidden()
+  })
+}

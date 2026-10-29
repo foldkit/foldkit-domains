@@ -34,6 +34,8 @@ Build and deploy the HTML and assets together. Foldkit assigns a coordinated bui
 
 ### Cloudflare through Alchemy
 
+The `preview` stage serves the app at [domains.foldkit.dev](https://domains.foldkit.dev). Alchemy manages the custom hostname on the Website Worker in the Cloudflare account that owns the `foldkit.dev` zone. Other stages do not claim this hostname.
+
 [`infra/alchemy.run.ts`](infra/alchemy.run.ts) declares the site with [Alchemy’s Foldkit integration](https://alchemy.run/cloudflare/frontend/foldkit/) and Cloudflare-backed state. Alchemy builds the app with its existing Vite configuration and deploys the generated Fetch handler and static assets together. Prerendered `/` is served as an asset; domain API requests reach the Effect backend, and unknown page paths return HTTP 404.
 
 The application and infrastructure use Effect `4.0.6`, one of the patch versions verified by the Foldkit preview. Alchemy and its Cloudflare integration are pinned to `2.0.0-beta.84`. Each workspace typechecks with its own compiler; the application retains the scaffolded TypeScript preview.
@@ -88,7 +90,7 @@ All Results uses Foldkit UI’s VirtualList with `ScrollContainer.Window()` and 
 
 ## Search modes
 
-`searchMode` belongs to the root Model. The typed RadioGroup Block exposes the header control through a Binding, with selection owned by the parent. Switching mode cancels pending lookups and invalidates planning Messages. Query identity includes mode, label, offset, and limit. Late completions cannot install another mode’s quotes or cooldown, and Live provider cooldowns do not block Demo searches. The cart is stored per mode so sample prices never enter the Live cart. Sample data is labeled next to Top Results and in the footer.
+`searchMode` belongs to the root Model. The typed Listbox Block exposes the Data source menu through a Binding, with selection owned by the parent. Switching mode cancels pending lookups and invalidates planning Messages. Query identity includes mode, label, offset, and limit. Late completions cannot install another mode’s quotes or cooldown, and Live provider cooldowns do not block Demo searches. The cart is stored per mode so sample prices never enter the Live cart. Sample data is labeled next to Top Results and in the footer.
 
 ## Live domain search
 

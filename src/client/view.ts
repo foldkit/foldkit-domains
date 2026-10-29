@@ -111,24 +111,53 @@ const searchModeView = (model: Model, h: ApplicationViewBuilder): Html =>
       slotId: SEARCH_MODE_CONTROL_ID,
       model: model.searchModeControl,
       viewInputs: {
-        options: ['Demo', 'Live'],
-        selectedValue: Option.some(model.searchMode),
-        ariaLabel: 'Search data source',
-        orientation: 'Horizontal',
-        toView: ({ group, options }) =>
-          h.div(
-            [
-              ...group,
-              h.Class('search-mode'),
-              h.AriaDescribedBy('search-mode-description'),
-            ],
-            Array.map(options, option =>
-              h.button(
-                [...option.option, h.Class('search-mode-option')],
-                [h.span([...option.label], [option.value])],
-              ),
+        items: ['Demo', 'Live'],
+        maybeSelectedValue: Option.some(model.searchMode),
+        ariaLabel: `Data source: ${model.searchMode}`,
+        anchor: { placement: 'bottom-end', gap: 8, padding: 16, portal: true },
+        className: 'search-mode',
+        buttonClassName: 'button search-mode-trigger',
+        buttonAttributes: childAttributes([
+          h.AriaDescribedBy('search-mode-description'),
+        ]),
+        itemsClassName: 'search-mode-options',
+        backdropClassName: 'filter-backdrop',
+        buttonContent: h.span(
+          [h.Class('search-mode-trigger-content')],
+          [
+            h.span(
+              [h.Class('search-mode-trigger-copy')],
+              [
+                h.span([h.Class('search-mode-caption')], ['Data source']),
+                h.span([h.Class('search-mode-current')], [model.searchMode]),
+              ],
             ),
+            Icon.chevronDown(),
+          ],
+        ),
+        itemToConfig: value => ({
+          className: 'search-mode-option',
+          content: h.span(
+            [h.Class('search-mode-option-content')],
+            [
+              h.span(
+                [h.Class('search-mode-option-copy')],
+                [
+                  h.span([h.Class('search-mode-option-label')], [value]),
+                  h.span(
+                    [h.Class('search-mode-option-description')],
+                    [
+                      value === 'Demo'
+                        ? 'Sample prices and availability.'
+                        : 'Real quotes from Vercel.',
+                    ],
+                  ),
+                ],
+              ),
+              h.span([h.Class('search-mode-option-check')], [Icon.check()]),
+            ],
           ),
+        }),
       },
     }),
   )
@@ -1163,6 +1192,7 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
       h.Id('domains-app'),
       h.Class('app'),
       h.DataAttribute('search-mode', model.searchMode),
+      h.DataAttribute('search-layout', model.searchLayout),
       h.DataAttribute(
         'search',
         String.isNonEmpty(routeToQuery(model.route)) ? 'active' : 'idle',

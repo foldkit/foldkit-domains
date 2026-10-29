@@ -228,9 +228,20 @@ export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedReleaseEarlySearchListeners],
     handler: function* () {
       return () =>
-        Effect.sync(() =>
-          document.dispatchEvent(new Event('domains:ready')),
-        ).pipe(Effect.as(Message.CompletedReleaseEarlySearchListeners()))
+        Effect.sync(() => {
+          const isSearchStarted = document.documentElement.hasAttribute(
+            'data-domains-search-started',
+          )
+
+          document.documentElement.removeAttribute(
+            'data-domains-search-started',
+          )
+          document.dispatchEvent(new Event('domains:ready'))
+
+          return Message.CompletedReleaseEarlySearchListeners({
+            isSearchStarted,
+          })
+        })
     },
   },
 )

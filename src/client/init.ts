@@ -1,15 +1,20 @@
-import { Option } from 'effect'
+import { Option, String } from 'effect'
 import { Url } from 'foldkit'
 
 import { ReleaseEarlySearchListeners } from './command'
 import { ApplicationComposition } from './composition'
-import { urlToApplicationRoute } from './route'
+import { routeToQuery, urlToApplicationRoute } from './route'
 import { searchQueryStep } from './steps/index'
 
 export const init = ApplicationComposition.makeInit((url: Url.Url) => {
+  const route = urlToApplicationRoute(url)
+
   return {
     model: {
-      route: urlToApplicationRoute(url),
+      route,
+      searchLayout: String.isNonEmpty(routeToQuery(route))
+        ? 'Search'
+        : 'Landing',
       searchMode: 'Demo',
       searchGeneration: 0,
       searchPlanningTimeMillis: 0,

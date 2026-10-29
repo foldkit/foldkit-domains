@@ -407,7 +407,7 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
     page.getByRole('link', { name: 'Sign Up', exact: true }),
     page.getByRole('link', { name: 'Login', exact: true }),
     page.getByRole('button', { name: 'Cart, 0 domains' }),
-    page.getByRole('radio', { name: 'Demo', exact: true }),
+    page.getByRole('button', { name: 'Data source: Demo', exact: true }),
     page.getByRole('link', { name: 'Domains home' }),
     page.getByRole('link', { name: 'Skip to main content' }),
   ]) {

@@ -127,7 +127,14 @@ for (const { name, width, height } of PHONE_VIEWPORTS) {
       await expect(page).toHaveURL('/')
       await page.getByRole('heading', { name: 'Begin your search' }).tap()
       await expect(input).not.toBeFocused()
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(
+        page.getByRole('heading', { name: 'Begin your search' }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('heading', {
+          name: 'Find a domain for the next viral idea.',
+        }),
+      ).not.toBeVisible()
       expect(
         await originalInput?.evaluate(
           element => element === document.getElementById('domain-search'),
@@ -221,6 +228,87 @@ test('mobile empty search matches the compact header and survives hydration with
     await context.close()
   }
 })
+
+for (const phase of ['before hydration', 'after hydration']) {
+  test(`clearing search and dismissing the mobile keyboard retains the search header ${phase}`, async ({
+    browser,
+    browserName,
+    baseURL,
+  }) => {
+    if (baseURL === undefined) {
+      throw new Error('The domain example requires a base URL')
+    }
+
+    const context = await browser.newContext({
+      ...devices[browserName === 'webkit' ? 'iPhone 13' : 'Pixel 5'],
+      viewport: { width: 393, height: 852 },
+      baseURL,
+    })
+    const page = await context.newPage()
+    await mockDomainSearch(page)
+    let releaseBundle = () => {}
+    const bundleGate = new Promise<void>(resolve => {
+      releaseBundle = resolve
+    })
+    if (phase === 'before hydration') {
+      await page.route('**/assets/*.js', async route => {
+        await bundleGate
+        await route.continue()
+      })
+    }
+
+    try {
+      await page.goto('/', { waitUntil: 'commit' })
+      if (phase === 'after hydration') {
+        await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+      }
+      const input = page.getByRole('searchbox', { name: 'Search domains' })
+      const originalInput = await input.elementHandle()
+      await input.fill('acme')
+      await expect(page).toHaveURL(/q=acme/)
+      await input.fill('')
+      await expect(page).toHaveURL(/\/$/)
+      await input.press('Enter')
+      await expect(input).not.toBeFocused()
+
+      const beginSearch = page.getByRole('heading', {
+        name: 'Begin your search',
+      })
+      const hero = page.getByRole('heading', {
+        name: 'Find a domain for the next viral idea.',
+      })
+      await expect(beginSearch).toBeVisible()
+      await expect(hero).not.toBeVisible()
+      expect((await page.locator('form.search').boundingBox())?.y).toBeCloseTo(
+        75,
+        0,
+      )
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+
+      releaseBundle()
+      await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+      await expect(page.locator('#domains-app')).toHaveAttribute(
+        'data-search-layout',
+        'Search',
+      )
+      await expect(input).not.toBeFocused()
+      await expect(beginSearch).toBeVisible()
+      await expect(hero).not.toBeVisible()
+      expect(
+        await originalInput?.evaluate(
+          element => element === document.getElementById('domain-search'),
+        ),
+      ).toBe(true)
+      await input.fill('again')
+      await expect(
+        page.getByRole('heading', { name: 'Top Results' }),
+      ).toBeVisible()
+    } finally {
+      releaseBundle()
+      await context.close()
+    }
+  })
+}
 
 for (const phase of ['before hydration', 'after hydration']) {
   test(`tapping Domains focuses search during the mobile gesture ${phase}`, async ({

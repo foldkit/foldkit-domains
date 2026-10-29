@@ -48,6 +48,7 @@ test('typing synchronizes the URL before the route starts its domain request', (
     model(model => {
       expect(model.route).toEqual(emptyModel.route)
       expect(model.searchGeneration).toBe(1)
+      expect(model.searchLayout).toBe('Search')
       expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
     }),
     Command.expectExact(ReplaceSearchUrl({ q: Option.some('fresh') })),
@@ -284,6 +285,7 @@ test('clearing the input returns to the idle route, restores focus, and scrolls 
     model(model => {
       expect(model.route).toEqual(ApplicationRoute.Search({ q: Option.none() }))
       expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      expect(model.searchLayout).toBe('Search')
     }),
     resolveResultsListScrolls,
     Command.expectNone(),
@@ -303,6 +305,7 @@ test('backspacing to an empty query scrolls to the top after the route changes',
     message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
     model(model => {
       expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      expect(model.searchLayout).toBe('Search')
     }),
     Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
     resolveResultsListScrolls,
@@ -435,3 +438,21 @@ test('clearing a scrolled search discards its virtual viewport before another se
     Command.expectNone(),
   )
 })
+
+test.each([true, false])(
+  'the early search handoff preserves an opened search: %s',
+  isSearchStarted => {
+    story(
+      update,
+      given(emptyModel),
+      message(
+        Message.CompletedReleaseEarlySearchListeners({ isSearchStarted }),
+      ),
+      model(model => {
+        expect(model.searchLayout).toBe(isSearchStarted ? 'Search' : 'Landing')
+        expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      }),
+      Command.expectNone(),
+    )
+  },
+)

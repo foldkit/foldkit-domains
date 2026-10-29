@@ -45,6 +45,10 @@ export const makeSearchQueryStep = (isForced = false) =>
       cancelSearchStep,
       makeFieldsStep(() => ({
         searchGeneration: () => nextSearchGeneration,
+        searchLayout: currentLayout =>
+          String.isNonEmpty(routeToQuery(model.route))
+            ? 'Search'
+            : currentLayout,
         domainCandidateRanges: () => [],
         maybeBlockedDomainCandidateRange: () => Option.none(),
       })),
@@ -80,7 +84,11 @@ export const makeChangeSearchQueryStep = (query: string) =>
     } else {
       return Update.combineSteps([
         cancelSearchStep,
-        makeFieldsStep(() => ({ searchGeneration: Number.increment })),
+        makeFieldsStep(() => ({
+          searchGeneration: Number.increment,
+          searchLayout: currentLayout =>
+            String.isNonEmpty(query) ? 'Search' : currentLayout,
+        })),
         replaceSearchUrl,
       ])
     }

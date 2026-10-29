@@ -27,9 +27,12 @@ import {
 
 export const emptyModel = Model.make({
   route: ApplicationRoute.Search({ q: Option.none() }),
+  searchLayout: 'Landing',
   searchMode: 'Demo',
-  searchModeControl: SearchModeControlBlock.init({ id: SEARCH_MODE_CONTROL_ID })
-    .model,
+  searchModeControl: SearchModeControlBlock.init({
+    id: SEARCH_MODE_CONTROL_ID,
+    isAnimated: true,
+  }).model,
   searchGeneration: 0,
   searchPlanningTimeMillis: 0,
   domainCandidateRanges: [],
@@ -101,6 +104,7 @@ export const readyModel = (query: string): Model =>
     modifyFields(emptyModel, {
       route: () => ApplicationRoute.Search({ q: Option.some(query) }),
       searchGeneration: () => 1,
+      searchLayout: () => 'Search',
     }),
     {
       mode: 'Demo',

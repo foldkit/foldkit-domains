@@ -31,7 +31,6 @@ import {
   Dialog,
   DialogBlock,
   Listbox,
-  RadioGroup,
   VirtualList,
 } from '@foldkit/ui'
 
@@ -845,16 +844,56 @@ test.each(PageScrollKey.literals)(
   },
 )
 
-test('the search data source radio group changes mode with the keyboard while retaining the query', () => {
+test('the data source listbox selects Live and retains the query', () => {
   scene(
     { update, view },
     given(readyModel('acme')),
     measureResultsList,
-    expect(role('radio', { name: 'Demo' })).toHaveAttr('aria-checked', 'true'),
-    keydown(role('radio', { name: 'Demo' }), 'ArrowRight'),
+    ...openFilterListbox(
+      'Data source',
+      SEARCH_MODE_CONTROL_ID,
+      SearchModeControlBlock.Message,
+    ),
+    Command.resolveAll(
+      [
+        Animation.test.WaitForPaint,
+        Animation.AnimationBlock.Message.CompletedWaitForPaint({
+          generation: 1,
+        }),
+      ],
+      [
+        Animation.test.WaitForPaint,
+        Animation.AnimationBlock.Message.CompletedWaitForPaint({
+          generation: 1,
+        }),
+      ],
+      [
+        Animation.test.WaitForAnimationSettled,
+        Animation.AnimationBlock.Message.EndedAnimation({ generation: 1 }),
+      ],
+    ),
+    expect(role('option', { name: /^Demo/ })).toHaveAttr(
+      'aria-selected',
+      'true',
+    ),
+    click(role('option', { name: /^Live/ })),
     Command.resolve(
-      RadioGroup.test.FocusOption({ id: SEARCH_MODE_CONTROL_ID, index: 1 }),
-      SearchModeControlBlock.Message.CompletedFocusOption(),
+      Listbox.test.FocusListboxButton({ id: SEARCH_MODE_CONTROL_ID }),
+      SearchModeControlBlock.Message.CompletedFocusListboxButton(),
+    ),
+    Command.resolve(
+      Animation.test.WaitForPaint,
+      Animation.AnimationBlock.Message.CompletedWaitForPaint({ generation: 2 }),
+    ),
+    Command.resolve(
+      Listbox.test.DetectListboxMovementOrAnimationEnd,
+      SearchModeControlBlock.Message.CompletedDetectListboxMovementOrAnimationEnd(
+        { generation: 2 },
+      ),
+    ),
+    Mount.expectEnded(
+      Listbox.test.AnchorListbox,
+      Listbox.test.PortalListboxBackdrop,
     ),
     resolveSearchPlanningTime(),
     resolveDomains(
@@ -864,7 +903,11 @@ test('the search data source radio group changes mode with the keyboard while re
     resolveSearchPlanningTime(),
     resolveRemainingFirstPageDomains,
     resolveResultsListScrolls,
-    expect(role('radio', { name: 'Live' })).toHaveAttr('aria-checked', 'true'),
+    expect(role('listbox')).toBeAbsent(),
+    expect(role('button', { name: 'Data source: Live' })).toHaveAttr(
+      'aria-expanded',
+      'false',
+    ),
     expect(role('searchbox', { name: 'Search domains' })).toHaveValue('acme'),
   )
 })

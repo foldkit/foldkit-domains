@@ -1,5 +1,8 @@
 import { Schema } from 'effect'
 
+export const SearchLayout = Schema.Literals(['Landing', 'Search'])
+export type SearchLayout = typeof SearchLayout.Type
+
 export const SearchInputConfig = Schema.Struct({
   id: Schema.String,
   touchMediaQuery: Schema.String,

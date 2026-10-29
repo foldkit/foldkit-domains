@@ -4,8 +4,6 @@ import { modifyFields } from 'foldkit/struct'
 import { toParentMessage } from 'foldkit/test'
 import { expect, test } from 'vitest'
 
-import { RadioGroup } from '@foldkit/ui'
-
 import { Domain } from '../../shared/domain'
 import { SearchMode } from '../../shared/searchMode'
 import { DomainsQueryBinding, SearchModeBinding } from '../composition'
@@ -19,10 +17,7 @@ import { activeCart } from '../model'
 import { emptyModel, withDomainsForRange } from '../model.fixture'
 import { ApplicationRoute, routeToQuery } from '../route'
 import { SearchCooldown } from '../searchCooldown'
-import {
-  SEARCH_MODE_CONTROL_ID,
-  SearchModeControlBlock,
-} from '../searchModeControl'
+import { SearchModeControlBlock } from '../searchModeControl'
 import { SearchPresentation, searchPresentation } from '../searchPresentation'
 import { update } from '../update'
 import {
@@ -62,19 +57,8 @@ const selectMode = (mode: SearchMode) =>
   message(
     toParentMessage(
       SearchModeBinding,
-      SearchModeControlBlock.Message.SelectedOption({
-        index: mode === 'Demo' ? 0 : 1,
-        value: mode,
-      }),
+      SearchModeControlBlock.Message.SelectedItem({ item: mode }),
     ),
-  )
-const resolveModeFocus = (mode: SearchMode) =>
-  Command.resolve(
-    RadioGroup.test.FocusOption({
-      id: SEARCH_MODE_CONTROL_ID,
-      index: mode === 'Demo' ? 0 : 1,
-    }),
-    SearchModeControlBlock.Message.CompletedFocusOption(),
   )
 
 test('switching modes cancels a pending lookup and rejects its late quotes and cooldown', () => {
@@ -92,7 +76,6 @@ test('switching modes cancels a pending lookup and rejects its late quotes and c
     ),
     Command.expectHas(makeDomainsFetch(demoArgs, 1)),
     selectMode('Live'),
-    resolveModeFocus('Live'),
     resolveDomainsCancellation(demoArgs, 1),
     resolveSearchTime(1, 100),
     Command.expectHas(makeDomainsFetch(liveArgs, 3)),
@@ -142,7 +125,6 @@ test('mode-specific cached quotes and carts restore without fetching or changing
     given(cachedModel),
     message(Message.ClickedAddDomain({ domain: demoDomain })),
     selectMode('Live'),
-    resolveModeFocus('Live'),
     resolveSearchTime(1, 100),
     model(model => {
       expect(searchPresentation(model)).toEqual(
@@ -152,7 +134,6 @@ test('mode-specific cached quotes and carts restore without fetching or changing
     }),
     message(Message.ClickedAddDomain({ domain: liveDomain })),
     selectMode('Demo'),
-    resolveModeFocus('Demo'),
     resolveSearchTime(2, 200),
     model(model => {
       expect(routeToQuery(model.route)).toBe('acme')
@@ -182,12 +163,10 @@ test('a live provider cooldown permits Demo requests and applies again after ret
       }),
     ),
     selectMode('Demo'),
-    resolveModeFocus('Demo'),
     resolveSearchTime(1, 100),
     Command.expectHas(makeDomainsFetch(demoArgs, 1)),
     resolveDomainsSuccess(demoArgs, 1, [demoDomain], 200),
     selectMode('Live'),
-    resolveModeFocus('Live'),
     resolveSearchTime(2, 300),
     model(model => {
       expect(model.maybeSearchCooldown).toEqual(Option.some(cooldown))

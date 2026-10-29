@@ -99,7 +99,9 @@ export const TldDialogBinding = makeBinding(DialogBlock, {
 
 export const SearchModeBinding = makeBinding(SearchModeControlBlock, {
   field: 'searchModeControl',
-  init: { contextToArgs: () => [{ id: SEARCH_MODE_CONTROL_ID }] },
+  init: {
+    contextToArgs: () => [{ id: SEARCH_MODE_CONTROL_ID, isAnimated: true }],
+  },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(SearchModeControlBlock, {
     Selected: ({ value }) => makeChangeSearchModeStep(value),

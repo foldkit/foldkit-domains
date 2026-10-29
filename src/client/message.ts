@@ -54,6 +54,6 @@ export const Message = defineMessageUnion({
   CompletedScrollPageToTop: {},
   CompletedRevealResultsListStart: {},
   CompletedDismissSearchKeyboard: {},
-  CompletedReleaseEarlySearchListeners: {},
+  CompletedReleaseEarlySearchListeners: { isSearchStarted: Schema.Boolean },
 })
 export type Message = typeof Message.Type

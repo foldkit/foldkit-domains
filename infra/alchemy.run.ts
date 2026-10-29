@@ -7,6 +7,7 @@ import * as Cloudflare from '@alchemy.run/cloudflare'
 export const Website = Cloudflare.Website.Foldkit(
   'Website',
   Effect.gen(function* () {
+    const stage = yield* Stage
     const maybeAccessToken = yield* Config.Redacted('VERCEL_API_TOKEN').pipe(
       Config.option,
       Effect.orDie,
@@ -14,6 +15,7 @@ export const Website = Cloudflare.Website.Foldkit(
 
     return {
       rootDir: '..',
+      ...(stage === 'preview' ? { domain: 'domains.foldkit.dev' } : {}),
       compatibility: {
         date: '2026-10-19',
         flags: [
@@ -24,7 +26,7 @@ export const Website = Cloudflare.Website.Foldkit(
       },
       dev: { host: '127.0.0.1', port: 5195, strictPort: true },
       env: {
-        COORDINATOR_STAGE: yield* Stage,
+        COORDINATOR_STAGE: stage,
         DOMAIN_QUOTES: Cloudflare.DurableObject('DomainSearchCoordinator'),
         REGISTRAR_BUDGET: Cloudflare.DurableObject('RegistrarCoordinator'),
         REGISTRAR_REQUESTS_PER_SECOND: yield* Config.String(

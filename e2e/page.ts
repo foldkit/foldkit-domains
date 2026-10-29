@@ -58,3 +58,16 @@ export const chooseFilterOption = async (
   await expect(listbox).toBeHidden()
   await expect(trigger).toBeFocused()
 }
+
+export const chooseSearchMode = async (
+  page: Page,
+  mode: 'Demo' | 'Live',
+): Promise<void> => {
+  const trigger = page.getByRole('button', { name: /^Data source:/ })
+  await trigger.click()
+  await page.getByRole('option', { name: new RegExp(`^${mode}`) }).click()
+  await expect(
+    page.getByRole('listbox', { name: /^Data source:/ }),
+  ).toBeHidden()
+  await expect(trigger).toBeFocused()
+}

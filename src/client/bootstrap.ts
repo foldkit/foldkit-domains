@@ -29,6 +29,11 @@ export const bootstrapSearchInput = ({
 
     app.setAttribute('data-search', input.value ? 'active' : 'idle')
 
+    if (input.value) {
+      app.setAttribute('data-search-layout', 'Search')
+      document.documentElement.setAttribute('data-domains-search-started', '')
+    }
+
     if (isReturningToEmpty) {
       window.scrollTo({ top: 0, behavior: 'instant' })
     }

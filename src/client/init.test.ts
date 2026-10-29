@@ -36,6 +36,9 @@ describe('startup', () => {
     ({ path, query, presentationTag, clocks }) => {
       const applicationInit = init(urlOrThrow(`http://localhost${path}`))
 
+      expect(applicationInit.model.searchLayout).toBe(
+        query ? 'Search' : 'Landing',
+      )
       expect(applicationInit.model.searchMode).toBe('Demo')
       expect(applicationInit.model.carts).toEqual({ Demo: [], Live: [] })
       expect(routeToQuery(applicationInit.model.route)).toBe(query)

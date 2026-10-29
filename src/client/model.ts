@@ -14,6 +14,7 @@ import {
 import { ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
 import { SearchCooldown } from './searchCooldown'
+import { SearchLayout } from './searchInput'
 import { SearchModeControlBlock } from './searchModeControl'
 
 export const Carts = Schema.Struct({
@@ -24,6 +25,7 @@ export type Carts = typeof Carts.Type
 
 export const Model = Schema.Struct({
   route: ApplicationRoute,
+  searchLayout: SearchLayout,
   searchMode: SearchMode,
   searchModeControl: SearchModeControlBlock.Model,
   searchGeneration: Schema.Number,
