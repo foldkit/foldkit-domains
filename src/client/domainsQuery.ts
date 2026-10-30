@@ -7,7 +7,8 @@ import type { RateLimitedSearchError } from '../shared/domainsRpc'
 import { DomainsClient } from './rpc'
 import { SearchCooldown, formatRateLimitMessage } from './searchCooldown'
 
-const SEARCH_DEBOUNCE = '150 millis'
+const DEMO_SEARCH_DEBOUNCE = '150 millis'
+const LIVE_SEARCH_DEBOUNCE = '350 millis'
 const SEARCH_TIMEOUT = '20 seconds'
 
 export const DomainsQueryArgs = Schema.Struct({
@@ -55,7 +56,11 @@ export const fetchDomains = (args: DomainsQueryArgs) => {
     const client = yield* DomainsClient
 
     if (args.offset === 0) {
-      yield* Effect.sleep(SEARCH_DEBOUNCE)
+      yield* Effect.sleep(
+        args.dataSource === 'Live'
+          ? LIVE_SEARCH_DEBOUNCE
+          : DEMO_SEARCH_DEBOUNCE,
+      )
     }
 
     return yield* client.SearchDomains({

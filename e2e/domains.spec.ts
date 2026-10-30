@@ -1128,6 +1128,47 @@ test('Demo and Live preserve the input and query while isolating cached quotes a
   ).toBeVisible()
 })
 
+test('Live typing debounces intermediate keystrokes and loads the final query progressively', async ({
+  page,
+}) => {
+  await page.clock.install()
+  const requests: Array<{ label: string; offset: number; limit: number }> = []
+  await mockDomainSearch(page, (label, range, dataSource) => {
+    expect(dataSource).toBe('Live')
+    requests.push({ label, ...range })
+    return Effect.succeed(makeDomainFixtures(label))
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
+  await Page.chooseDataSource(page, 'Live')
+  const input = page.getByRole('searchbox', { name: 'Search domains' })
+  const nowMillis = await page.evaluate(() => Date.now())
+  await page.clock.pauseAt(nowMillis + 100)
+  await input.focus()
+
+  for (const character of ['d', 'e', 'v', 'i', 'n']) {
+    await input.pressSequentially(character)
+    await page.clock.runFor(200)
+  }
+
+  await expect(input).toHaveValue('devin')
+  await expect(page).toHaveURL(/q=devin$/)
+  expect(requests).toEqual([])
+
+  await page.clock.resume()
+  await expect(page.locator('.domain-card').first()).toContainText('devin.com')
+  await expect(page.locator('.domain-card .price').first()).toHaveText('$12.00')
+  await expect(
+    page.getByText('60 of 556 domains checked · Registration prices in USD', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  expect(requests).toEqual([
+    { label: 'devin', offset: 0, limit: 4 },
+    { label: 'devin', offset: 4, limit: 56 },
+  ])
+})
+
 test('switching away from pending Live quotes leaves cached Demo results usable', async ({
   page,
 }) => {

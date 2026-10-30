@@ -20,7 +20,7 @@ import {
   domainCandidates,
   domainTlds,
 } from '../shared/domain'
-import { registrarResponseToRetryAfterSeconds } from './retryAfter'
+import { registrarResponseToRetryDelay } from './retryAfter'
 import { timeSearchPhase } from './searchTiming'
 
 const REGISTRAR_SEARCH_URL =
@@ -127,11 +127,17 @@ export const RegistrarLayer = Layer.effect(
             Effect.catch(() => Effect.succeed(undefined)),
           )
 
-          const retryAfterSeconds = registrarResponseToRetryAfterSeconds(
+          const retryDelay = registrarResponseToRetryDelay(
             response.headers,
             body,
             nowMillis,
           )
+          const { retryAfterSeconds } = retryDelay
+
+          yield* Effect.logWarning('Registrar rate limit received', {
+            retryAfterSeconds,
+            retryAfterSource: retryDelay.source,
+          })
 
           const nextDeadline =
             nowMillis + Duration.toMillis(Duration.seconds(retryAfterSeconds))

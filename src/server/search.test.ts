@@ -8,6 +8,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Logger,
   Option,
   Result,
   Schema,
@@ -17,7 +18,11 @@ import { TestClock } from 'effect/testing'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import { DomainsClient, makeDomainsClientLayer } from '../client/rpc'
-import { DomainCandidateRange, domainCandidates } from '../shared/domain'
+import {
+  DomainCandidateRange,
+  domainCandidates,
+  domainTlds,
+} from '../shared/domain'
 import { SearchError } from '../shared/domainsRpc'
 import {
   Registrar,
@@ -72,7 +77,7 @@ const callSearch = (
     }),
   )
 
-const rawRequest = (label: string) =>
+const rawRequest = (payload: Readonly<Record<string, unknown>>) =>
   new Request('http://localhost/rpc', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -80,7 +85,7 @@ const rawRequest = (label: string) =>
       _tag: 'Request',
       id: '0',
       tag: 'SearchDomains',
-      payload: { mode: 'Live', label },
+      payload: { mode: 'Live', ...payload },
       headers: [],
     }),
   })
@@ -228,12 +233,38 @@ describe('domain search RPC', () => {
         calls += 1
         return successfulFetch(...args)
       })
-      const response = await handler(rawRequest(label))
+      const response = await handler(rawRequest({ label }))
       expect(response.headers.get('cache-control')).toBe('no-store')
       expect(await response.text()).toContain('Failure')
       expect(calls).toBe(0)
     },
   )
+
+  test.each([
+    { name: 'negative offset', range: { offset: -1, limit: 4 } },
+    {
+      name: 'offset beyond the catalog',
+      range: { offset: domainTlds.length, limit: 4 },
+    },
+    { name: 'fractional offset', range: { offset: 0.5, limit: 4 } },
+    { name: 'empty range', range: { offset: 0, limit: 0 } },
+    {
+      name: 'limit beyond the catalog',
+      range: { offset: 0, limit: domainTlds.length + 1 },
+    },
+    { name: 'fractional limit', range: { offset: 0, limit: 1.5 } },
+  ])('rejects $name before contacting the registrar', async ({ range }) => {
+    let calls = 0
+    const handler = makeApi(async (...args) => {
+      calls += 1
+      return successfulFetch(...args)
+    })
+    const response = await handler(rawRequest({ label: 'acme', ...range }))
+
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(await response.text()).toContain('Failure')
+    expect(calls).toBe(0)
+  })
 
   test('rejects malformed JSON, oversized streamed bodies, and non-JSON content', async () => {
     let calls = 0
@@ -454,23 +485,51 @@ describe('domain search RPC', () => {
     expect(calls).toBe(6)
   })
 
-  test('refreshes expired quotes rather than serving an old price', async () => {
+  test('reuses a fresh quote and returns the changed provider price at expiry', async () => {
     let calls = 0
-    const handler = makeApi(async (...args) => {
+    let price = 160
+    const handler = makeApi(async (input, init) => {
       calls += 1
-      return successfulFetch(...args)
+      const data = registrarResponse(await readNames(input, init))
+
+      return Response.json({
+        results: Array.map(data.results, result =>
+          result.available ? { ...result, price } : result,
+        ),
+      })
     })
+
     await Effect.runPromise(
       Effect.gen(function* () {
         const clock = yield* Clock.Clock
         const context = Context.make(Clock.Clock, clock)
-        yield* callSearch(handler, 'acme', '192.0.2.1', context)
-        yield* TestClock.adjust('59 seconds')
-        yield* callSearch(handler, 'acme', '192.0.2.1', context)
-        expect(calls).toBe(3)
-        yield* TestClock.adjust('2 seconds')
-        yield* callSearch(handler, 'acme', '192.0.2.1', context)
-        expect(calls).toBe(6)
+        const lookup = callSearch(
+          handler,
+          'acme',
+          '192.0.2.1',
+          context,
+          {},
+          {
+            offset: 0,
+            limit: 4,
+          },
+        )
+
+        expect(yield* lookup).toContainEqual(
+          expect.objectContaining({ name: 'acme.dev', price: 160 }),
+        )
+        price = 200
+        yield* TestClock.adjust('59999 millis')
+        expect(yield* lookup).toContainEqual(
+          expect.objectContaining({ name: 'acme.dev', price: 160 }),
+        )
+        expect(calls).toBe(1)
+
+        yield* TestClock.adjust('1 millis')
+        expect(yield* lookup).toContainEqual(
+          expect.objectContaining({ name: 'acme.dev', price: 200 }),
+        )
+        expect(calls).toBe(2)
       }).pipe(Effect.provide(TestClock.layer())),
     )
   })
@@ -536,6 +595,82 @@ describe('domain search RPC', () => {
       }).pipe(Effect.provide(TestClock.layer())),
     )
   })
+
+  test.each([
+    {
+      source: 'RetryAfterHeader',
+      headers: { 'retry-after': '60' },
+      body: {},
+      retryAfterSeconds: 60,
+    },
+    {
+      source: 'RateLimitResetHeader',
+      headers: { 'x-ratelimit-reset': '60' },
+      body: {},
+      retryAfterSeconds: 60,
+    },
+    {
+      source: 'ResponseBody',
+      headers: {},
+      body: { retryAfter: { value: 12, str: '12s' } },
+      retryAfterSeconds: 12,
+    },
+    {
+      source: 'Fallback',
+      headers: {},
+      body: {},
+      retryAfterSeconds: 60,
+    },
+  ])(
+    'logs $source once per registrar 429 without exposing provider details',
+    async ({ source, headers, body, retryAfterSeconds }) => {
+      const messages: Array<unknown> = []
+      const logger = Logger.make(options => messages.push(options.message))
+      let calls = 0
+      const fetch: typeof globalThis.fetch = async () => {
+        calls += 1
+        return Response.json(
+          { ...body, private: 'private-provider-details' },
+          { status: 429, headers },
+        )
+      }
+      const results = await Effect.runPromise(
+        Effect.gen(function* () {
+          const registrar = yield* Registrar
+          const first = yield* registrar
+            .search('acme', 0, 4)
+            .pipe(Effect.result)
+          const second = yield* registrar
+            .search('other', 0, 4)
+            .pipe(Effect.result)
+
+          return [first, second]
+        }).pipe(
+          Effect.provide(
+            RegistrarLayer.pipe(Layer.provide(FetchHttpClient.layer)),
+          ),
+          Effect.provideService(FetchHttpClient.Fetch, fetch),
+          Effect.provide([Logger.layer([logger]), TestClock.layer()]),
+        ),
+      )
+
+      expect(results).toEqual([
+        Result.fail(RegistrarError.RateLimited({ retryAfterSeconds })),
+        Result.fail(RegistrarError.RateLimited({ retryAfterSeconds })),
+      ])
+      expect(calls).toBe(1)
+      expect(messages).toHaveLength(1)
+      expect(messages).toContainEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            retryAfterSeconds,
+            retryAfterSource: source,
+          }),
+        ]),
+      )
+      expect(JSON.stringify(messages)).not.toContain('private-provider-details')
+    },
+  )
 
   test('honors the registrar cooldown across requests and recovers when it expires', async () => {
     let calls = 0

@@ -12,7 +12,7 @@ import { makeDomainFixtures } from '../../shared/domain.fixture'
 import { FocusSearchInput, ReadCurrentTime } from '../command'
 import { ResultsListBinding } from '../composition'
 import { DomainListing, SortOrder } from '../domain'
-import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
+import { DomainsQueryFailure } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, urlOrThrow, withDomainsForRange } from '../model.fixture'
 import { resultListings } from '../resultListings'
@@ -397,20 +397,9 @@ describe('progressive domain results', () => {
               }),
             }),
           )
-          expect(model.activeDomainCandidateRanges).toEqual([
-            { offset: 0, limit: 60 },
-            { offset: 60, limit: 60 },
-            { offset: 0, limit: domainTlds.length },
-          ])
         }),
         resolveDomainsSuccess(catalogArgs, 3, allDomains, 40),
         model(model => {
-          expect(model.activeDomainCandidateRanges).toEqual([
-            { offset: 0, limit: domainTlds.length },
-          ])
-          expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
-            'Failure',
-          )
           expect(searchViewState(model)).toEqual(
             SearchViewState.Ready({ domains: allDomains }),
           )

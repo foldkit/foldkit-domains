@@ -1,6 +1,7 @@
 import {
   Cause,
   Context,
+  Duration,
   Effect,
   Exit,
   Fiber,
@@ -81,10 +82,15 @@ afterEach(async () => {
   await Promise.all(disposals.splice(0).map(dispose => dispose()))
 })
 
+const debounceCases = [
+  { dataSource: DataSource.make('Demo'), debounceMillis: 150 },
+  { dataSource: DataSource.make('Live'), debounceMillis: 350 },
+]
+
 describe('fetching domain results for candidate ranges', () => {
-  test.each(DataSource.literals)(
-    'the Query wires a debounced %s lookup to its originating request',
-    async dataSource => {
+  test.each(debounceCases)(
+    'the Query waits $debounceMillis ms before a $dataSource lookup and preserves its originating request',
+    async ({ dataSource, debounceMillis }) => {
       const requestArgs = DomainsQueryArgs.make({ ...args, dataSource })
       let calls = 0
       const transport = rpcTransport((label, range, receivedDataSource) => {
@@ -100,7 +106,7 @@ describe('fetching domain results for candidate ranges', () => {
             makeDomainsFetch(requestArgs, 42).effect,
           )
 
-          yield* TestClock.adjust('149 millis')
+          yield* TestClock.adjust(Duration.millis(debounceMillis - 1))
           expect(calls).toBe(0)
 
           yield* TestClock.adjust('1 millis')
@@ -115,50 +121,57 @@ describe('fetching domain results for candidate ranges', () => {
           generation: 42,
           requestKey: domainsRequestKey(requestArgs),
           result: Result.succeed([availableDomain]),
-          completedAtMillis: 150,
+          completedAtMillis: debounceMillis,
         }),
       )
     },
   )
 
-  test('changing a query during debounce cancels the lookup before any RPC', async () => {
-    let calls = 0
-    const transport = rpcTransport(() => {
-      calls += 1
-      return Effect.succeed([availableDomain])
-    })
-    await Effect.runPromise(
-      Effect.gen(function* () {
-        const fetch = yield* Effect.forkChild(fetchDomains(args))
+  test.each(debounceCases)(
+    'changing a $dataSource query during its $debounceMillis ms debounce cancels before any RPC',
+    async ({ dataSource, debounceMillis }) => {
+      const requestArgs = DomainsQueryArgs.make({ ...args, dataSource })
+      let calls = 0
+      const transport = rpcTransport(() => {
+        calls += 1
+        return Effect.succeed([availableDomain])
+      })
+      await Effect.runPromise(
+        Effect.gen(function* () {
+          const fetch = yield* Effect.forkChild(fetchDomains(requestArgs))
 
-        yield* TestClock.adjust('149 millis')
-        yield* Fiber.interrupt(fetch)
-        yield* TestClock.adjust('1 second')
-      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
-    )
+          yield* TestClock.adjust(Duration.millis(debounceMillis - 1))
+          yield* Fiber.interrupt(fetch)
+          yield* TestClock.adjust('1 second')
+        }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
+      )
 
-    expect(calls).toBe(0)
-  })
+      expect(calls).toBe(0)
+    },
+  )
 
-  test('progressive ranges reach the RPC without an input debounce', async () => {
-    let calls = 0
-    const transport = rpcTransport((_label, range) => {
-      calls += 1
-      expect(range).toEqual({ offset: 4, limit: 56 })
-      return Effect.succeed([availableDomain])
-    })
-    const domains = await Effect.runPromise(
-      fetchDomains({
-        dataSource: DataSource.make('Demo'),
-        label: 'acme',
-        offset: 4,
-        limit: 56,
-      }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
-    )
+  test.each(DataSource.literals)(
+    'progressive %s ranges reach the RPC without an input debounce',
+    async dataSource => {
+      let calls = 0
+      const transport = rpcTransport((_label, range) => {
+        calls += 1
+        expect(range).toEqual({ offset: 4, limit: 56 })
+        return Effect.succeed([availableDomain])
+      })
+      const domains = await Effect.runPromise(
+        fetchDomains({
+          dataSource,
+          label: 'acme',
+          offset: 4,
+          limit: 56,
+        }).pipe(Effect.provide([clientLayer(transport), TestClock.layer()])),
+      )
 
-    expect(calls).toBe(1)
-    expect(domains).toEqual([availableDomain])
-  })
+      expect(calls).toBe(1)
+      expect(domains).toEqual([availableDomain])
+    },
+  )
 
   test.each([
     {

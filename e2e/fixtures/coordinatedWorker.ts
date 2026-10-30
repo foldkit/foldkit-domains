@@ -82,11 +82,6 @@ const makeFixtureDomainSearchImplementation = (
             )
           }
 
-          const coordinator = new FixtureDomainSearchCoordinator(
-            state.raw,
-            environment,
-          )
-          yield* Effect.promise(() => coordinator.alarm())
           return HttpServerResponse.empty({ status: 204 })
         } else if (request.url.endsWith('/reopen')) {
           const coordinator = new FixtureDomainSearchCoordinator(

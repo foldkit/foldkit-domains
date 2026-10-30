@@ -5,8 +5,9 @@ import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
 import { DataSource } from '../../shared/dataSource'
-import { domainTlds } from '../../shared/domain'
+import { Domain, domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
+import { FocusSearchInput } from '../command'
 import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, withDomainsForRange } from '../model.fixture'
@@ -76,7 +77,7 @@ test('a normalized fresh label restores after another label fails', () => {
   )
 })
 
-test('a fresh hit touches recency without extending the completion deadline', () => {
+test('fresh results expire one minute after completion even after reuse', () => {
   const acmeArgs = {
     dataSource: DataSource.make('Demo'),
     label: 'acme',
@@ -101,9 +102,6 @@ test('a fresh hit touches recency without extending the completion deadline', ()
     resolveDomainsSuccess(otherArgs, 2, otherDomains, 1_000),
     changeSearchQuery('acme', 6, 60_099),
     model(model => {
-      expect(DomainsQuery.isFresh(model.domainsQuery, acmeArgs, 60_099)).toBe(
-        true,
-      )
       expect(searchViewState(model)).toEqual(
         SearchViewState.Ready({ domains: acmeDomains }),
       )
@@ -118,6 +116,69 @@ test('a fresh hit touches recency without extending the completion deadline', ()
       )
     }),
     resolveDomainsSuccess(acmeArgs, 3, acmeDomains, 60_120),
+    resolveResultsListScrolls,
+    Command.expectNone(),
+  )
+})
+
+test('a failed stale refresh retains checked results and retry replaces them with the new quote', () => {
+  const args = {
+    dataSource: DataSource.make('Demo'),
+    label: 'acme',
+    offset: 0,
+    limit: 4,
+  }
+  const domains = Array.take(makeDomainFixtures('acme'), 4)
+  const nextDomains = Array.map(domains, domain =>
+    Domain.match(domain, {
+      Available: domain => Domain.Available({ ...domain, price: 25 }),
+      Unconfirmed: domain => domain,
+    }),
+  )
+  const failure = DomainsQueryFailure.make({
+    error: 'Provider unavailable',
+    maybeSearchCooldown: Option.none(),
+  })
+  const cachedModel = withDomainsForRange(
+    modifyFields(emptyModel, {
+      route: () => ApplicationRoute.Search({ q: Option.some('acme') }),
+      tldFilter: () => 'Com',
+    }),
+    args,
+    domains,
+    100,
+  )
+
+  story(
+    update,
+    given(cachedModel),
+    message(Message.RequestedSearch()),
+    resolveSearchTime(1, 60_100),
+    model(model => {
+      expect(searchViewState(model)).toEqual(SearchViewState.Loading())
+    }),
+    resolveDomainsFailure(args, 2, failure, 60_110),
+    model(model => {
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({
+          domains,
+          domainRequest: DomainRequestPresentation.Failed({
+            offset: 0,
+            limit: 4,
+            error: failure.error,
+          }),
+        }),
+      )
+    }),
+    message(Message.ClickedRetrySearch()),
+    Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
+    resolveSearchTime(1, 60_120, 0, 4, true),
+    resolveDomainsSuccess(args, 3, nextDomains, 60_130),
+    model(model => {
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: nextDomains }),
+      )
+    }),
     resolveResultsListScrolls,
     Command.expectNone(),
   )

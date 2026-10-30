@@ -4,6 +4,17 @@ import { Headers } from 'effect/http'
 const DEFAULT_RETRY_AFTER_SECONDS = 60
 const MILLISECONDS_PER_SECOND = 1000
 
+export const RegistrarRetryDelay = Schema.Struct({
+  retryAfterSeconds: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  source: Schema.Literals([
+    'RetryAfterHeader',
+    'RateLimitResetHeader',
+    'ResponseBody',
+    'Fallback',
+  ]),
+})
+export type RegistrarRetryDelay = typeof RegistrarRetryDelay.Type
+
 const parseSeconds = (value: string) =>
   Number.parse(value).pipe(
     Option.filter(
@@ -29,11 +40,20 @@ const bodyToMaybeRetryAfterSeconds = (body: unknown) =>
     Option.map(Duration.toSeconds),
   )
 
-export const registrarResponseToRetryAfterSeconds = (
+const makeRetryDelay = (
+  seconds: number,
+  source: RegistrarRetryDelay['source'],
+): RegistrarRetryDelay =>
+  RegistrarRetryDelay.make({
+    retryAfterSeconds: Math.max(1, Math.ceil(seconds)),
+    source,
+  })
+
+export const registrarResponseToRetryDelay = (
   headers: Headers.Headers,
   body: unknown,
   nowMillis: number,
-): number => {
+): RegistrarRetryDelay => {
   const maybeRetryAfter = Option.fromUndefinedOr(headers['retry-after']).pipe(
     Option.flatMap(value =>
       Number.parse(value).pipe(
@@ -53,14 +73,21 @@ export const registrarResponseToRetryAfterSeconds = (
   )
 
   return maybeRetryAfter.pipe(
+    Option.map(seconds => makeRetryDelay(seconds, 'RetryAfterHeader')),
     Option.orElse(() =>
       Option.fromUndefinedOr(headers['x-ratelimit-reset']).pipe(
         Option.flatMap(parseSeconds),
         Option.map(reset => reset - nowMillis / MILLISECONDS_PER_SECOND),
+        Option.map(seconds => makeRetryDelay(seconds, 'RateLimitResetHeader')),
       ),
     ),
-    Option.orElse(() => bodyToMaybeRetryAfterSeconds(body)),
-    Option.map(seconds => Math.max(1, Math.ceil(seconds))),
-    Option.getOrElse(() => DEFAULT_RETRY_AFTER_SECONDS),
+    Option.orElse(() =>
+      bodyToMaybeRetryAfterSeconds(body).pipe(
+        Option.map(seconds => makeRetryDelay(seconds, 'ResponseBody')),
+      ),
+    ),
+    Option.getOrElse(() =>
+      makeRetryDelay(DEFAULT_RETRY_AFTER_SECONDS, 'Fallback'),
+    ),
   )
 }
