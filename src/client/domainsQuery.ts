@@ -53,10 +53,7 @@ export const DomainsQuery = Query.define({
   maxSettledEntries: 100,
   notifyOnCompletion: true,
   handler: function* () {
-    const client = yield* DomainsClient
-
-    return args =>
-      fetchDomains(args).pipe(Effect.provideService(DomainsClient, client))
+    return fetchDomains
   },
 })
 
