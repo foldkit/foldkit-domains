@@ -30,16 +30,13 @@ import {
   TldListboxBlock,
 } from './filterListboxes'
 import { ResultsListBlock, resultsListConfig } from './resultsList'
+import { applyDomainResult, loadRequiredDomains } from './steps/domainLoading'
 import {
-  applyDomainResultStep,
-  loadRequiredDomainsStep,
-} from './steps/domainLoading'
-import {
-  changeAvailabilityFilterStep,
-  changeSortOrderStep,
-  changeTldFilterStep,
+  updateAvailabilityFilter,
+  updateSortOrder,
+  updateTldFilter,
 } from './steps/filters'
-import { requestDataSourceStep } from './steps/search'
+import { requestDataSource } from './steps/search'
 
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
   field: 'resultsList',
@@ -48,9 +45,9 @@ export const ResultsListBinding = makeBinding(ResultsListBlock, {
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(ResultsListBlock, {
-    ObservedContainerScroll: () => loadRequiredDomainsStep,
+    ObservedContainerScroll: () => loadRequiredDomains,
     ApproachedLoadedStart: makeNoopStep,
-    EndedContainerScroll: () => loadRequiredDomainsStep,
+    EndedContainerScroll: () => loadRequiredDomains,
   }),
 })
 
@@ -114,7 +111,7 @@ export const DataSourceBinding = makeBinding(DataSourceControlBlock, {
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DataSourceControlBlock, {
-    Selected: ({ value }) => requestDataSourceStep(value),
+    Selected: ({ value }) => requestDataSource(value),
   }),
 })
 
@@ -122,7 +119,7 @@ export const DomainsQueryBinding = makeBinding(DomainsQuery, {
   field: 'domainsQuery',
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DomainsQuery, {
-    CompletedFetch: applyDomainResultStep,
+    CompletedFetch: applyDomainResult,
   }),
 })
 
@@ -131,7 +128,7 @@ export const TldListboxBinding = makeBinding(TldListboxBlock, {
   init: { contextToArgs: () => [{ id: TLD_FILTER_ID }] },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(TldListboxBlock, {
-    Selected: ({ value }) => changeTldFilterStep(value),
+    Selected: ({ value }) => updateTldFilter(value),
   }),
 })
 
@@ -143,7 +140,7 @@ export const AvailabilityListboxBinding = makeBinding(
   },
 ).withOutMessagePolicy({
   fold: makeOutMessageFold(AvailabilityListboxBlock, {
-    Selected: ({ value }) => changeAvailabilityFilterStep(value),
+    Selected: ({ value }) => updateAvailabilityFilter(value),
   }),
 })
 
@@ -152,7 +149,7 @@ export const SortListboxBinding = makeBinding(SortListboxBlock, {
   init: { contextToArgs: () => [{ id: SORT_ORDER_ID }] },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(SortListboxBlock, {
-    Selected: ({ value }) => changeSortOrderStep(value),
+    Selected: ({ value }) => updateSortOrder(value),
   }),
 })
 

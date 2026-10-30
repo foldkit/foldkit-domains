@@ -10,10 +10,10 @@ import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
 import { routeToQuery } from '../route'
 import { searchViewState } from '../searchViewState'
-import { scheduleDomainRequestStep } from './domainLoading'
-import { informResultsListStep, resetResultsListStep } from './resultsList'
+import { scheduleDomainRequest } from './domainLoading'
+import { informResultsList, resetResultsList } from './resultsList'
 
-export const cancelSearchStep = makeStep(model =>
+export const cancelSearch = makeStep(model =>
   Update.combineSteps(
     Array.map(DomainsQuery.pendingArgs(model.domainsQuery), args =>
       DomainsQueryBinding.requestCancel(args),
@@ -21,13 +21,13 @@ export const cancelSearchStep = makeStep(model =>
   ),
 )
 
-export const searchQueryStep = (query: string, isRefreshRequested = false) =>
+export const searchQuery = (query: string, isRefreshRequested = false) =>
   makeStep(model => {
     const nextSearchGeneration = Number.increment(model.searchGeneration)
     const maybeDomainLabel = queryToMaybeDomainLabel(query)
 
     return Update.combineSteps([
-      cancelSearchStep,
+      cancelSearch,
       makeFieldsStep(() => ({
         searchGeneration: () => nextSearchGeneration,
         searchLayout: currentLayout =>
@@ -48,23 +48,18 @@ export const searchQueryStep = (query: string, isRefreshRequested = false) =>
           () => Option.isSome(maybeDomainLabel),
         ),
       ),
-      String.isEmpty(query) ? resetResultsListStep : informResultsListStep,
+      String.isEmpty(query) ? resetResultsList : informResultsList,
     ])
   })
 
-const replaceSearchUrlStep = (query: string) =>
-  makeCommandsStep(() => [
-    ReplaceSearchUrl({ q: Option.liftPredicate(query, String.isNonEmpty) }),
-  ])
-
-export const changeSearchQueryStep = (query: string) =>
+export const changeSearchQuery = (query: string) =>
   makeStep(model => {
     const isQueryChanged = query !== routeToQuery(model.route)
 
     return Update.combineSteps([
       ...(isQueryChanged
         ? [
-            cancelSearchStep,
+            cancelSearch,
             makeFieldsStep(() => ({
               searchGeneration: Number.increment,
               searchLayout: currentLayout =>
@@ -72,13 +67,15 @@ export const changeSearchQueryStep = (query: string) =>
             })),
           ]
         : []),
-      replaceSearchUrlStep(query),
+      makeCommandsStep(() => [
+        ReplaceSearchUrl({ q: Option.liftPredicate(query, String.isNonEmpty) }),
+      ]),
     ])
   })
 
-export const clearSearchStep = changeSearchQueryStep('')
+export const clearSearch = changeSearchQuery('')
 
-export const retrySearchStep = makeStep(model => {
+export const retrySearch = makeStep(model => {
   const search = searchViewState(model)
 
   if (search._tag === 'Ready' && search.domainRequest._tag === 'Failed') {
@@ -89,13 +86,13 @@ export const retrySearchStep = makeStep(model => {
       ? { offset: 0, limit: domainTlds.length }
       : search.domainRequest
 
-    return scheduleDomainRequestStep(range, true)
+    return scheduleDomainRequest(range, true)
   } else {
-    return searchQueryStep(routeToQuery(model.route), true)
+    return searchQuery(routeToQuery(model.route), true)
   }
 })
 
-export const changeDataSourceStep = (dataSource: DataSource) =>
+export const changeDataSource = (dataSource: DataSource) =>
   makeStep(model => {
     if (dataSource === model.dataSource) {
       return { model }
@@ -103,11 +100,11 @@ export const changeDataSourceStep = (dataSource: DataSource) =>
 
     return Update.combineSteps([
       makeFieldsStep(() => ({ dataSource: () => dataSource })),
-      searchQueryStep(routeToQuery(model.route)),
+      searchQuery(routeToQuery(model.route)),
     ])
   })
 
-export const requestDataSourceStep = (dataSource: DataSource) =>
+export const requestDataSource = (dataSource: DataSource) =>
   makeStep(model => {
     if (dataSource === 'Live' && model.dataSource === 'Demo') {
       return Update.combineSteps([
@@ -115,13 +112,6 @@ export const requestDataSourceStep = (dataSource: DataSource) =>
         LiveWarningDialogBinding.requestOpen(),
       ])
     } else {
-      return changeDataSourceStep(dataSource)
+      return changeDataSource(dataSource)
     }
   })
-
-export const continueToLiveStep = makeStep(() =>
-  Update.combineSteps([
-    changeDataSourceStep('Live'),
-    LiveWarningDialogBinding.requestClose(),
-  ]),
-)

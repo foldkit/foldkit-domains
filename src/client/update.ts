@@ -16,6 +16,7 @@ import {
   ApplicationComposition,
   CartDialogBinding,
   FiltersDialogBinding,
+  LiveWarningDialogBinding,
   ResultsListBinding,
   TldDialogBinding,
 } from './composition'
@@ -28,22 +29,22 @@ import {
 import { Cart } from './domain'
 import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
-  changeAvailabilityFilterStep,
-  changeSearchQueryStep,
-  changeSortOrderStep,
-  changeTldFilterStep,
-  clearSearchStep,
-  continueToLiveStep,
-  loadDomainsForRangeStep,
-  retrySearchStep,
-  scheduleDomainRequestStep,
-  searchQueryStep,
+  changeDataSource,
+  changeSearchQuery,
+  clearSearch,
+  loadDomainsForRange,
+  retrySearch,
+  scheduleDomainRequest,
+  searchQuery,
+  updateAvailabilityFilter,
+  updateSortOrder,
+  updateTldFilter,
 } from './steps'
 
 export const update = ApplicationComposition.makeUpdate({
-  UpdatedSearch: (model, { value }) => changeSearchQueryStep(value)(model),
+  UpdatedSearch: (model, { value }) => changeSearchQuery(value)(model),
 
-  RequestedSearch: model => searchQueryStep(routeToQuery(model.route))(model),
+  RequestedSearch: model => searchQuery(routeToQuery(model.route))(model),
 
   ReachedSearchCooldownExpiry: makeFieldsStep.fromMessage(({ nowMillis }) => ({
     maybeSearchCooldown: Option.filter(
@@ -52,12 +53,12 @@ export const update = ApplicationComposition.makeUpdate({
   })),
 
   RequestedDomains: makeStep.fromMessage(({ offset, limit }) =>
-    scheduleDomainRequestStep({ offset, limit }),
+    scheduleDomainRequest({ offset, limit }),
   ),
 
   SubmittedSearch: model =>
     Update.combineSteps(model, [
-      searchQueryStep(routeToQuery(model.route), true),
+      searchQuery(routeToQuery(model.route), true),
       makeCommandsStep(() => [DismissSearchKeyboard()]),
     ]),
 
@@ -67,16 +68,17 @@ export const update = ApplicationComposition.makeUpdate({
     }),
   ),
 
-  ClickedContinueToLive: continueToLiveStep,
-
-  CompletedFocusDataSourceButton: makeNoopStep(),
+  ClickedContinueToLive: Update.combineSteps([
+    changeDataSource('Live'),
+    LiveWarningDialogBinding.requestClose(),
+  ]),
 
   ClickedRetrySearch: Update.combineSteps([
-    retrySearchStep,
+    retrySearch,
     makeCommandsStep(() => [FocusSearchInput()]),
   ]),
 
-  PressedEscape: clearSearchStep,
+  PressedEscape: clearSearch,
 
   FocusedResultsList: makeCommandsStep(() => [RevealResultsListStart()]),
 
@@ -88,7 +90,7 @@ export const update = ApplicationComposition.makeUpdate({
   ),
 
   ClickedClearSearch: Update.combineSteps([
-    clearSearchStep,
+    clearSearch,
     makeCommandsStep(() => [FocusSearchInput()]),
   ]),
 
@@ -105,7 +107,7 @@ export const update = ApplicationComposition.makeUpdate({
 
     return Update.combineSteps(model, [
       makeFieldsStep(() => ({ route: () => nextRoute })),
-      isSearchRefreshNeeded ? searchQueryStep(nextQuery) : makeNoopStep(),
+      isSearchRefreshNeeded ? searchQuery(nextQuery) : makeNoopStep(),
       shouldScrollToTop
         ? makeCommandsStep(() => [ScrollPageToTop()])
         : makeNoopStep(),
@@ -119,17 +121,13 @@ export const update = ApplicationComposition.makeUpdate({
     }),
   ),
 
-  UpdatedTldFilter: makeStep.fromMessage(({ value }) =>
-    changeTldFilterStep(value),
-  ),
+  UpdatedTldFilter: makeStep.fromMessage(({ value }) => updateTldFilter(value)),
 
   UpdatedAvailabilityFilter: makeStep.fromMessage(({ value }) =>
-    changeAvailabilityFilterStep(value),
+    updateAvailabilityFilter(value),
   ),
 
-  UpdatedSortOrder: makeStep.fromMessage(({ value }) =>
-    changeSortOrderStep(value),
-  ),
+  UpdatedSortOrder: makeStep.fromMessage(({ value }) => updateSortOrder(value)),
 
   ClickedAddDomain: makeFieldsStep((model, { domain }) => {
     const isDomainInCart = Array.some(
@@ -179,29 +177,37 @@ export const update = ApplicationComposition.makeUpdate({
     tldSearchQuery: () => value,
   })),
 
-  ClickedTldOption: makeStep.fromMessage(({ value }) =>
+  ClickedMobileTldOption: makeStep.fromMessage(({ value }) =>
     Update.combineSteps([
-      changeTldFilterStep(value),
+      updateTldFilter(value),
       TldDialogBinding.requestClose(),
     ]),
   ),
 
-  ClickedAvailabilityOption: makeStep.fromMessage(({ value }) =>
+  ClickedMobileAvailabilityOption: makeStep.fromMessage(({ value }) =>
     Update.combineSteps([
-      changeAvailabilityFilterStep(value),
+      updateAvailabilityFilter(value),
       FiltersDialogBinding.requestClose(),
     ]),
   ),
 
-  ClickedSortOption: makeStep.fromMessage(({ value }) =>
+  ClickedMobileSortOption: makeStep.fromMessage(({ value }) =>
     Update.combineSteps([
-      changeSortOrderStep(value),
+      updateSortOrder(value),
       FiltersDialogBinding.requestClose(),
     ]),
   ),
 
-  CompletedReadCurrentTime: loadDomainsForRangeStep,
+  CompletedReadCurrentTime: loadDomainsForRange,
 
+  CompletedReleaseEarlySearchListeners: makeFieldsStep.fromMessage(
+    ({ isSearchStarted }) => ({
+      searchLayout: currentLayout =>
+        isSearchStarted ? 'Search' : currentLayout,
+    }),
+  ),
+
+  CompletedFocusDataSourceButton: makeNoopStep(),
   ClickedDomainsHome: makeNoopStep(),
   ClickedSkipToMain: makeNoopStep(),
   CompletedReplaceSearchUrl: makeNoopStep(),
@@ -216,10 +222,4 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedScrollPageToTop: makeNoopStep(),
   CompletedRevealResultsListStart: makeNoopStep(),
   CompletedDismissSearchKeyboard: makeNoopStep(),
-  CompletedReleaseEarlySearchListeners: makeFieldsStep.fromMessage(
-    ({ isSearchStarted }) => ({
-      searchLayout: currentLayout =>
-        isSearchStarted ? 'Search' : currentLayout,
-    }),
-  ),
 })

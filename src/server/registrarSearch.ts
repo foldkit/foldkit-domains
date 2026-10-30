@@ -229,12 +229,15 @@ export const makeRegistrarSearchLayer = (
                   : budget.minute.startsAt + MINUTE_MILLISECONDS
               const opensAtMillis = Math.max(secondOpensAt, minuteOpensAt)
 
-              if (
-                nowMillis >= deadlineMillis ||
-                opensAtMillis > deadlineMillis ||
-                (!HashMap.has(clients, client) &&
-                  HashMap.size(clients) >= MAX_CLIENT_COUNTERS)
-              ) {
+              const isAdmissionDeadlineExceeded =
+                nowMillis >= deadlineMillis || opensAtMillis > deadlineMillis
+              const isClientCapacityExceeded =
+                !HashMap.has(clients, client) &&
+                HashMap.size(clients) >= MAX_CLIENT_COUNTERS
+              const isAdmissionRejected =
+                isAdmissionDeadlineExceeded || isClientCapacityExceeded
+
+              if (isAdmissionRejected) {
                 return yield* Effect.fail(
                   RegistrarError.AdmissionLimited({
                     source: 'Application',

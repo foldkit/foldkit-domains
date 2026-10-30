@@ -4,7 +4,7 @@ import { Url } from 'foldkit'
 import { ReleaseEarlySearchListeners } from './command'
 import { ApplicationComposition } from './composition'
 import { routeToQuery, urlToApplicationRoute } from './route'
-import { searchQueryStep } from './steps'
+import { searchQuery } from './steps'
 
 export const init = ApplicationComposition.makeInit((url: Url.Url) => {
   const route = urlToApplicationRoute(url)
@@ -28,6 +28,6 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
       carts: { Demo: [], Live: [] },
     },
     commands: [ReleaseEarlySearchListeners()],
-    steps: [searchQueryStep(query)],
+    steps: [searchQuery(query)],
   }
 })

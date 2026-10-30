@@ -22,41 +22,46 @@ import {
 } from '../domainsQuery'
 import type { CompletedReadCurrentTimeMessage } from '../message'
 import { routeToQuery } from '../route'
-import { informResultsListStep } from './resultsList'
+import { informResultsList } from './resultsList'
 
-const trackDomainRangeStep = (
+const trackDomainRange = (
   range: DomainCandidateRange,
   nowMillis: number,
   isBlocked: boolean,
 ) =>
   makeFieldsStep(() => ({
     searchPlanningTimeMillis: () => nowMillis,
-    activeDomainCandidateRanges: ranges =>
-      Array.some(
+    activeDomainCandidateRanges: ranges => {
+      const isRangeActive = Array.some(
         ranges,
         existing =>
           existing.offset === range.offset && existing.limit === range.limit,
       )
-        ? ranges
-        : Array.append(ranges, range),
+
+      return isRangeActive ? ranges : Array.append(ranges, range)
+    },
     maybeBlockedDomainCandidateRange: () =>
       isBlocked ? Option.some(range) : Option.none(),
   }))
 
-const useFullCatalogStep = (args: DomainsQueryArgs) =>
-  makeFieldsStep(model =>
-    args.offset === 0 &&
-    args.limit === domainTlds.length &&
-    AsyncData.isSuccess(DomainsQuery.read(model.domainsQuery, args))
+const replaceActiveRangesWithFullCatalog = (args: DomainsQueryArgs) =>
+  makeFieldsStep(model => {
+    const isFullCatalogRange =
+      args.offset === 0 && args.limit === domainTlds.length
+    const isFullCatalogChecked =
+      isFullCatalogRange &&
+      AsyncData.isSuccess(DomainsQuery.read(model.domainsQuery, args))
+
+    return isFullCatalogChecked
       ? {
           activeDomainCandidateRanges: () => [
             { offset: args.offset, limit: args.limit },
           ],
         }
-      : {},
-  )
+      : {}
+  })
 
-export const scheduleDomainRequestStep = (
+export const scheduleDomainRequest = (
   { offset, limit }: DomainCandidateRange,
   isRefreshRequested = false,
 ) =>
@@ -69,33 +74,37 @@ export const scheduleDomainRequestStep = (
     }),
   ])
 
-export const loadRequiredDomainsStep = makeStep(model =>
+export const loadRequiredDomains = makeStep(model =>
   Option.match(findNextDomainRangeToLoad(model), {
     onNone: () => ({ model }),
-    onSome: range => scheduleDomainRequestStep(range)(model),
+    onSome: range => scheduleDomainRequest(range)(model),
   }),
 )
 
-export const loadDomainsForRangeStep = makeStep(
+export const loadDomainsForRange = makeStep(
   (model, message: CompletedReadCurrentTimeMessage) => {
     if (message.searchGeneration !== model.searchGeneration) {
       return { model }
     }
 
-    const maybeLabel = pipe(model.route, routeToQuery, queryToMaybeDomainLabel)
+    const maybeDomainLabel = pipe(
+      model.route,
+      routeToQuery,
+      queryToMaybeDomainLabel,
+    )
 
-    if (Option.isNone(maybeLabel)) {
+    if (Option.isNone(maybeDomainLabel)) {
       return { model }
     }
 
-    if (
-      Array.some(
-        DomainsQuery.pendingArgs(model.domainsQuery),
-        args =>
-          args.dataSource === model.dataSource &&
-          args.label === maybeLabel.value,
-      )
-    ) {
+    const isSearchPending = Array.some(
+      DomainsQuery.pendingArgs(model.domainsQuery),
+      args =>
+        args.dataSource === model.dataSource &&
+        args.label === maybeDomainLabel.value,
+    )
+
+    if (isSearchPending) {
       return { model }
     }
 
@@ -105,19 +114,21 @@ export const loadDomainsForRangeStep = makeStep(
     }
     const args = {
       dataSource: model.dataSource,
-      label: maybeLabel.value,
+      label: maybeDomainLabel.value,
       ...range,
     }
+    const isFetchRequired =
+      message.isRefreshRequested ||
+      !DomainsQuery.isFresh(model.domainsQuery, args, message.nowMillis)
     const isBlocked =
       model.dataSource === 'Live' &&
-      (message.isRefreshRequested ||
-        !DomainsQuery.isFresh(model.domainsQuery, args, message.nowMillis)) &&
+      isFetchRequired &&
       Option.exists(
         model.maybeSearchCooldown,
         cooldown => cooldown.expiresAtMillis > message.nowMillis,
       )
 
-    const loadDomainsStep = (() => {
+    const loadDomains = () => {
       if (isBlocked) {
         return makeNoopStep()
       } else if (message.isRefreshRequested) {
@@ -125,47 +136,51 @@ export const loadDomainsForRangeStep = makeStep(
       } else {
         return DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis)
       }
-    })()
+    }
 
     return Update.combineSteps([
-      trackDomainRangeStep(range, message.nowMillis, isBlocked),
-      loadDomainsStep,
-      useFullCatalogStep(args),
-      loadRequiredDomainsStep,
-      informResultsListStep,
+      trackDomainRange(range, message.nowMillis, isBlocked),
+      loadDomains(),
+      replaceActiveRangesWithFullCatalog(args),
+      loadRequiredDomains,
+      informResultsList,
     ])
   },
 )
 
-export const applyDomainResultStep = ({
+export const applyDomainResult = ({
   args,
   result,
   completedAtMillis,
 }: DomainsQueryCompletedFetch) =>
   makeStep(model => {
-    if (
-      args.dataSource !== model.dataSource ||
-      !Option.contains(
+    const isCurrentSearch =
+      args.dataSource === model.dataSource &&
+      Option.contains(
         queryToMaybeDomainLabel(routeToQuery(model.route)),
         args.label,
       )
-    ) {
+
+    if (!isCurrentSearch) {
       return { model }
     }
+
+    const isLiveSearchFailure =
+      model.dataSource === 'Live' && Result.isFailure(result)
 
     return Update.combineSteps([
       makeFieldsStep(() => ({
         searchPlanningTimeMillis: time => completedAtMillis ?? time,
         maybeSearchCooldown: maybeCooldown =>
-          model.dataSource === 'Live' && Result.isFailure(result)
+          isLiveSearchFailure
             ? Option.orElse(
                 result.failure.maybeSearchCooldown,
                 () => maybeCooldown,
               )
             : maybeCooldown,
       })),
-      useFullCatalogStep(args),
-      loadRequiredDomainsStep,
-      informResultsListStep,
+      replaceActiveRangesWithFullCatalog(args),
+      loadRequiredDomains,
+      informResultsList,
     ])
   })

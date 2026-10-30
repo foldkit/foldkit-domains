@@ -108,14 +108,15 @@ export const bootstrapSearchInput = ({
     domainsHome.addEventListener(
       'click',
       event => {
-        if (
-          event.button !== 0 ||
-          event.metaKey ||
-          event.ctrlKey ||
-          event.shiftKey ||
-          event.altKey ||
-          event.defaultPrevented
-        ) {
+        const isClientNavigationAllowed =
+          event.button === 0 &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.defaultPrevented
+
+        if (!isClientNavigationAllowed) {
           return
         }
 

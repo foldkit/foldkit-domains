@@ -210,11 +210,14 @@ export const filterAndSortDomainListings = (
 ): ReadonlyArray<DomainListing> => {
   const listings = Array.filter(
     queryToDomainListings(query, domains),
-    listing =>
-      matchesTldFilter(tldFilter)(listing) &&
-      (availabilityFilter === 'All' ||
+    listing => {
+      const isAvailabilityMatch =
+        availabilityFilter === 'All' ||
         listing._tag === 'Pending' ||
-        listing.domain._tag === 'Available'),
+        listing.domain._tag === 'Available'
+
+      return matchesTldFilter(tldFilter)(listing) && isAvailabilityMatch
+    },
   )
 
   return Match.value(sortOrder).pipe(

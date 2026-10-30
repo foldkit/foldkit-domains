@@ -64,6 +64,9 @@ const PREVIEW_RESULT_COUNT = 36
 
 const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
   const search = searchViewState(model)
+  const query = routeToQuery(model.route)
+  const isQueryInvalid =
+    String.isNonEmpty(query) && Option.isNone(queryToMaybeDomainLabel(query))
 
   return h.form(
     [
@@ -78,15 +81,12 @@ const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
         h.Type('search'),
         h.Name('q'),
         h.AriaLabel('Search domains'),
-        h.AriaInvalid(
-          String.isNonEmpty(routeToQuery(model.route)) &&
-            Option.isNone(queryToMaybeDomainLabel(routeToQuery(model.route))),
-        ),
+        h.AriaInvalid(isQueryInvalid),
         ...(search._tag === 'Failed'
           ? [h.AriaDescribedBy('search-error')]
           : []),
         h.Placeholder('Search for a domain'),
-        h.Value(routeToQuery(model.route)),
+        h.Value(query),
         h.Autocomplete('off'),
         h.Attribute('autocapitalize', 'none'),
         h.Attribute('enterkeyhint', 'search'),
@@ -533,8 +533,11 @@ const sortOrderView = (model: Model, h: ApplicationViewBuilder): Html =>
     }),
   )
 
-const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
-  h.div(
+const filtersView = (model: Model, h: ApplicationViewBuilder): Html => {
+  const isFilterOrSortActive =
+    model.availabilityFilter !== 'All' || model.sortOrder !== 'Relevance'
+
+  return h.div(
     [h.Class('filters')],
     [
       h.div(
@@ -590,7 +593,7 @@ const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
         [
           h.Id('filters-button'),
           h.Class(
-            `filters-button${model.availabilityFilter !== 'All' || model.sortOrder !== 'Relevance' ? ' has-active-filters' : ''}`,
+            `filters-button${isFilterOrSortActive ? ' has-active-filters' : ''}`,
           ),
           h.AriaLabel('Filters and sort'),
           h.AriaHasPopup('dialog'),
@@ -601,6 +604,7 @@ const filtersView = (model: Model, h: ApplicationViewBuilder): Html =>
       ),
     ],
   )
+}
 
 const visibleTldFilters = (query: string): ReadonlyArray<TldFilter> => {
   const search = pipe(
@@ -685,7 +689,7 @@ const tldDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
                                       : 'false',
                                   ),
                                   h.OnClick(
-                                    Message.ClickedTldOption({ value }),
+                                    Message.ClickedMobileTldOption({ value }),
                                   ),
                                 ],
                                 filterChoiceContent(tldFilterLabel(value), h),
@@ -777,7 +781,9 @@ const filtersDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
                                   ? render.initialFocus
                                   : []),
                                 h.OnClick(
-                                  Message.ClickedAvailabilityOption({ value }),
+                                  Message.ClickedMobileAvailabilityOption({
+                                    value,
+                                  }),
                                 ),
                               ],
                               filterChoiceContent(
@@ -802,20 +808,21 @@ const filtersDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
                             ],
                             ['Sort by'],
                           ),
-                          ...Array.map(MOBILE_SORT_ORDERS, value =>
-                            h.keyed('button')(
+                          ...Array.map(MOBILE_SORT_ORDERS, value => {
+                            const isSelected =
+                              value === model.sortOrder ||
+                              (value === 'PriceAscending' &&
+                                model.sortOrder === 'PriceDescending')
+
+                            return h.keyed('button')(
                               value,
                               [
                                 h.Type('button'),
                                 h.Class('filter-choice'),
-                                h.AriaPressed(
-                                  value === model.sortOrder ||
-                                    (value === 'PriceAscending' &&
-                                      model.sortOrder === 'PriceDescending')
-                                    ? 'true'
-                                    : 'false',
+                                h.AriaPressed(isSelected ? 'true' : 'false'),
+                                h.OnClick(
+                                  Message.ClickedMobileSortOption({ value }),
                                 ),
-                                h.OnClick(Message.ClickedSortOption({ value })),
                               ],
                               filterChoiceContent(
                                 value === 'PriceAscending'
@@ -823,8 +830,8 @@ const filtersDialogView = (model: Model, h: ApplicationViewBuilder): Html =>
                                   : sortOrderLabels[value],
                                 h,
                               ),
-                            ),
-                          ),
+                            )
+                          }),
                         ],
                       ),
                       h.button(
@@ -984,21 +991,20 @@ const searchResultsView = (model: Model, h: ApplicationViewBuilder): Html => {
     Failed: () => [],
   })
 
+  const isLoadingDomains =
+    search._tag === 'Loading' ||
+    (search._tag === 'Ready' && search.domainRequest._tag === 'Loading')
+  const isDomainRequestFailed =
+    search._tag === 'Ready' && search.domainRequest._tag === 'Failed'
+
   return h.div(
     [],
     [
       h.div(
-        [
-          h.Class('results-content'),
-          h.AriaBusy(
-            search._tag === 'Loading' ||
-              (search._tag === 'Ready' &&
-                search.domainRequest._tag === 'Loading'),
-          ),
-        ],
+        [h.Class('results-content'), h.AriaBusy(isLoadingDomains)],
         [resultsGridView(domains, results, model, h)],
       ),
-      search._tag === 'Ready' && search.domainRequest._tag === 'Failed'
+      isDomainRequestFailed
         ? h.div(
             [
               h.Class(

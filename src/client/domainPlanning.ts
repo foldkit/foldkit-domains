@@ -43,13 +43,14 @@ export const findNextDomainRangeToLoad = (
         ),
     )
 
-    if (
-      hasCompleteCatalogRequestFailed ||
-      Option.exists(
-        model.maybeBlockedDomainCandidateRange,
-        range => range.offset === 0 && range.limit === domainTlds.length,
-      )
-    ) {
+    const isCompleteCatalogRequestBlocked = Option.exists(
+      model.maybeBlockedDomainCandidateRange,
+      range => range.offset === 0 && range.limit === domainTlds.length,
+    )
+    const isCatalogRetryRequired =
+      hasCompleteCatalogRequestFailed || isCompleteCatalogRequestBlocked
+
+    if (isCatalogRetryRequired) {
       return Option.none()
     }
 

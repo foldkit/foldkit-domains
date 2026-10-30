@@ -6,7 +6,7 @@ import { makeStep } from '../definition'
 import { resultListings } from '../resultListings'
 import { groupDomainListings, resultsListConfig } from '../resultsList'
 
-export const informResultsListStep = makeStep(model =>
+export const informResultsList = makeStep(model =>
   ResultsListBinding.informItemsChanged(
     pipe(
       model,
@@ -17,6 +17,6 @@ export const informResultsListStep = makeStep(model =>
   ),
 )
 
-export const resetResultsListStep = makeStep(model =>
+export const resetResultsList = makeStep(model =>
   initAndSet(ResultsListBinding, model, { args: [resultsListConfig] }),
 )
