@@ -8,10 +8,6 @@ import { DOMAINS_RPC_PATH } from '../shared/domainsRpc'
 import { DomainsRpcLayer } from './rpc'
 
 export { prerenderPaths, renderDocument } from '../client/entry.server'
-export {
-  DomainSearchCoordinator,
-  RegistrarCoordinator,
-} from './coordinatorExports'
 
 const domainsRpc = HttpRouter.toWebHandler(DomainsRpcLayer, {
   disableLogger: true,
@@ -30,13 +26,7 @@ export const renderPage = (request: Request): Promise<Server.EntryResult> => {
   )
 
   if (isRpcRequest) {
-    return (
-      import.meta.env.DEV
-        ? domainsRpc.handler(request)
-        : import('./cloudflareRpc').then(({ coordinatedDomainsRpc }) =>
-            coordinatedDomainsRpc.handler(request),
-          )
-    ).then(Server.Responded)
+    return domainsRpc.handler(request).then(Server.Responded)
   } else {
     return renderApplicationPage(request)
   }

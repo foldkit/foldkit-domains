@@ -35,7 +35,6 @@ export const findNextDomainRangeToLoad = (
       label =>
         AsyncData.hasError(
           DomainsQuery.read(model.domainsQuery, {
-            dataSource: model.dataSource,
             label,
             offset: 0,
             limit: domainTlds.length,
@@ -43,14 +42,7 @@ export const findNextDomainRangeToLoad = (
         ),
     )
 
-    const isCompleteCatalogRequestBlocked = Option.exists(
-      model.maybeBlockedDomainCandidateRange,
-      range => range.offset === 0 && range.limit === domainTlds.length,
-    )
-    const isCatalogRetryRequired =
-      hasCompleteCatalogRequestFailed || isCompleteCatalogRequestBlocked
-
-    if (isCatalogRetryRequired) {
+    if (hasCompleteCatalogRequestFailed) {
       return Option.none()
     }
 

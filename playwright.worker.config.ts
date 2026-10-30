@@ -34,7 +34,7 @@ export default defineConfig({
     },
     {
       command: `pnpm exec wrangler dev --local --config e2e/fixtures/wrangler.jsonc --ip 127.0.0.1 --port ${RPC_PORT}`,
-      url: `${RPC_BASE_URL}/stats`,
+      url: `${RPC_BASE_URL}/health`,
       reuseExistingServer: false,
       timeout: 120_000,
     },

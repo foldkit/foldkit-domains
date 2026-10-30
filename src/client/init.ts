@@ -1,4 +1,4 @@
-import { Option, String } from 'effect'
+import { String } from 'effect'
 import { Url } from 'foldkit'
 
 import { ReleaseEarlySearchListeners } from './command'
@@ -14,18 +14,13 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
     model: {
       route,
       searchLayout: String.isNonEmpty(query) ? 'Search' : 'Landing',
-      dataSource: 'Demo',
-      isLiveLatencyAccepted: false,
       searchGeneration: 0,
-      searchPlanningTimeMillis: 0,
       activeDomainCandidateRanges: [],
-      maybeBlockedDomainCandidateRange: Option.none(),
-      maybeSearchCooldown: Option.none(),
       tldFilter: 'All',
       tldSearchQuery: '',
       availabilityFilter: 'All',
       sortOrder: 'Relevance',
-      carts: { Demo: [], Live: [] },
+      cart: [],
     },
     commands: [ReleaseEarlySearchListeners()],
     steps: [searchQuery(query)],

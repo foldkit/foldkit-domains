@@ -837,49 +837,27 @@ test('backspacing to a loaded query restores quotes without waiting for debounce
   ])
 })
 
-test('recovers from a registrar rate limit through retry without showing stale quotes', async ({
+test('failed lookups hide prices and recover through explicit retry', async ({
   page,
 }) => {
-  await page.clock.install()
   let calls = 0
   await mockDomainSearch(page, label =>
     Effect.suspend(() => {
       calls += 1
-      if (calls === 1) {
-        return Effect.fail(
-          SearchError.RateLimited({
-            source: 'Registrar',
-            retryAfterSeconds: 60,
-          }),
-        )
-      } else {
-        return Effect.succeed(makeDomainFixtures(label))
-      }
+      return calls === 1
+        ? Effect.fail(SearchError.Unavailable())
+        : Effect.succeed(makeDomainFixtures(label))
     }),
   )
-  await page.goto('/')
-  await Page.chooseDataSource(page, 'Live')
-  await page
-    .getByRole('searchbox', { name: 'Search domains' })
-    .fill('retry-idea')
-  await expect(page.getByRole('alert')).toContainText(
-    'The domain provider is busy. Please try again in 60 seconds.',
-  )
+  await page.goto('/?q=retry-idea')
+  await expect(page.getByRole('alert')).toBeVisible()
   await expect(page.locator('.results .price')).toHaveCount(0)
-  await page
-    .getByRole('searchbox', { name: 'Search domains' })
-    .fill('retry-other')
-  await expect(page.getByRole('alert')).toContainText(
-    'The domain provider is busy.',
-  )
-  expect(calls).toBe(1)
-  await page.clock.fastForward('01:00')
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.locator('.domain-card').first()).toContainText('$12.00')
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(
     page.getByRole('searchbox', { name: 'Search domains' }),
-  ).toHaveValue('retry-other')
+  ).toHaveValue('retry-idea')
 })
 
 test('shows multi-year registration and renewal quotes without treating an unconfirmed name as purchasable', async ({
@@ -903,7 +881,7 @@ test('shows multi-year registration and renewal quotes without treating an uncon
   await expect(unconfirmed).toContainText('Not available')
   await expect(unconfirmed.locator('.unavailable')).toHaveAttribute(
     'title',
-    /could not confirm/,
+    'This sample domain is marked unavailable in the demo data.',
   )
   await expect(unconfirmed.getByRole('button')).toHaveCount(0)
   await Page.chooseFilterOption(page, 'Filter by TLD', '.ai')
@@ -948,7 +926,7 @@ test('loads quotes for the visible catalog pages and preserves prices when a lat
   const viewport = page.locator('#domain-results')
   await Page.scrollResultsToOffset(page, 1140)
   await expect(page.getByRole('alert')).toContainText(
-    'Could not check availability and prices.',
+    'Could not load sample domains. Please try again.',
   )
   await expect(page.locator('.domain-card').first()).toContainText('$12.00')
   expect(windows).toEqual([
@@ -1068,79 +1046,17 @@ for (const width of [1440, 390]) {
   })
 }
 
-test('Demo and Live preserve the input and query while isolating cached quotes and carts', async ({
-  page,
-}) => {
-  const requests: Array<string> = []
-  await mockDomainSearch(page, (label, range, dataSource) => {
-    requests.push(`${dataSource}:${range.offset}`)
-    return Effect.succeed(
-      Array.map(makeDomainFixtures(label), domain =>
-        domain._tag === 'Available' && dataSource === 'Live'
-          ? Domain.Available({ ...domain, price: domain.price + 100 })
-          : domain,
-      ),
-    ).pipe(Effect.delay(dataSource === 'Live' ? '300 millis' : '0 millis'))
-  })
-  await page.setViewportSize({ width: 393, height: 852 })
-  await page.goto('/?q=acme')
-  const input = page.getByRole('searchbox', { name: 'Search domains' })
-  const inputNode = await input.elementHandle()
-  const topCard = page.locator('.domain-card').first()
-  await expect(
-    page.getByRole('button', { name: 'Data source: Demo', exact: true }),
-  ).toBeVisible()
-  await expect(topCard.locator('.price')).toHaveText('$12.00')
-  await expect(page.locator('.data-source-label')).toHaveText('Sample data')
-  await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
-  await expect(page.getByRole('status').last()).toContainText('60 of 556')
-  const demoRequests = requests.filter(request =>
-    request.startsWith('Demo:'),
-  ).length
-  await Page.chooseDataSource(page, 'Live')
-  await expect(topCard.locator('.price')).toBeHidden()
-  await expect(
-    page.getByRole('button', { name: 'Cart, 0 domains' }),
-  ).toBeVisible()
-  await expect(input).toHaveValue('acme')
-  await expect(page).toHaveURL(/\?q=acme$/)
-  expect(
-    await input.evaluate((node, original) => node === original, inputNode),
-  ).toBe(true)
-  await expect(topCard.locator('.price')).toHaveText('$112.00')
-  await expect(page.locator('.data-source-label')).toHaveText('Live · Vercel')
-  await topCard.getByRole('button', { name: 'Add acme.com to cart' }).click()
-  await Page.chooseDataSource(page, 'Demo')
-  await expect(topCard.locator('.price')).toHaveText('$12.00')
-  await expect(
-    page.getByRole('button', { name: 'Cart, 1 domains' }),
-  ).toBeVisible()
-  expect(requests.filter(request => request.startsWith('Demo:'))).toHaveLength(
-    demoRequests,
-  )
-  await topCard
-    .getByRole('button', { name: 'Remove acme.com from cart' })
-    .click()
-  await Page.chooseDataSource(page, 'Live')
-  await expect(topCard.locator('.price')).toHaveText('$112.00')
-  await expect(
-    page.getByRole('button', { name: 'Cart, 1 domains' }),
-  ).toBeVisible()
-})
-
-test('Live typing debounces intermediate keystrokes and loads the final query progressively', async ({
+test('typing debounces intermediate keystrokes and loads the final query progressively', async ({
   page,
 }) => {
   await page.clock.install()
   const requests: Array<{ label: string; offset: number; limit: number }> = []
-  await mockDomainSearch(page, (label, range, dataSource) => {
-    expect(dataSource).toBe('Live')
+  await mockDomainSearch(page, (label, range) => {
     requests.push({ label, ...range })
     return Effect.succeed(makeDomainFixtures(label))
   })
   await page.goto('/')
   await expect(page.locator('[data-foldkit-app]')).toHaveCount(0)
-  await Page.chooseDataSource(page, 'Live')
   const input = page.getByRole('searchbox', { name: 'Search domains' })
   const nowMillis = await page.evaluate(() => Date.now())
   await page.clock.pauseAt(nowMillis + 100)
@@ -1148,7 +1064,7 @@ test('Live typing debounces intermediate keystrokes and loads the final query pr
 
   for (const character of ['d', 'e', 'v', 'i', 'n']) {
     await input.pressSequentially(character)
-    await page.clock.runFor(200)
+    await page.clock.runFor(50)
   }
 
   await expect(input).toHaveValue('devin')
@@ -1167,170 +1083,4 @@ test('Live typing debounces intermediate keystrokes and loads the final query pr
     { label: 'devin', offset: 0, limit: 4 },
     { label: 'devin', offset: 4, limit: 56 },
   ])
-})
-
-test('switching away from pending Live quotes leaves cached Demo results usable', async ({
-  page,
-}) => {
-  let liveRequests = 0
-  await mockDomainSearch(page, (label, _range, dataSource) => {
-    if (dataSource === 'Live') {
-      liveRequests += 1
-      return Effect.sleep('600 millis').pipe(
-        Effect.andThen(
-          Effect.fail(
-            SearchError.RateLimited({
-              source: 'Registrar',
-              retryAfterSeconds: 60,
-            }),
-          ),
-        ),
-      )
-    }
-    return Effect.succeed(makeDomainFixtures(label))
-  })
-  await page.goto('/?q=acme')
-  const price = page.locator('.domain-card .price').first()
-  await expect(price).toHaveText('$12.00')
-  await Page.chooseDataSource(page, 'Live')
-  await expect.poll(() => liveRequests).toBe(1)
-  await Page.chooseDataSource(page, 'Demo')
-  await expect(price).toHaveText('$12.00')
-  await page.waitForTimeout(800)
-  await expect(price).toHaveText('$12.00')
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  await page.getByRole('searchbox', { name: 'Search domains' }).fill('another')
-  await expect(page.locator('.domain-card').first()).toContainText(
-    'another.com',
-  )
-  await expect(price).toHaveText('$12.00')
-})
-
-for (const width of [320, 393, 1000, 1200, 1280, 1440]) {
-  test(`data source menu matches the cart height and supports keyboard selection at ${width}px`, async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width, height: 900 })
-    await page.goto('/?q=acme')
-    const trigger = page.getByRole('button', {
-      name: 'Data source: Demo',
-      exact: true,
-    })
-    const cart = page.getByRole('button', { name: 'Cart, 0 domains' })
-    const triggerBounds = await trigger.boundingBox()
-    const cartBounds = await cart.boundingBox()
-    const brandBounds = await page
-      .getByRole('link', { name: 'Domains home' })
-      .boundingBox()
-    expect(triggerBounds?.height).toBe(cartBounds?.height)
-    expect(triggerBounds?.y).toBe(cartBounds?.y)
-    expect(triggerBounds?.x).toBeGreaterThanOrEqual(
-      (brandBounds?.x ?? 0) + (brandBounds?.width ?? 0),
-    )
-    expect((cartBounds?.x ?? 0) + (cartBounds?.width ?? 0)).toBeLessThanOrEqual(
-      width,
-    )
-    if (width > 700) {
-      const searchBounds = await page.locator('form.search').boundingBox()
-      expect(
-        (searchBounds?.x ?? 0) + (searchBounds?.width ?? 0),
-      ).toBeLessThanOrEqual(triggerBounds?.x ?? 0)
-      expect(searchBounds?.x).toBeGreaterThanOrEqual(
-        (brandBounds?.x ?? 0) + (brandBounds?.width ?? 0),
-      )
-    }
-    await trigger.focus()
-    await page.keyboard.press('ArrowDown')
-    const panel = page.getByRole('listbox', { name: 'Data source: Demo' })
-    await expect(panel).toBeVisible()
-    await expect(panel).toBeFocused()
-    await expect(panel.getByRole('option', { name: /^Demo/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    await expect(panel).toContainText('Sample prices and availability.')
-    await expect(panel).toContainText('Real quotes from Vercel.')
-    await page.keyboard.press('ArrowDown')
-    await expect(panel).toHaveAttribute(
-      'aria-activedescendant',
-      'data-source-item-1',
-    )
-    await page.keyboard.press('Enter')
-    await expect(panel).toBeHidden()
-    await Page.acknowledgeLiveWarning(page)
-    const liveTrigger = page.getByRole('button', {
-      name: 'Data source: Live',
-      exact: true,
-    })
-    await expect(liveTrigger).toBeFocused()
-    await expect(
-      page.getByRole('searchbox', { name: 'Search domains' }),
-    ).toHaveValue('acme')
-    await liveTrigger.click()
-    const livePanel = page.getByRole('listbox', { name: 'Data source: Live' })
-    await expect(
-      livePanel.getByRole('option', { name: /^Live/ }),
-    ).toHaveAttribute('aria-selected', 'true')
-    await page.keyboard.press('Escape')
-    await expect(livePanel).toBeHidden()
-    await expect(liveTrigger).toBeFocused()
-    await page.emulateMedia({ reducedMotion: 'reduce' })
-    await liveTrigger.click()
-    await expect(livePanel).toBeVisible()
-    await expect(livePanel).toHaveCSS('transition-duration', '0s')
-    await page
-      .getByRole('searchbox', { name: 'Search domains' })
-      .click({ force: true })
-    await expect(livePanel).toBeHidden()
-  })
-}
-
-test('Live warning gates requests, supports dismissal, and resets acknowledgment', async ({
-  page,
-}) => {
-  const liveRequests: Array<string> = []
-  await mockDomainSearch(page, (label, _range, dataSource) => {
-    if (dataSource === 'Live') {
-      liveRequests.push(label)
-    }
-    return Effect.succeed(makeDomainFixtures(label))
-  })
-  await page.goto('/?q=acme')
-  await expect(page.locator('.domain-card .price').first()).toBeVisible()
-  const trigger = page.getByRole('button', {
-    name: 'Data source: Demo',
-    exact: true,
-  })
-  const warning = page.getByRole('dialog', { name: 'Before you go Live' })
-  const checkbox = warning.getByRole('checkbox')
-  const continueButton = warning.getByRole('button', {
-    name: 'Continue to Live',
-  })
-
-  await trigger.click()
-  await page.getByRole('option', { name: /^Live/ }).click()
-  await expect(warning).toBeVisible()
-  await expect(continueButton).toBeDisabled()
-  expect(liveRequests).toEqual([])
-  await checkbox.click()
-  await expect(checkbox).toBeChecked()
-  await warning.getByRole('button', { name: 'Stay in Demo' }).click()
-  await expect(warning).toBeHidden()
-  await expect(trigger).toBeFocused()
-  expect(liveRequests).toEqual([])
-
-  await trigger.click()
-  await page.getByRole('option', { name: /^Live/ }).click()
-  await expect(checkbox).not.toBeChecked()
-  await expect(continueButton).toBeDisabled()
-  await page.keyboard.press('Escape')
-  await expect(warning).toBeHidden()
-  await expect(trigger).toBeFocused()
-  expect(liveRequests).toEqual([])
-
-  await Page.chooseDataSource(page, 'Live')
-  await expect.poll(() => liveRequests.length).toBeGreaterThan(0)
-  await expect(
-    page.getByRole('button', { name: 'Data source: Live', exact: true }),
-  ).toBeFocused()
 })

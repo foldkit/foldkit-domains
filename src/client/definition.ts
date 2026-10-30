@@ -16,5 +16,4 @@ export const {
   makeOutMessageFold,
   makeBinding,
   makeComposition,
-  makeSubscriptions,
 } = ApplicationDefinition

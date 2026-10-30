@@ -7,16 +7,7 @@ import { DialogBlock } from '@foldkit/ui'
 
 import { Domain, domainTlds, queryToMaybeDomainLabel } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
-import {
-  CART_DIALOG_ID,
-  FILTERS_DIALOG_ID,
-  LIVE_WARNING_DIALOG_ID,
-  TLD_DIALOG_ID,
-} from './composition'
-import {
-  DATA_SOURCE_CONTROL_ID,
-  DataSourceControlBlock,
-} from './dataSourceControl'
+import { CART_DIALOG_ID, FILTERS_DIALOG_ID, TLD_DIALOG_ID } from './composition'
 import { DomainsQuery, DomainsQueryArgs } from './domainsQuery'
 import {
   AVAILABILITY_FILTER_ID,
@@ -33,19 +24,9 @@ import { ApplicationRoute } from './route'
 export const emptyModel = Model.make({
   route: ApplicationRoute.Search({ q: Option.none() }),
   searchLayout: 'Landing',
-  dataSource: 'Demo',
-  isLiveLatencyAccepted: false,
-  liveWarningDialog: DialogBlock.init({ id: LIVE_WARNING_DIALOG_ID }).model,
-  dataSourceControl: DataSourceControlBlock.init({
-    id: DATA_SOURCE_CONTROL_ID,
-    isAnimated: true,
-  }).model,
   searchGeneration: 0,
-  searchPlanningTimeMillis: 0,
   activeDomainCandidateRanges: [],
   domainsQuery: DomainsQuery.init().model,
-  maybeBlockedDomainCandidateRange: Option.none(),
-  maybeSearchCooldown: Option.none(),
   resultsList: ResultsListBlock.init(resultsListConfig).model,
   tldListbox: TldListboxBlock.init({ id: TLD_FILTER_ID }).model,
   availabilityListbox: AvailabilityListboxBlock.init({
@@ -56,7 +37,7 @@ export const emptyModel = Model.make({
   tldSearchQuery: '',
   availabilityFilter: 'All',
   sortOrder: 'Relevance',
-  carts: { Demo: [], Live: [] },
+  cart: [],
   cartDialog: DialogBlock.init({ id: CART_DIALOG_ID }).model,
   tldDialog: DialogBlock.init({ id: TLD_DIALOG_ID, isAnimated: true }).model,
   filtersDialog: DialogBlock.init({ id: FILTERS_DIALOG_ID, isAnimated: true })
@@ -95,7 +76,6 @@ export const withDomainsForRange = (
 
   return modifyFields(model, {
     domainsQuery: () => domainsCompletion.model,
-    searchPlanningTimeMillis: () => completedAtMillis,
     activeDomainCandidateRanges: ranges =>
       Array.some(
         ranges,
@@ -114,7 +94,6 @@ export const readyModel = (query: string): Model =>
       searchLayout: () => 'Search',
     }),
     {
-      dataSource: 'Demo',
       label: Option.getOrThrow(queryToMaybeDomainLabel(query)),
       offset: 0,
       limit: domainTlds.length,

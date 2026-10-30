@@ -1,19 +1,16 @@
-import { Array, Effect, Fiber, Result, Schema } from 'effect'
+import { Array, Effect, pipe } from 'effect'
 
 import { expect, test } from '@playwright/test'
 
 import { DomainsClient, makeDomainsClientLayer } from '../src/client/rpc'
-import { SearchError } from '../src/shared/domainsRpc'
+import { makeDemoDomains } from '../src/shared/demoDomains'
+import type { DomainCandidateRange } from '../src/shared/domain'
 
-const SEARCH_BURST_SIZE = 10
-
-const Stats = Schema.Struct({
-  calls: Schema.Int,
-  inFlight: Schema.Int,
-  maximumInFlight: Schema.Int,
-})
-
-const searchDomains = (baseURL: string | undefined, label: string) => {
+const searchDomains = (
+  baseURL: string | undefined,
+  label: string,
+  range: Partial<DomainCandidateRange> = {},
+) => {
   if (baseURL === undefined) {
     throw new Error('The Worker RPC regression requires a base URL')
   }
@@ -21,7 +18,7 @@ const searchDomains = (baseURL: string | undefined, label: string) => {
   return Effect.scoped(
     Effect.gen(function* () {
       const client = yield* DomainsClient
-      return yield* client.SearchDomains({ mode: 'Live', label })
+      return yield* client.SearchDomains({ label, ...range })
     }),
   ).pipe(
     Effect.provide(makeDomainsClientLayer(`${baseURL}/rpc`)),
@@ -29,114 +26,62 @@ const searchDomains = (baseURL: string | undefined, label: string) => {
   )
 }
 
-test('overlapping HTTP requests use independent lookups and reuse completed quotes', async ({
+test('production demo RPC returns the requested range and repeatable complete results', async ({
   baseURL,
-  request,
 }) => {
-  const readStats = async () =>
-    Schema.decodeUnknownSync(Stats)(await (await request.get('/stats')).json())
-  const before = await readStats()
-  const [first, duplicate] = await Effect.runPromise(
-    Effect.all(
-      [searchDomains(baseURL, 'overlap'), searchDomains(baseURL, 'overlap')],
-      { concurrency: 'unbounded' },
+  const label = 'rpc-demo'
+  const expected = makeDemoDomains(label)
+
+  expect(await Effect.runPromise(searchDomains(baseURL, label))).toEqual(
+    expected,
+  )
+  expect(
+    await Effect.runPromise(
+      searchDomains(baseURL, label, { offset: 4, limit: 56 }),
     ),
+  ).toEqual(pipe(expected, Array.drop(4), Array.take(56)))
+  expect(await Effect.runPromise(searchDomains(baseURL, label))).toEqual(
+    expected,
   )
-  expect(first).toHaveLength(556)
-  expect(duplicate).toEqual(first)
-  expect((await readStats()).calls - before.calls).toBe(6)
-  expect(await Effect.runPromise(searchDomains(baseURL, 'overlap'))).toEqual(
-    first,
-  )
-  expect((await readStats()).calls - before.calls).toBe(6)
 })
 
-test('excess uncached searches fail promptly and recover after the admission window', async ({
+test('overlapping HTTP requests return independent query and range results', async ({
   baseURL,
-  request,
 }) => {
-  const searches = Effect.runPromise(
+  const searches = Array.map(Array.range(1, 30), index => ({
+    label: `overlap-${index}`,
+    offset: index,
+    limit: 4,
+  }))
+  const responses = await Effect.runPromise(
     Effect.all(
-      Array.map(Array.range(1, SEARCH_BURST_SIZE), index =>
-        searchDomains(baseURL, `capacity-${index}`),
+      Array.map(searches, ({ label, offset, limit }) =>
+        searchDomains(baseURL, label, { offset, limit }),
       ),
       { concurrency: 'unbounded' },
     ),
   )
-  await expect
-    .poll(
-      async () =>
-        Schema.decodeUnknownSync(Stats)(
-          await (await request.get('/stats')).json(),
-        ).inFlight,
-    )
-    .toBe(SEARCH_BURST_SIZE * 2)
-  const overloaded = await Effect.runPromise(
-    searchDomains(baseURL, 'capacity-three').pipe(Effect.result),
-  )
-  expect(overloaded).toEqual(
-    Result.fail(
-      SearchError.RateLimited({ source: 'Application', retryAfterSeconds: 1 }),
+
+  expect(responses).toEqual(
+    Array.map(searches, ({ label, offset, limit }) =>
+      pipe(makeDemoDomains(label), Array.drop(offset), Array.take(limit)),
     ),
   )
-  for (const domains of await searches) {
-    expect(domains).toHaveLength(556)
-  }
-  expect(
-    await Effect.runPromise(searchDomains(baseURL, 'capacity-three')),
-  ).toHaveLength(556)
-  const stats = Schema.decodeUnknownSync(Stats)(
-    await (await request.get('/stats')).json(),
-  )
-  expect(stats.maximumInFlight).toBe(SEARCH_BURST_SIZE * 2)
 })
 
-test('cancelled HTTP requests cannot leave admission permanently blocked', async ({
-  baseURL,
+test('RPC rejects unsupported media and oversized bodies without caching responses', async ({
   request,
 }) => {
-  const searches = Array.map(Array.range(1, SEARCH_BURST_SIZE), index =>
-    Effect.runFork(searchDomains(baseURL, `cancelled-${index}`)),
-  )
+  const unsupported = await request.post('/rpc', {
+    headers: { 'content-type': 'text/plain' },
+    data: 'not JSON',
+  })
+  expect(unsupported.status()).toBe(415)
+  expect(unsupported.headers()['cache-control']).toBe('no-store')
 
-  try {
-    await expect
-      .poll(
-        async () =>
-          Schema.decodeUnknownSync(Stats)(
-            await (await request.get('/stats')).json(),
-          ).inFlight,
-      )
-      .toBe(SEARCH_BURST_SIZE * 2)
-  } finally {
-    await Effect.runPromise(
-      Effect.all(Array.map(searches, Fiber.interrupt), {
-        concurrency: 'unbounded',
-      }),
-    )
-  }
-
-  await expect
-    .poll(
-      async () => {
-        const result = await Effect.runPromise(
-          searchDomains(baseURL, 'after-cancel').pipe(Effect.result),
-        )
-
-        if (Result.isSuccess(result)) {
-          expect(result.success).toHaveLength(556)
-          return true
-        } else {
-          expect(result.failure).toEqual(
-            SearchError.RateLimited({
-              source: 'Application',
-              retryAfterSeconds: 1,
-            }),
-          )
-          return false
-        }
-      },
-      { timeout: 5000 },
-    )
-    .toBe(true)
+  const oversized = await request.post('/rpc', {
+    data: { padding: 'x'.repeat(2000) },
+  })
+  expect(oversized.status()).toBe(413)
+  expect(oversized.headers()['cache-control']).toBe('no-store')
 })

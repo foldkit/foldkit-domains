@@ -407,7 +407,6 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
     page.getByRole('link', { name: 'Sign Up', exact: true }),
     page.getByRole('link', { name: 'Login', exact: true }),
     page.getByRole('button', { name: 'Cart, 0 domains' }),
-    page.getByRole('button', { name: 'Data source: Demo', exact: true }),
     page.getByRole('link', { name: 'Domains home' }),
     page.getByRole('link', { name: 'Skip to main content' }),
   ]) {
@@ -668,35 +667,4 @@ test('custom filter backgrounds and modal text have readable contrast, and the c
     ).toBeGreaterThanOrEqual(MINIMUM_TEXT_CONTRAST)
     expect(appearance.isUnobscured).toBe(true)
   }
-})
-
-test('Live latency acknowledgment is accessible and supports keyboard consent', async ({
-  page,
-}, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 })
-  await mockDomainSearch(page)
-  await page.goto('/?q=acme')
-  await page
-    .getByRole('button', { name: 'Data source: Demo', exact: true })
-    .click()
-  await page.getByRole('option', { name: /^Live/ }).click()
-  const warning = page.getByRole('dialog', { name: 'Before you go Live' })
-  const checkbox = warning.getByRole('checkbox')
-  const continueButton = warning.getByRole('button', {
-    name: 'Continue to Live',
-  })
-  await expect(checkbox).toBeFocused()
-  await expect(continueButton).toBeDisabled()
-  await checkAccessibility(page, testInfo, 'live-latency-warning')
-  await page.screenshot({
-    path: testInfo.outputPath('live-latency-warning.png'),
-  })
-  await page.keyboard.press('Space')
-  await expect(checkbox).toBeChecked()
-  await expect(continueButton).toBeEnabled()
-  await page.keyboard.press('Escape')
-  await expect(warning).toBeHidden()
-  await expect(
-    page.getByRole('button', { name: 'Data source: Demo', exact: true }),
-  ).toBeFocused()
 })

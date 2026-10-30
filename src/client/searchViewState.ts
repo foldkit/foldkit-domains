@@ -1,4 +1,4 @@
-import { Array, Duration, Effect, Option, Schema, String, pipe } from 'effect'
+import { Array, Effect, Option, Schema, String, pipe } from 'effect'
 import { AsyncData } from 'foldkit'
 import { defineTaggedUnion } from 'foldkit/schema'
 
@@ -11,7 +11,6 @@ import { mergeDomainsByName } from './domain'
 import { DomainsQuery } from './domainsQuery'
 import type { Model } from './model'
 import { routeToQuery } from './route'
-import { formatRateLimitMessage } from './searchCooldown'
 
 export const DomainRequestPresentation = defineTaggedUnion({
   Idle: {},
@@ -54,7 +53,6 @@ export const searchViewState = (model: Model): SearchViewState => {
   const rangeQueries = Array.map(model.activeDomainCandidateRanges, range => ({
     range,
     data: DomainsQuery.read(model.domainsQuery, {
-      dataSource: model.dataSource,
       label: maybeLabel.value,
       ...range,
     }),
@@ -80,28 +78,6 @@ export const searchViewState = (model: Model): SearchViewState => {
       Option.map(AsyncData.getError(data), failure => ({
         ...range,
         error: failure.error,
-      })),
-    ),
-    Option.orElse(() =>
-      Option.map(model.maybeBlockedDomainCandidateRange, range => ({
-        ...range,
-        error: Option.match(model.maybeSearchCooldown, {
-          onNone: () => 'Please try again.',
-          onSome: cooldown =>
-            formatRateLimitMessage(
-              cooldown.source,
-              Math.max(
-                1,
-                Math.ceil(
-                  Duration.toSeconds(
-                    Duration.millis(
-                      cooldown.expiresAtMillis - model.searchPlanningTimeMillis,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        }),
       })),
     ),
   )

@@ -12,7 +12,6 @@ export const Message = defineMessageUnion({
   SubmittedSearch: {},
   RequestedSearch: {},
   RequestedDomains: DomainCandidateRange.fields,
-  ReachedSearchCooldownExpiry: { nowMillis: Schema.Number },
   PressedEscape: {},
   FocusedResultsList: {},
   PressedResultsListScrollKey: { key: ResultsListScrollKey },
@@ -35,9 +34,6 @@ export const Message = defineMessageUnion({
   ClickedMobileAvailabilityOption: { value: AvailabilityFilter },
   ClickedMobileSortOption: { value: SortOrder },
   ClickedRetrySearch: {},
-  UpdatedLiveLatencyAcceptance: { isAccepted: Schema.Boolean },
-  ClickedContinueToLive: {},
-  CompletedFocusDataSourceButton: {},
   CompletedReadCurrentTime: {
     searchGeneration: Schema.Number,
     nowMillis: Schema.Number,

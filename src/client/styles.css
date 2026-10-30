@@ -104,79 +104,8 @@
     @apply mb-0;
   }
 
-  .data-source-label {
+  .sample-data-label {
     @apply text-xs text-gray-400;
-  }
-
-  .data-source {
-    @apply relative shrink-0;
-  }
-
-  .data-source-trigger-content {
-    @apply flex items-center gap-2;
-  }
-
-  .data-source-trigger-copy {
-    @apply flex items-center gap-1.5;
-  }
-
-  .data-source-caption {
-    @apply text-gray-400;
-  }
-
-  .data-source-current::before {
-    content: '· ';
-  }
-
-  .data-source-trigger .icon {
-    @apply size-3.5;
-  }
-
-  .data-source-options {
-    @apply z-50 w-72 max-w-[calc(100vw-32px)] rounded-lg border border-gray-700 bg-gray-950 p-1 text-[13px] text-gray-50 shadow-[0_12px_40px_#000b] outline-none;
-  }
-
-  .data-source-options[data-transition] {
-    transition:
-      opacity 160ms ease-out,
-      translate 160ms ease-out;
-  }
-
-  .data-source-options[data-closed] {
-    opacity: 0;
-    translate: 0 -8px;
-  }
-
-  .data-source-option {
-    @apply cursor-pointer rounded-md px-3 py-3 select-none;
-  }
-
-  .data-source-option[data-active] {
-    @apply bg-gray-900;
-  }
-
-  .data-source-option-content {
-    @apply flex items-center justify-between gap-4;
-  }
-
-  .data-source-option-copy {
-    @apply flex flex-col gap-1;
-  }
-
-  .data-source-option-label {
-    @apply font-medium;
-  }
-
-  .data-source-option-description {
-    @apply text-xs text-gray-400;
-  }
-
-  .data-source-option-check {
-    @apply invisible;
-  }
-
-  .data-source-option[data-selected] .data-source-option-check {
-    @apply visible;
   }
 
   .skip-link {
@@ -584,7 +513,6 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .data-source-options[data-transition],
     .filters-panel[data-transition],
     .filters-backdrop[data-transition] {
       transition: none;
@@ -684,34 +612,6 @@
 
   .dialog-backdrop {
     @apply absolute inset-0 w-full border-0 bg-black/60;
-  }
-
-  .live-warning-panel {
-    @apply absolute top-1/2 left-1/2 max-h-[calc(100dvh-32px)] w-[min(480px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-xl border border-gray-700 bg-gray-950 p-6 shadow-xl;
-  }
-
-  .live-warning-copy {
-    @apply text-sm leading-6 text-gray-300;
-  }
-
-  .live-warning-acceptance {
-    @apply mt-6 flex items-center gap-3 text-sm leading-6;
-  }
-
-  .live-warning-checkbox {
-    @apply flex size-11 shrink-0 items-center justify-center rounded-md border border-gray-600 data-checked:border-gray-50 data-checked:bg-gray-50 data-checked:text-black;
-  }
-
-  .live-warning-footnote {
-    @apply mt-4 text-xs leading-5 text-gray-400;
-  }
-
-  .live-warning-actions {
-    @apply mt-6 flex flex-wrap justify-end gap-3;
-  }
-
-  .live-warning-continue {
-    @apply disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .cart-panel {
@@ -832,22 +732,6 @@
     [data-search-layout='Search'] .search {
       @apply top-[75px] h-[38px];
       width: calc(100vw - 32px);
-    }
-
-    .data-source-trigger {
-      @apply h-11 px-2.5;
-    }
-
-    .data-source-trigger-copy {
-      @apply flex-col items-start gap-0 text-xs leading-4;
-    }
-
-    .data-source-caption {
-      @apply text-[10px];
-    }
-
-    .data-source-current::before {
-      content: none;
     }
 
     .cart-button {

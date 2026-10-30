@@ -39,8 +39,7 @@ describe('startup', () => {
       expect(applicationInit.model.searchLayout).toBe(
         query ? 'Search' : 'Landing',
       )
-      expect(applicationInit.model.dataSource).toBe('Demo')
-      expect(applicationInit.model.carts).toEqual({ Demo: [], Live: [] })
+      expect(applicationInit.model.cart).toEqual([])
       expect(routeToQuery(applicationInit.model.route)).toBe(query)
       expect(searchViewState(applicationInit.model)._tag).toBe(viewStateTag)
       expect(

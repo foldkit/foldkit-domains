@@ -4,19 +4,13 @@ import { DialogBlock } from '@foldkit/ui'
 
 import {
   FocusCartButton,
-  FocusDataSourceButton,
   FocusFiltersButton,
   FocusTldFilterButton,
 } from './command'
 import {
-  DATA_SOURCE_CONTROL_ID,
-  DataSourceControlBlock,
-} from './dataSourceControl'
-import {
   makeBinding,
   makeCommandsStep,
   makeComposition,
-  makeFieldsStep,
   makeNoopStep,
   makeOutMessageFold,
 } from './definition'
@@ -36,7 +30,6 @@ import {
   updateSortOrder,
   updateTldFilter,
 } from './steps/filters'
-import { requestDataSource } from './steps/search'
 
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
   field: 'resultsList',
@@ -47,7 +40,7 @@ export const ResultsListBinding = makeBinding(ResultsListBlock, {
   fold: makeOutMessageFold(ResultsListBlock, {
     ObservedContainerScroll: () => loadRequiredDomains,
     ApproachedLoadedStart: makeNoopStep,
-    EndedContainerScroll: () => loadRequiredDomains,
+    EndedContainerScroll: makeNoopStep,
   }),
 })
 
@@ -87,31 +80,6 @@ export const TldDialogBinding = makeBinding(DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: () => makeCommandsStep(() => [FocusTldFilterButton()]),
-  }),
-})
-
-export const LIVE_WARNING_DIALOG_ID = 'domains-live-warning'
-
-export const LiveWarningDialogBinding = makeBinding(DialogBlock, {
-  field: 'liveWarningDialog',
-  init: { contextToArgs: () => [{ id: LIVE_WARNING_DIALOG_ID }] },
-}).withOutMessagePolicy({
-  fold: makeOutMessageFold(DialogBlock, {
-    Opened: makeNoopStep,
-    Closed: () =>
-      makeFieldsStep(() => ({ isLiveLatencyAccepted: () => false })),
-    CompletedClose: () => makeCommandsStep(() => [FocusDataSourceButton()]),
-  }),
-})
-
-export const DataSourceBinding = makeBinding(DataSourceControlBlock, {
-  field: 'dataSourceControl',
-  init: {
-    contextToArgs: () => [{ id: DATA_SOURCE_CONTROL_ID, isAnimated: true }],
-  },
-}).withOutMessagePolicy({
-  fold: makeOutMessageFold(DataSourceControlBlock, {
-    Selected: ({ value }) => requestDataSource(value),
   }),
 })
 
@@ -155,8 +123,6 @@ export const SortListboxBinding = makeBinding(SortListboxBlock, {
 
 export const ApplicationComposition = makeComposition({
   bindings: [
-    DataSourceBinding,
-    LiveWarningDialogBinding,
     ResultsListBinding,
     CartDialogBinding,
     FiltersDialogBinding,

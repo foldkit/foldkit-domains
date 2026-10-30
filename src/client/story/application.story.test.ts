@@ -1,4 +1,4 @@
-import { Array, Option } from 'effect'
+import { Array, Option, Result } from 'effect'
 import { UrlRequest } from 'foldkit/navigation'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { toParentMessage } from 'foldkit/test'
@@ -6,7 +6,6 @@ import { describe, expect, test } from 'vitest'
 
 import { VirtualList } from '@foldkit/ui'
 
-import { DataSource } from '../../shared/dataSource'
 import { Domain } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
 import {
@@ -16,8 +15,8 @@ import {
   ReplaceSearchUrl,
   ScrollPageToTop,
 } from '../command'
-import { ResultsListBinding } from '../composition'
-import { DomainsQuery } from '../domainsQuery'
+import { DomainsQueryBinding, ResultsListBinding } from '../composition'
+import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
 import { Message } from '../message'
 import { emptyModel, readyModel, urlOrThrow } from '../model.fixture'
 import { ResultsListBlock } from '../resultsList'
@@ -25,6 +24,7 @@ import { ApplicationRoute, routeToQuery, searchHref } from '../route'
 import { SearchViewState, searchViewState } from '../searchViewState'
 import { update } from '../update'
 import {
+  domainsRequestKey,
   makeDomainsFetch,
   resolveDomainsCancellation,
   resolveDomainsSuccess,
@@ -35,7 +35,6 @@ import {
 
 test('typing synchronizes the URL before the route starts its domain request', () => {
   const args = {
-    dataSource: DataSource.make('Demo'),
     label: 'fresh',
     offset: 0,
     limit: 4,
@@ -96,7 +95,6 @@ describe('domain validation', () => {
     { query: 'a'.repeat(63), label: 'a'.repeat(63) },
   ])('searches the normalized label for $query', ({ query, label }) => {
     const args = {
-      dataSource: DataSource.make('Demo'),
       label,
       offset: 0,
       limit: 4,
@@ -160,7 +158,6 @@ describe('domain validation', () => {
 
 test('an unchanged input keeps its active Query request', () => {
   const args = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
@@ -201,9 +198,84 @@ test('an unchanged input keeps its active Query request', () => {
   )
 })
 
+test.each([
+  {
+    name: 'success',
+    result: Result.succeed(Array.take(makeDomainFixtures('acme'), 4)),
+  },
+  {
+    name: 'failure',
+    result: Result.fail(
+      DomainsQueryFailure.make({ error: 'Sample data unavailable' }),
+    ),
+  },
+])(
+  'a canceled $name before URL delivery cannot restore old results or schedule loading',
+  ({ result }) => {
+    const previousArgs = { label: 'acme', offset: 0, limit: 4 }
+    const currentArgs = { label: 'other', offset: 0, limit: 4 }
+    const currentDomains = Array.take(makeDomainFixtures('other'), 4)
+
+    story(
+      update,
+      given(emptyModel),
+      message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
+      ),
+      resolveSearchTime(1, 0),
+      Command.expectHas(makeDomainsFetch(previousArgs, 1)),
+      message(Message.UpdatedSearch({ value: 'other' })),
+      resolveDomainsCancellation(previousArgs, 1),
+      resolveResultsListScrolls,
+      Command.expectExact(ReplaceSearchUrl({ q: Option.some('other') })),
+      message(
+        toParentMessage(
+          DomainsQueryBinding,
+          DomainsQuery.Message.CompletedFetch({
+            args: previousArgs,
+            generation: 1,
+            requestKey: domainsRequestKey(previousArgs),
+            result,
+            completedAtMillis: 100,
+          }),
+        ),
+      ),
+      model(model => {
+        expect(routeToQuery(model.route)).toBe('acme')
+        expect(searchViewState(model)).toEqual(SearchViewState.Loading())
+      }),
+      Command.expectExact(ReplaceSearchUrl({ q: Option.some('other') })),
+      Command.resolve(
+        ReplaceSearchUrl({ q: Option.some('other') }),
+        Message.CompletedReplaceSearchUrl(),
+      ),
+      message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=other') }),
+      ),
+      resolveSearchTime(3, 200),
+      Command.expectHas(makeDomainsFetch(currentArgs, 3)),
+      resolveDomainsSuccess(currentArgs, 3, currentDomains, 220),
+      model(model => {
+        expect(routeToQuery(model.route)).toBe('other')
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({ domains: currentDomains }),
+        )
+      }),
+      resolveRemainingFirstPageDomains(
+        'other',
+        3,
+        4,
+        Array.take(Array.drop(makeDomainFixtures('other'), 4), 56),
+        220,
+      ),
+      resolveResultsListScrolls,
+      Command.expectNone(),
+    )
+  },
+)
+
 test('a planning Clock from the previous route cannot start domain lookups', () => {
   const otherArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -245,7 +317,6 @@ test('a planning Clock from the previous route cannot start domain lookups', () 
 
 test('leaving search cancels its pending Query key', () => {
   const args = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
@@ -383,12 +454,12 @@ test('cart additions are unique and removals are idempotent', () => {
     message(Message.ClickedAddDomain({ domain })),
     message(Message.ClickedRemoveDomain({ name: 'missing.com' })),
     model(model => {
-      expect(model.carts.Demo).toEqual([domain])
+      expect(model.cart).toEqual([domain])
     }),
     message(Message.ClickedRemoveDomain({ name: domain.name })),
     message(Message.ClickedRemoveDomain({ name: domain.name })),
     model(model => {
-      expect(model.carts.Demo).toEqual([])
+      expect(model.cart).toEqual([])
     }),
     Command.expectNone(),
   )

@@ -170,11 +170,11 @@ export const filterAndSortDomains = (
   )
   const availableDomains = Array.filter(
     filteredDomains,
-    Domain.isAnyOf(['Available']),
+    Domain.guards.Available,
   )
   const unconfirmedDomains = Array.filter(
     filteredDomains,
-    Domain.isAnyOf(['Unconfirmed']),
+    Domain.guards.Unconfirmed,
   )
 
   return Match.value(sortOrder).pipe(
@@ -235,7 +235,7 @@ export const filterAndSortDomainListings = (
           ),
           domainToReadyListing,
         ),
-        Array.filter(listings, DomainListing.isAnyOf(['Pending'])),
+        Array.filter(listings, DomainListing.guards.Pending),
       ),
     ),
     Match.exhaustive,

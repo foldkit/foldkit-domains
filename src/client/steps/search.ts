@@ -1,10 +1,9 @@
 import { Array, Number, Option, String } from 'effect'
 import { Update } from 'foldkit'
 
-import { DataSource } from '../../shared/dataSource'
 import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
 import { ReadCurrentTime, ReplaceSearchUrl } from '../command'
-import { DomainsQueryBinding, LiveWarningDialogBinding } from '../composition'
+import { DomainsQueryBinding } from '../composition'
 import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
 import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
@@ -33,7 +32,6 @@ export const searchQuery = (query: string, isRefreshRequested = false) =>
         searchLayout: currentLayout =>
           String.isNonEmpty(query) ? 'Search' : currentLayout,
         activeDomainCandidateRanges: () => [],
-        maybeBlockedDomainCandidateRange: () => Option.none(),
       })),
       makeCommandsStep(() =>
         Array.filter(
@@ -91,27 +89,3 @@ export const retrySearch = makeStep(model => {
     return searchQuery(routeToQuery(model.route), true)
   }
 })
-
-export const changeDataSource = (dataSource: DataSource) =>
-  makeStep(model => {
-    if (dataSource === model.dataSource) {
-      return { model }
-    }
-
-    return Update.combineSteps([
-      makeFieldsStep(() => ({ dataSource: () => dataSource })),
-      searchQuery(routeToQuery(model.route)),
-    ])
-  })
-
-export const requestDataSource = (dataSource: DataSource) =>
-  makeStep(model => {
-    if (dataSource === 'Live' && model.dataSource === 'Demo') {
-      return Update.combineSteps([
-        makeFieldsStep(() => ({ isLiveLatencyAccepted: () => false })),
-        LiveWarningDialogBinding.requestOpen(),
-      ])
-    } else {
-      return changeDataSource(dataSource)
-    }
-  })

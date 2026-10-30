@@ -11,7 +11,6 @@ export {
 export { informResultsList } from './resultsList'
 export {
   clearSearch,
-  changeDataSource,
   changeSearchQuery,
   retrySearch,
   searchQuery,

@@ -18,26 +18,18 @@
     "dev:cloudflare": "pnpm --dir infra exec alchemy dev",
     "test:e2e:worker": "playwright test --config playwright.worker.config.ts",
     "test:e2e:preview": "playwright test --config playwright.preview.config.ts",
-    "test:capacity": "playwright test --config playwright.capacity.config.ts",
-    "diagnose:search": "playwright test --config playwright.timing.config.ts",
-    "test:live": "playwright test --config playwright.live.config.ts",
     "generate:social": "node scripts/generate-social-assets.ts"
   },
   "dependencies": {
-    "@alchemy.run/cloudflare": "2.0.0-beta.84",
     "@effect/platform-browser": "4.0.6",
-    "@effect/platform-bun": "4.0.6",
-    "@effect/platform-node": "4.0.6",
     "@foldkit/devtools": "0.169.0-canary.90746b32d2ca",
     "@foldkit/ui": "0.169.0-canary.90746b32d2ca",
     "@fontsource-variable/geist": "^5.3.0",
-    "alchemy": "2.0.0-beta.84",
     "effect": "4.0.6",
     "foldkit": "0.169.0-canary.90746b32d2ca"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
-    "@cloudflare/workers-types": "5.20261026.1",
     "@effect/tsgo": "0.50.0",
     "@foldkit/devtools-mcp": "0.25.0-canary.90746b32d2ca",
     "@foldkit/oxlint-plugin": "0.15.3-canary.90746b32d2ca",

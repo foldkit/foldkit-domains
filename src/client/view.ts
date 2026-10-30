@@ -1,7 +1,7 @@
 import { Array, Number, Option, Schema, String, pipe } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
 
-import { Checkbox, type Listbox } from '@foldkit/ui'
+import { type Listbox } from '@foldkit/ui'
 import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
 
 import {
@@ -16,20 +16,16 @@ import {
   AvailabilityListboxBinding,
   CART_DIALOG_ID,
   CartDialogBinding,
-  DataSourceBinding,
   FILTERS_DIALOG_ID,
   FiltersDialogBinding,
-  LiveWarningDialogBinding,
   ResultsListBinding,
   SortListboxBinding,
   TLD_DIALOG_ID,
   TldDialogBinding,
   TldListboxBinding,
 } from './composition'
-import { DATA_SOURCE_CONTROL_ID } from './dataSourceControl'
 import {
   AvailabilityFilter,
-  Cart,
   DomainListing,
   SortOrder,
   TOP_RESULT_COUNT,
@@ -112,63 +108,6 @@ const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
   )
 }
 
-const dataSourceView = (model: Model, h: ApplicationViewBuilder): Html =>
-  h.block(
-    DataSourceBinding.embedView({
-      slotId: DATA_SOURCE_CONTROL_ID,
-      model: model.dataSourceControl,
-      viewInputs: {
-        items: ['Demo', 'Live'],
-        maybeSelectedValue: Option.some(model.dataSource),
-        ariaLabel: `Data source: ${model.dataSource}`,
-        anchor: { placement: 'bottom-end', gap: 8, padding: 16, portal: true },
-        className: 'data-source',
-        buttonClassName: 'button data-source-trigger',
-        buttonAttributes: childAttributes([
-          h.AriaDescribedBy('data-source-description'),
-        ]),
-        itemsClassName: 'data-source-options',
-        backdropClassName: 'filter-backdrop',
-        buttonContent: h.span(
-          [h.Class('data-source-trigger-content')],
-          [
-            h.span(
-              [h.Class('data-source-trigger-copy')],
-              [
-                h.span([h.Class('data-source-caption')], ['Data source ']),
-                h.span([h.Class('data-source-current')], [model.dataSource]),
-              ],
-            ),
-            Icon.chevronDown(),
-          ],
-        ),
-        itemToConfig: value => ({
-          className: 'data-source-option',
-          content: h.span(
-            [h.Class('data-source-option-content')],
-            [
-              h.span(
-                [h.Class('data-source-option-copy')],
-                [
-                  h.span([h.Class('data-source-option-label')], [value]),
-                  h.span(
-                    [h.Class('data-source-option-description')],
-                    [
-                      value === 'Demo'
-                        ? 'Sample prices and availability.'
-                        : 'Real quotes from Vercel.',
-                    ],
-                  ),
-                ],
-              ),
-              h.span([h.Class('data-source-option-check')], [Icon.check()]),
-            ],
-          ),
-        }),
-      },
-    }),
-  )
-
 const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.header(
     [h.Class('header')],
@@ -210,22 +149,19 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
       h.div(
         [h.Class('ml-auto flex items-center gap-2 max-[700px]:gap-1.5')],
         [
-          dataSourceView(model, h),
           h.button(
             [
               h.Id('cart-button'),
               h.Class('button cart-button'),
               h.OnClick(Message.ClickedCart()),
-              h.AriaLabel(
-                `Cart, ${Array.length(Cart.forDataSource(model.carts, model.dataSource))} domains`,
-              ),
+              h.AriaLabel(`Cart, ${Array.length(model.cart)} domains`),
               h.AriaHasPopup('dialog'),
               h.AriaControls(CART_DIALOG_ID),
             ],
             [
               Icon.cart(),
               h.span([], ['Cart']),
-              Array.match(Cart.forDataSource(model.carts, model.dataSource), {
+              Array.match(model.cart, {
                 onEmpty: () => h.empty,
                 onNonEmpty: cart =>
                   h.span(
@@ -256,7 +192,7 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
           h.AriaAtomic(true),
         ],
         [
-          Array.match(Cart.forDataSource(model.carts, model.dataSource), {
+          Array.match(model.cart, {
             onEmpty: () => 'Your cart is empty.',
             onNonEmpty: cart =>
               `${Array.length(cart)} ${Array.length(cart) === 1 ? 'domain' : 'domains'} in your cart.`,
@@ -314,10 +250,7 @@ const readyDomainActionView = (
   model: Model,
   h: ApplicationViewBuilder,
 ): Html => {
-  const isInCart = Array.some(
-    Cart.forDataSource(model.carts, model.dataSource),
-    item => item.name === domain.name,
-  )
+  const isInCart = Array.some(model.cart, item => item.name === domain.name)
   return Domain.match(domain, {
     Unconfirmed: () =>
       h.div(
@@ -327,7 +260,7 @@ const readyDomainActionView = (
             [
               h.Class('unavailable'),
               h.Title(
-                'The registrar reports this domain unavailable or could not confirm availability.',
+                'This sample domain is marked unavailable in the demo data.',
               ),
             ],
             ['Not available'],
@@ -936,10 +869,7 @@ const resultsGridView = (
         [h.Class('top-results-heading')],
         [
           h.h2([], ['Top Results']),
-          h.span(
-            [h.Class('data-source-label')],
-            [model.dataSource === 'Demo' ? 'Sample data' : 'Live · Vercel'],
-          ),
+          h.span([h.Class('sample-data-label')], ['Sample data']),
         ],
       ),
       h.div(
@@ -1072,7 +1002,7 @@ const cartPanelView = (
   h: ApplicationViewBuilder,
 ): Html => {
   const total = pipe(
-    Cart.forDataSource(model.carts, model.dataSource),
+    model.cart,
     Array.map(domain => domain.price),
     Number.sumAll,
   )
@@ -1095,7 +1025,7 @@ const cartPanelView = (
           ),
         ],
       ),
-      Array.match(Cart.forDataSource(model.carts, model.dataSource), {
+      Array.match(model.cart, {
         onEmpty: () =>
           h.p(
             [h.Class('empty-cart')],
@@ -1147,9 +1077,7 @@ const cartPanelView = (
       h.p(
         [...render.description, h.Class('demo-note')],
         [
-          model.dataSource === 'Demo'
-            ? 'Demo cart with sample prices and availability. No domains are reserved. No purchases are made.'
-            : 'Demo cart. Live registrar quotes may change; adding a domain does not reserve it. No purchases are made.',
+          'Demo cart with sample prices and availability. No domains are reserved. No purchases are made.',
         ],
       ),
     ],
@@ -1181,104 +1109,12 @@ const cartView = (model: Model, h: ApplicationViewBuilder): Html =>
     }),
   )
 
-const liveWarningView = (model: Model, h: ApplicationViewBuilder): Html =>
-  h.block(
-    LiveWarningDialogBinding.embedView({
-      slotId: model.liveWarningDialog.id,
-      model: model.liveWarningDialog,
-      viewInputs: {
-        hasDescription: true,
-        toView: render =>
-          h.dialog(
-            [...render.dialog, h.Class('dialog-overlay')],
-            render.isVisible
-              ? [
-                  h.div([
-                    ...render.backdrop,
-                    h.Class('dialog-backdrop'),
-                    h.AriaHidden(true),
-                  ]),
-                  h.section(
-                    [...render.panel, h.Class('live-warning-panel')],
-                    [
-                      h.h2([...render.title], ['Before you go Live']),
-                      h.p(
-                        [...render.description, h.Class('live-warning-copy')],
-                        [
-                          'Live availability and pricing depend on Vercel’s Domains API, so results can take a moment. By continuing, you solemnly promise not to blame the CAFE stack for the wait.',
-                        ],
-                      ),
-                      Checkbox.view(
-                        {
-                          id: 'live-latency-acceptance',
-                          isChecked: model.isLiveLatencyAccepted,
-                          onToggle: isAccepted =>
-                            Message.UpdatedLiveLatencyAcceptance({
-                              isAccepted,
-                            }),
-                          toView: attributes =>
-                            h.div(
-                              [h.Class('live-warning-acceptance')],
-                              [
-                                h.button(
-                                  [
-                                    ...attributes.checkbox,
-                                    ...render.initialFocus,
-                                    h.Class('live-warning-checkbox'),
-                                  ],
-                                  model.isLiveLatencyAccepted
-                                    ? [Icon.check()]
-                                    : undefined,
-                                ),
-                                h.span([...attributes.label], ['I promise']),
-                              ],
-                            ),
-                        },
-                        h,
-                      ),
-                      h.p(
-                        [h.Class('live-warning-footnote')],
-                        ['Not legally binding. Please do report actual bugs.'],
-                      ),
-                      h.div(
-                        [h.Class('live-warning-actions')],
-                        [
-                          h.button(
-                            [...render.closeButton, h.Class('button')],
-                            ['Stay in Demo'],
-                          ),
-                          h.button(
-                            [
-                              h.Class('button primary live-warning-continue'),
-                              h.Disabled(!model.isLiveLatencyAccepted),
-                              h.OnClick(Message.ClickedContinueToLive()),
-                            ],
-                            ['Continue to Live'],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ]
-              : undefined,
-          ),
-      },
-    }),
-  )
-
-const footerView = (model: Model, h: ApplicationViewBuilder): Html =>
+const footerView = (h: ApplicationViewBuilder): Html =>
   h.footer(
     [h.Class('footer')],
     [
       h.span([], ['A Foldkit example']),
-      h.span(
-        [],
-        [
-          model.dataSource === 'Demo'
-            ? 'Sample data · Demo cart'
-            : 'Live data from Vercel · Demo cart',
-        ],
-      ),
+      h.span([], ['Sample data · Demo cart']),
       h.a(
         [h.Href('https://github.com/foldkit/foldkit-domains')],
         ['View source', Icon.arrowUpRight()],
@@ -1291,7 +1127,6 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
     [
       h.Id('domains-app'),
       h.Class('app'),
-      h.DataAttribute('data-source', model.dataSource),
       h.DataAttribute('search-layout', model.searchLayout),
       h.DataAttribute(
         'search',
@@ -1311,18 +1146,6 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
         ['Skip to main content'],
       ),
       headerView(model, h),
-      h.p(
-        [
-          h.Id('data-source-description'),
-          h.Class('sr-only'),
-          h.AriaLive('polite'),
-        ],
-        [
-          model.dataSource === 'Demo'
-            ? 'Demo dataSource uses sample prices and availability. No live domain checks are made.'
-            : 'Live dataSource checks prices and availability with Vercel. The cart is a demo.',
-        ],
-      ),
       h.main(
         [
           h.Id('main'),
@@ -1336,9 +1159,8 @@ const searchPageView = (model: Model, h: ApplicationViewBuilder): Html =>
           resultsView(model, h),
         ],
       ),
-      footerView(model, h),
+      footerView(h),
       cartView(model, h),
-      liveWarningView(model, h),
       filtersDialogView(model, h),
       tldDialogView(model, h),
     ],

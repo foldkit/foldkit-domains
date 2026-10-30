@@ -1,19 +1,9 @@
 import { Effect, Layer, Stream, String } from 'effect'
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpRouter,
-  HttpServerRequest,
-  HttpServerResponse,
-} from 'effect/http'
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http'
 import { RpcSerialization, RpcServer } from 'effect/rpc'
 
 import { DOMAINS_RPC_PATH, DomainsRpcs } from '../shared/domainsRpc'
-import { makeCoordinatedSearchHandlersLayer } from './coordinatedSearch'
-import type { SearchEnvironment } from './coordination'
-import { RegistrarLayer } from './registrar'
-import { SearchHandlersLayer, SearchRateLimiterLayer } from './search'
-import { collectSearchTimings } from './searchTiming'
+import { SearchHandlersLayer } from './search'
 
 const MAX_RPC_REQUEST_BYTES = 1024
 
@@ -63,23 +53,6 @@ const RequestBounds = HttpRouter.middleware(httpEffect =>
   }),
 )
 
-const SearchTimingMiddleware = HttpRouter.middleware(httpEffect =>
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest
-
-    if (request.headers['x-domains-timing'] !== '1') {
-      return yield* httpEffect
-    }
-
-    const measuredResponse = yield* collectSearchTimings(httpEffect, 'rpc')
-    return HttpServerResponse.setHeader(
-      measuredResponse.value,
-      'server-timing',
-      measuredResponse.header,
-    )
-  }),
-)
-
 export const DomainsRpcRoutes = HttpRouter.add(
   'POST',
   DOMAINS_RPC_PATH,
@@ -91,31 +64,9 @@ export const DomainsRpcRoutes = HttpRouter.add(
   ),
 ).pipe(
   HttpRouter.provideRequest(RpcSerialization.layerJson),
-  Layer.provide([RequestBounds.layer, SearchTimingMiddleware.layer]),
+  Layer.provide(RequestBounds.layer),
 )
 
 export const DomainsRpcLayer = DomainsRpcRoutes.pipe(
-  HttpRouter.provideRequest(
-    SearchHandlersLayer.pipe(
-      Layer.provide(
-        RegistrarLayer.pipe(
-          Layer.provide(FetchHttpClient.layer),
-          Layer.provide(
-            Layer.succeed(HttpClient.TracerPropagationEnabled, false),
-          ),
-        ),
-      ),
-      Layer.provide(SearchRateLimiterLayer),
-    ),
-  ),
+  HttpRouter.provideRequest(SearchHandlersLayer),
 )
-
-export const makeCoordinatedDomainsRpc = (environment: SearchEnvironment) =>
-  HttpRouter.toWebHandler(
-    DomainsRpcRoutes.pipe(
-      HttpRouter.provideRequest(
-        makeCoordinatedSearchHandlersLayer(environment),
-      ),
-    ),
-    { disableLogger: true },
-  )

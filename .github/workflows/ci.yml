@@ -27,7 +27,6 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
-      - run: pnpm test:capacity
       - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e:dev
       - run: pnpm test:e2e:worker

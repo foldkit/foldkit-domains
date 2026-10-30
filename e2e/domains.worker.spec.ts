@@ -1,11 +1,5 @@
 import { expect, test } from '@playwright/test'
 
-import { mockDomainSearch } from './api'
-
-test.beforeEach(async ({ page }) => {
-  await mockDomainSearch(page)
-})
-
 test('serves unknown paths with HTTP 404 and recovers through the Worker', async ({
   page,
   request,

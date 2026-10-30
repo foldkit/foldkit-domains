@@ -34,14 +34,12 @@ import {
   VirtualList,
 } from '@foldkit/ui'
 
-import { DataSource } from '../shared/dataSource'
 import { Domain, domainCandidates, domainTlds } from '../shared/domain'
 import { makeDomainFixtures } from '../shared/domain.fixture'
 import {
   DismissSearchKeyboard,
   FocusCartButton,
   FocusCartCloseButton,
-  FocusDataSourceButton,
   FocusFiltersButton,
   FocusSearchInput,
   FocusTldFilterButton,
@@ -49,10 +47,6 @@ import {
   ReplaceSearchUrl,
   ScrollPage,
 } from './command'
-import {
-  DATA_SOURCE_CONTROL_ID,
-  DataSourceControlBlock,
-} from './dataSourceControl'
 import { DOMAIN_PAGE_SIZE, TOP_RESULT_COUNT } from './domain'
 import { DomainsQuery, DomainsQueryFailure } from './domainsQuery'
 import { SortListboxBlock, TldListboxBlock } from './filterListboxes'
@@ -412,7 +406,6 @@ describe('domain search', () => {
         Result.fail(
           DomainsQueryFailure.make({
             error: 'Search unavailable',
-            maybeSearchCooldown: Option.none(),
           }),
         ),
       ),
@@ -676,7 +669,6 @@ test('multi-year quotes display and sort by the full registration price', () => 
   const quotedModel = withDomainsForRange(
     readyModel('acme'),
     {
-      dataSource: DataSource.make('Demo'),
       label: 'acme',
       offset: 0,
       limit: domainTlds.length,
@@ -819,92 +811,3 @@ test.each(PageScrollKey.literals)(
     )
   },
 )
-
-test('the data source listbox requires acknowledgment before selecting Live and retains the query', () => {
-  scene(
-    { update, view },
-    given(readyModel('acme')),
-    measureResultsList,
-    ...openFilterListbox(
-      'Data source',
-      DATA_SOURCE_CONTROL_ID,
-      DataSourceControlBlock.Message,
-    ),
-    Command.resolveAll(
-      [
-        Animation.test.WaitForPaint,
-        Animation.AnimationBlock.Message.CompletedWaitForPaint({
-          generation: 1,
-        }),
-      ],
-      [
-        Animation.test.WaitForPaint,
-        Animation.AnimationBlock.Message.CompletedWaitForPaint({
-          generation: 1,
-        }),
-      ],
-      [
-        Animation.test.WaitForAnimationSettled,
-        Animation.AnimationBlock.Message.EndedAnimation({ generation: 1 }),
-      ],
-    ),
-    expect(role('option', { name: /^Demo/ })).toHaveAttr(
-      'aria-selected',
-      'true',
-    ),
-    click(role('option', { name: /^Live/ })),
-    Command.resolve(
-      Listbox.test.FocusListboxButton({ id: DATA_SOURCE_CONTROL_ID }),
-      DataSourceControlBlock.Message.CompletedFocusListboxButton(),
-    ),
-    Command.resolve(
-      Animation.test.WaitForPaint,
-      Animation.AnimationBlock.Message.CompletedWaitForPaint({ generation: 2 }),
-    ),
-    Command.resolve(
-      Listbox.test.DetectListboxMovementOrAnimationEnd,
-      DataSourceControlBlock.Message.CompletedDetectListboxMovementOrAnimationEnd(
-        { generation: 2 },
-      ),
-    ),
-    Mount.expectEnded(
-      Listbox.test.AnchorListbox,
-      Listbox.test.PortalListboxBackdrop,
-    ),
-    Command.resolve(
-      Dialog.test.ShowDialog,
-      DialogBlock.Message.SucceededShowDialog(),
-    ),
-    expect(role('dialog', { name: 'Before you go Live' })).toExist(),
-    expect(role('button', { name: 'Continue to Live' })).toBeDisabled(),
-    click(
-      role('checkbox', {
-        name: 'I promise',
-      }),
-    ),
-    expect(role('button', { name: 'Continue to Live' })).not.toBeDisabled(),
-    click(role('button', { name: 'Continue to Live' })),
-    Command.resolve(
-      Dialog.test.CloseDialog,
-      DialogBlock.Message.CompletedCloseDialog(),
-    ),
-    Command.resolve(
-      FocusDataSourceButton,
-      Message.CompletedFocusDataSourceButton(),
-    ),
-    resolveSearchPlanningTime(),
-    resolveDomains(
-      'acme',
-      Result.succeed(Array.take(makeDomainFixtures('acme'), TOP_RESULT_COUNT)),
-    ),
-    resolveSearchPlanningTime(),
-    resolveRemainingFirstPageDomains,
-    resolveResultsListScrolls,
-    expect(role('listbox')).toBeAbsent(),
-    expect(role('button', { name: 'Data source: Live' })).toHaveAttr(
-      'aria-expanded',
-      'false',
-    ),
-    expect(role('searchbox', { name: 'Search domains' })).toHaveValue('acme'),
-  )
-})

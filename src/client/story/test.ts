@@ -3,7 +3,6 @@ import { Command, type StorySimulation, message, steps } from 'foldkit/story'
 
 import { VirtualList } from '@foldkit/ui'
 
-import { DataSource } from '../../shared/dataSource'
 import { Domain } from '../../shared/domain'
 import { ReadCurrentTime, ReplaceSearchUrl } from '../command'
 import {
@@ -109,7 +108,7 @@ export const resolveRemainingFirstPageDomains = (
   steps(
     resolveSearchTime(searchGeneration, nowMillis, 4, 56),
     resolveDomainsSuccess(
-      { dataSource: DataSource.make('Demo'), label, offset: 4, limit: 56 },
+      { label, offset: 4, limit: 56 },
       generation,
       domains,
       nowMillis,

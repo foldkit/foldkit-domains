@@ -4,7 +4,6 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
-import { DataSource } from '../../shared/dataSource'
 import { Domain, domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
 import { FocusSearchInput } from '../command'
@@ -30,13 +29,11 @@ import {
 
 test('a normalized fresh label restores after another label fails', () => {
   const acmeArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
   }
   const otherArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -53,14 +50,13 @@ test('a normalized fresh label restores after another label fails', () => {
       otherArgs,
       2,
       DomainsQueryFailure.make({
-        error: 'Provider unavailable',
-        maybeSearchCooldown: Option.none(),
+        error: 'Sample data unavailable',
       }),
       220,
     ),
     model(model => {
       expect(searchViewState(model)).toEqual(
-        SearchViewState.Failed({ error: 'Provider unavailable' }),
+        SearchViewState.Failed({ error: 'Sample data unavailable' }),
       )
     }),
     changeSearchQuery('Acme.de', 6, 300),
@@ -79,13 +75,11 @@ test('a normalized fresh label restores after another label fails', () => {
 
 test('fresh results expire one minute after completion even after reuse', () => {
   const acmeArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
   }
   const otherArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'other',
     offset: 0,
     limit: 4,
@@ -123,7 +117,6 @@ test('fresh results expire one minute after completion even after reuse', () => 
 
 test('a failed stale refresh retains checked results and retry replaces them with the new quote', () => {
   const args = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 4,
@@ -136,8 +129,7 @@ test('a failed stale refresh retains checked results and retry replaces them wit
     }),
   )
   const failure = DomainsQueryFailure.make({
-    error: 'Provider unavailable',
-    maybeSearchCooldown: Option.none(),
+    error: 'Sample data unavailable',
   })
   const cachedModel = withDomainsForRange(
     modifyFields(emptyModel, {
@@ -186,19 +178,16 @@ test('a failed stale refresh retains checked results and retry replaces them wit
 
 test('label, offset, and limit isolate candidate ranges used by the application', () => {
   const firstArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 60,
   }
   const secondArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 60,
     limit: 60,
   }
   const catalogArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: domainTlds.length,
@@ -246,19 +235,16 @@ test('label, offset, and limit isolate candidate ranges used by the application'
 
 test('global criteria reuse a fresh catalog and prune an active failed page', () => {
   const firstArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: 60,
   }
   const secondArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 60,
     limit: 60,
   }
   const catalogArgs = {
-    dataSource: DataSource.make('Demo'),
     label: 'acme',
     offset: 0,
     limit: domainTlds.length,
@@ -283,8 +269,7 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
     { activeDomainCandidateRanges: () => [{ offset: 0, limit: 60 }] },
   )
   const pageFailure = DomainsQueryFailure.make({
-    error: 'Provider busy',
-    maybeSearchCooldown: Option.none(),
+    error: 'Sample service unavailable',
   })
 
   story(
@@ -337,7 +322,6 @@ test('backspacing to a fresh query reuses Top Results and the visible candidate 
     changeSearchQuery('acme', 2, 0),
     resolveDomainsSuccess(
       {
-        dataSource: DataSource.make('Demo'),
         label: 'acme',
         offset: 0,
         limit: 4,
@@ -356,7 +340,6 @@ test('backspacing to a fresh query reuses Top Results and the visible candidate 
     changeSearchQuery('acmes', 4, 200),
     resolveDomainsSuccess(
       {
-        dataSource: DataSource.make('Demo'),
         label: 'acmes',
         offset: 0,
         limit: 4,

@@ -1,4 +1,4 @@
-import { Array, Match, Option, String } from 'effect'
+import { Array, Match, String } from 'effect'
 import { Update, Url } from 'foldkit'
 import { UrlRequest } from 'foldkit/navigation'
 
@@ -16,7 +16,6 @@ import {
   ApplicationComposition,
   CartDialogBinding,
   FiltersDialogBinding,
-  LiveWarningDialogBinding,
   ResultsListBinding,
   TldDialogBinding,
 } from './composition'
@@ -26,10 +25,8 @@ import {
   makeNoopStep,
   makeStep,
 } from './definition'
-import { Cart } from './domain'
 import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
-  changeDataSource,
   changeSearchQuery,
   clearSearch,
   loadDomainsForRange,
@@ -46,12 +43,6 @@ export const update = ApplicationComposition.makeUpdate({
 
   RequestedSearch: model => searchQuery(routeToQuery(model.route))(model),
 
-  ReachedSearchCooldownExpiry: makeFieldsStep.fromMessage(({ nowMillis }) => ({
-    maybeSearchCooldown: Option.filter(
-      cooldown => cooldown.expiresAtMillis > nowMillis,
-    ),
-  })),
-
   RequestedDomains: makeStep.fromMessage(({ offset, limit }) =>
     scheduleDomainRequest({ offset, limit }),
   ),
@@ -61,17 +52,6 @@ export const update = ApplicationComposition.makeUpdate({
       searchQuery(routeToQuery(model.route), true),
       makeCommandsStep(() => [DismissSearchKeyboard()]),
     ]),
-
-  UpdatedLiveLatencyAcceptance: makeFieldsStep.fromMessage(
-    ({ isAccepted }) => ({
-      isLiveLatencyAccepted: () => isAccepted,
-    }),
-  ),
-
-  ClickedContinueToLive: Update.combineSteps([
-    changeDataSource('Live'),
-    LiveWarningDialogBinding.requestClose(),
-  ]),
 
   ClickedRetrySearch: Update.combineSteps([
     retrySearch,
@@ -131,34 +111,21 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedAddDomain: makeFieldsStep((model, { domain }) => {
     const isDomainInCart = Array.some(
-      Cart.forDataSource(model.carts, model.dataSource),
+      model.cart,
       item => item.name === domain.name,
     )
 
-    return isDomainInCart
-      ? {}
-      : {
-          carts: Cart.updateForDataSource(
-            model.dataSource,
-            Array.append(domain),
-          ),
-        }
+    return isDomainInCart ? {} : { cart: Array.append(domain) }
   }),
 
-  ClickedRemoveDomain: makeFieldsStep((model, { name }) => ({
-    carts: Cart.updateForDataSource(
-      model.dataSource,
-      Array.filter(domain => domain.name !== name),
-    ),
+  ClickedRemoveDomain: makeFieldsStep.fromMessage(({ name }) => ({
+    cart: Array.filter(domain => domain.name !== name),
   })),
 
   ClickedRemoveCartDomain: makeStep.fromMessage(({ name }) =>
     Update.combineSteps([
-      makeFieldsStep(model => ({
-        carts: Cart.updateForDataSource(
-          model.dataSource,
-          Array.filter(domain => domain.name !== name),
-        ),
+      makeFieldsStep(() => ({
+        cart: Array.filter(domain => domain.name !== name),
       })),
       makeCommandsStep(() => [FocusCartCloseButton()]),
     ]),
@@ -207,7 +174,6 @@ export const update = ApplicationComposition.makeUpdate({
     }),
   ),
 
-  CompletedFocusDataSourceButton: makeNoopStep(),
   ClickedDomainsHome: makeNoopStep(),
   ClickedSkipToMain: makeNoopStep(),
   CompletedReplaceSearchUrl: makeNoopStep(),

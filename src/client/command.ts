@@ -3,13 +3,11 @@ import { Dom, Render } from 'foldkit'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
 import { DomainCandidateRange } from '../shared/domain'
-import { DATA_SOURCE_CONTROL_ID } from './dataSourceControl'
 import { ApplicationDefinition } from './definition'
 import { Message } from './message'
 import { PageScrollKey, RESULTS_LIST_ID } from './resultsList'
 import { searchRouter } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
-import { subscriptions } from './subscription'
 
 export const ReadCurrentTime = ApplicationDefinition.makeCommand(
   'ReadCurrentTime',
@@ -118,22 +116,6 @@ export const FocusTldFilterButton = ApplicationDefinition.makeCommand(
         Dom.focus('#mobile-tld-filter', { preventScroll: true }).pipe(
           Effect.ignore,
           Effect.as(Message.CompletedFocusTldFilterButton()),
-        )
-    },
-  },
-)
-
-export const FocusDataSourceButton = ApplicationDefinition.makeCommand(
-  'FocusDataSourceButton',
-  {
-    messages: [Message.CompletedFocusDataSourceButton],
-    handler: function* () {
-      return () =>
-        Dom.focus(`#${DATA_SOURCE_CONTROL_ID}-button`, {
-          preventScroll: true,
-        }).pipe(
-          Effect.ignore,
-          Effect.as(Message.CompletedFocusDataSourceButton()),
         )
     },
   },
@@ -264,7 +246,6 @@ export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
 )
 
 export const EffectsLayer = Layer.mergeAll(
-  subscriptions.layer,
   ReadCurrentTime.layer,
   ReplaceSearchUrl.layer,
   NavigateInternal.layer,
@@ -274,7 +255,6 @@ export const EffectsLayer = Layer.mergeAll(
   FocusFiltersButton.layer,
   FocusTldFilterButton.layer,
   FocusCartCloseButton.layer,
-  FocusDataSourceButton.layer,
   ScrollPage.layer,
   ScrollPageToTop.layer,
   RevealResultsListStart.layer,

@@ -123,6 +123,6 @@ export const findFirstPendingListingInViewport = (
         offsetPx <= viewportEndPx,
     ),
     Array.flatMap(({ group }) => group.listings),
-    Array.findFirst(DomainListing.isAnyOf(['Pending'])),
+    Array.findFirst(DomainListing.guards.Pending),
   )
 }

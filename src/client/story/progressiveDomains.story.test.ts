@@ -6,7 +6,6 @@ import { describe, expect, test } from 'vitest'
 
 import { VirtualList } from '@foldkit/ui'
 
-import { DataSource } from '../../shared/dataSource'
 import { domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
 import { FocusSearchInput, ReadCurrentTime } from '../command'
@@ -33,25 +32,21 @@ import {
 } from './test'
 
 const firstArgs = {
-  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 0,
   limit: 60,
 }
 const secondArgs = {
-  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 60,
   limit: 60,
 }
 const laterArgs = {
-  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 180,
   limit: 60,
 }
 const catalogArgs = {
-  dataSource: DataSource.make('Demo'),
   label: 'acme',
   offset: 0,
   limit: domainTlds.length,
@@ -69,8 +64,7 @@ const partialModel = withDomainsForRange(
   firstPageDomains,
 )
 const pageFailure = DomainsQueryFailure.make({
-  error: 'Provider busy',
-  maybeSearchCooldown: Option.none(),
+  error: 'Sample service unavailable',
 })
 
 const scroll = (scrollTop: number) =>
@@ -108,13 +102,11 @@ describe('progressive domain results', () => {
     '%s sorts pending names immediately and retries only the visible candidate range',
     sortOrder => {
       const topArgs = {
-        dataSource: DataSource.make('Demo'),
         label: 'acme',
         offset: 0,
         limit: 4,
       }
       const remainingArgs = {
-        dataSource: DataSource.make('Demo'),
         label: 'acme',
         offset: 4,
         limit: 56,
@@ -143,9 +135,7 @@ describe('progressive domain results', () => {
           expect(
             Array.map(Array.take(listings, 5), listing => listing.name),
           ).toEqual(expectedNames)
-          expect(
-            Array.every(listings, DomainListing.isAnyOf(['Pending'])),
-          ).toBe(true)
+          expect(Array.every(listings, DomainListing.guards.Pending)).toBe(true)
         }),
         resolveResultsListScrolls,
         Command.expectNone(),
@@ -210,13 +200,11 @@ describe('progressive domain results', () => {
 
   test('shows Top Results before the rest of the first page and ignores a duplicate planning Clock while pending', () => {
     const topArgs = {
-      dataSource: DataSource.make('Demo'),
       label: 'acme',
       offset: 0,
       limit: 4,
     }
     const remainingArgs = {
-      dataSource: DataSource.make('Demo'),
       label: 'acme',
       offset: 4,
       limit: 56,
@@ -317,7 +305,7 @@ describe('progressive domain results', () => {
             domainRequest: DomainRequestPresentation.Failed({
               offset: 60,
               limit: 60,
-              error: 'Provider busy',
+              error: 'Sample service unavailable',
             }),
           }),
         )
