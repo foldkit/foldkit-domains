@@ -1084,3 +1084,57 @@ test('typing debounces intermediate keystrokes and loads the final query progres
     { label: 'devin', offset: 4, limit: 56 },
   ])
 })
+
+for (const { name, width } of [
+  { name: 'mobile', width: 390 },
+  { name: 'desktop', width: 1280 },
+]) {
+  test(`changing sort order preserves page position on ${name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/?q=acme')
+    await expect(page.locator('.domain-card .price').first()).toBeVisible()
+    const sortTriggerName =
+      name === 'mobile' ? 'Filters and sort' : 'Sort results'
+
+    for (const option of [
+      name === 'mobile' ? 'Price' : 'Price: Low to High',
+      'Alphabetical',
+      'Length',
+      'Relevance',
+    ]) {
+      if (option !== (name === 'mobile' ? 'Price' : 'Price: Low to High')) {
+        await page.evaluate(() =>
+          window.scrollTo({ top: 120, behavior: 'instant' }),
+        )
+      }
+
+      const trigger = page.getByRole('button', {
+        name: sortTriggerName,
+        exact: false,
+      })
+      await trigger.click()
+      const beforeScrollY = await page.evaluate(() => window.scrollY)
+      const choices =
+        name === 'mobile'
+          ? page.getByRole('dialog', { name: 'Filters and sort' })
+          : page.getByRole('listbox', { name: 'Sort results', exact: false })
+      const choice = choices.getByRole(
+        name === 'mobile' ? 'button' : 'option',
+        { name: option, exact: true },
+      )
+      await choice.click()
+      await expect(choices).toBeHidden()
+      await expect(trigger).toBeFocused()
+      await expect(
+        page.locator('#domain-results .domain-row').first(),
+      ).toBeVisible()
+      await expect
+        .poll(() => page.evaluate(() => window.scrollY))
+        .toBe(beforeScrollY)
+      await page.waitForTimeout(250)
+      expect(await page.evaluate(() => window.scrollY)).toBe(beforeScrollY)
+    }
+  })
+}

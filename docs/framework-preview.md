@@ -18,8 +18,10 @@ Development uses a shared build identity across client and SSR environments, wor
 
 The UI dependency patch preserves responsive scroll anchors and accepts native
 scroll observations when their offset changes during a pending row-layout update.
-Browser coverage protects both resize anchoring and returning to the first
-catalog row with Home.
+When the page viewport starts above the list, it preserves the signed offset
+instead of following a row that moves during sorting or filtering. Browser
+coverage protects resize anchoring, sorting without page jumps, and returning
+to the first catalog row with Home.
 
 When upgrading Foldkit, pull the subtree at the commit or release tag matching the new package versions:
 

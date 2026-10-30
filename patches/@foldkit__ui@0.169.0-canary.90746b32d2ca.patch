@@ -1,8 +1,19 @@
 diff --git a/dist/virtualList/virtualList.js b/dist/virtualList/virtualList.js
-index 75695856e28a9714043b730da332fe62b62994b4..22c81076f5d3d4c409d3650c7c6127f30950c89d 100644
+index 75695856e28a9714043b730da332fe62b62994b4..99d02ef30b274cdd22550d7059331a8c5acf12bc 100644
 --- a/dist/virtualList/virtualList.js
 +++ b/dist/virtualList/virtualList.js
-@@ -523,6 +523,9 @@ const applyScrollSnapshot = (model, snapshot) => __foldkitBrandViewResult((modif
+@@ -501,6 +501,10 @@ const currentScrollRequest = (model) => __foldkitBrandViewResult((PendingScroll.
+ })), "@foldkit/ui/virtualList/virtualList.js#currentScrollRequest");
+ const reconcileLayoutStep = VirtualListDefinition.makeStep(model => __foldkitBrandViewResult((buildScrollRequestStep(currentScrollRequest(model))), "@foldkit/ui/virtualList/virtualList.js#anonymous~19"));
+ const anchorFromSnapshot = (model, scrollTop, scrollHeight, containerHeight, anchor) => {
++    const isBeforeListStart = model.scrollContainer._tag !== 'Self' && scrollTop < 0;
++    if (isBeforeListStart) {
++        return ViewportAnchor.Offset({ scrollTop });
++    }
+     const distanceFromEnd = model.history._tag === 'Enabled'
+         ? Math.max(0, -scrollTop)
+         : Math.max(0, scrollHeight - containerHeight - scrollTop);
+@@ -523,6 +527,9 @@ const applyScrollSnapshot = (model, snapshot) => __foldkitBrandViewResult((modif
          if (snapshot.layoutVersion !== undefined &&
              snapshot.layoutVersion !== model.layoutVersion &&
              nextAnchor._tag !== 'End') {
@@ -12,7 +23,7 @@ index 75695856e28a9714043b730da332fe62b62994b4..22c81076f5d3d4c409d3650c7c6127f3
              return __foldkitBrandViewResult((model.viewportAnchor), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
          }
          return __foldkitBrandViewResult((nextAnchor), "@foldkit/ui/virtualList/virtualList.js#viewportAnchor");
-@@ -857,6 +860,7 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
+@@ -857,6 +864,7 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
          : registerExternalViewport(viewport);
      const scrollOwner = viewport?.owner ?? element;
      let previousScrollTop = element.scrollTop;
@@ -20,7 +31,7 @@ index 75695856e28a9714043b730da332fe62b62994b4..22c81076f5d3d4c409d3650c7c6127f3
      let previousDistanceFromEnd = Math.max(0, element.scrollHeight - element.clientHeight - element.scrollTop);
      let lastApproachedPageVersion;
      let scrollSettleTimeout;
-@@ -907,22 +911,28 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
+@@ -907,22 +915,28 @@ const observeVirtualList = (element, id, observeHistory, scrollContainer) => __f
              emitEndedContainerScroll();
          }, SCROLL_SETTLE_FALLBACK_MS);
      };
