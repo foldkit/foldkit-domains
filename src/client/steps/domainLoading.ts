@@ -6,7 +6,7 @@ import {
   domainTlds,
   queryToMaybeDomainLabel,
 } from '../../shared/domain'
-import { ReadSearchPlanningTime } from '../command'
+import { ReadCurrentTime } from '../command'
 import { DomainsQueryBinding } from '../composition'
 import {
   makeCommandsStep,
@@ -14,17 +14,17 @@ import {
   makeNoopStep,
   makeStep,
 } from '../definition'
-import { planRequiredDomainCandidateRange } from '../domainPlanning'
+import { findNextDomainRangeToLoad } from '../domainPlanning'
 import {
   DomainsQuery,
   DomainsQueryArgs,
   type DomainsQueryCompletedFetch,
 } from '../domainsQuery'
-import type { CompletedReadSearchPlanningTimeMessage } from '../message'
+import type { CompletedReadCurrentTimeMessage } from '../message'
 import { routeToQuery } from '../route'
 import { informResultsListStep } from './resultsList'
 
-const makeTrackDomainCandidateRangeStep = (
+const trackDomainRangeStep = (
   range: DomainCandidateRange,
   nowMillis: number,
   isBlocked: boolean,
@@ -43,7 +43,7 @@ const makeTrackDomainCandidateRangeStep = (
       isBlocked ? Option.some(range) : Option.none(),
   }))
 
-const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
+const useFullCatalogStep = (args: DomainsQueryArgs) =>
   makeFieldsStep(model =>
     args.offset === 0 &&
     args.limit === domainTlds.length &&
@@ -56,12 +56,12 @@ const makeUseCompleteCatalogRangeStep = (args: DomainsQueryArgs) =>
       : {},
   )
 
-export const makeScheduleDomainRequestStep = (
+export const scheduleDomainRequestStep = (
   { offset, limit }: DomainCandidateRange,
   isRefreshRequested = false,
 ) =>
   makeCommandsStep(model => [
-    ReadSearchPlanningTime({
+    ReadCurrentTime({
       searchGeneration: model.searchGeneration,
       offset,
       limit,
@@ -70,14 +70,14 @@ export const makeScheduleDomainRequestStep = (
   ])
 
 export const loadRequiredDomainsStep = makeStep(model =>
-  Option.match(planRequiredDomainCandidateRange(model), {
+  Option.match(findNextDomainRangeToLoad(model), {
     onNone: () => ({ model }),
-    onSome: range => makeScheduleDomainRequestStep(range)(model),
+    onSome: range => scheduleDomainRequestStep(range)(model),
   }),
 )
 
 export const loadDomainsForRangeStep = makeStep(
-  (model, message: CompletedReadSearchPlanningTimeMessage) => {
+  (model, message: CompletedReadCurrentTimeMessage) => {
     if (message.searchGeneration !== model.searchGeneration) {
       return { model }
     }
@@ -128,16 +128,16 @@ export const loadDomainsForRangeStep = makeStep(
     })()
 
     return Update.combineSteps([
-      makeTrackDomainCandidateRangeStep(range, message.nowMillis, isBlocked),
+      trackDomainRangeStep(range, message.nowMillis, isBlocked),
       loadDomainsStep,
-      makeUseCompleteCatalogRangeStep(args),
+      useFullCatalogStep(args),
       loadRequiredDomainsStep,
       informResultsListStep,
     ])
   },
 )
 
-export const makeApplyDomainCompletionStep = ({
+export const applyDomainResultStep = ({
   args,
   result,
   completedAtMillis,
@@ -164,9 +164,7 @@ export const makeApplyDomainCompletionStep = ({
               )
             : maybeCooldown,
       })),
-      Result.isSuccess(result)
-        ? makeUseCompleteCatalogRangeStep(args)
-        : makeNoopStep(),
+      useFullCatalogStep(args),
       loadRequiredDomainsStep,
       informResultsListStep,
     ])

@@ -22,6 +22,7 @@ export const SearchError = defineTaggedUnion({
   Unavailable: {},
 })
 export type SearchError = typeof SearchError.Type
+export type RateLimitedSearchError = typeof SearchError.RateLimited.Type
 
 export const DomainsRpcs = RpcGroup.make(
   Rpc.make('SearchDomains', {

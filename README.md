@@ -13,7 +13,7 @@ pnpm install
 pnpm dev
 ```
 
-This app uses the unreleased Blocks and Layers preview at commit `b75b14110d6ad3fc51c548c5d6c938dad2dc5016`. All six Foldkit packages are pinned to commit-addressed archives in [`vendor/foldkit-preview`](vendor/foldkit-preview), with exact versions and integrity in its manifest and the lockfile. A fresh checkout builds without another framework checkout. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
+This app uses the unreleased Blocks and Layers preview at commit `90746b32d2ca8bc0476de7a051ace396ca590ae0`. All six Foldkit packages are pinned to the matching published npm canary versions, with exact versions and archive integrity in the lockfile. A fresh checkout builds without another framework checkout. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
 
 ## Build and deploy
 
@@ -28,7 +28,7 @@ Development HTML links the stylesheet directly so the page is styled before clie
 
 `pnpm preview` runs the built Fetch handler and assets in local workerd, including Demo search and the Live domain API. A static file server can display the page but cannot answer searches.
 
-Development uses a shared build identity across client and SSR environments, working around separate identities in the pinned preview. Development reloads refresh the SSR module graph so Block Definitions and their Commands are recreated together. This avoids duplicate-declaration errors after editing Command modules in the pinned preview.
+Development uses a shared build identity across client and SSR environments, working around separate identities in the pinned preview. Foldkit’s Vite plugin refreshes the SSR module graph during development updates, and the server entry disposes its RPC handler before reevaluation.
 
 Build and deploy the HTML and assets together. Foldkit assigns a coordinated build id so an old document cannot hydrate with an unrelated client bundle. Let the plugin generate the id when one `pnpm build` produces both artifacts.
 
@@ -67,12 +67,12 @@ Page-load-to-interaction measurements record browser caching, device, and networ
 
 - `src/client/model.ts` and `src/client/message.ts` declare the state and events. App-owned Schemas export same-named decoded types for readable annotations.
 - `src/client/init.ts` starts a search from the URL; `src/client/update.ts` maps Messages to search, filter, and cart Steps.
-- `src/client/steps/` owns reusable parent Steps shared by update, composition, and init. Its responsibility modules cover search transitions, domain-request execution, and results-list updates. `src/client/domainPlanning.ts` selects the next required candidate range without creating Commands. A `DomainCandidateRange` identifies an offset/limit slice of the ordered candidate catalog; KeyedQuery retains its checked response. Required-domain loading covers the viewport and overscan area or the complete catalog for global filters and sorting. `src/client/searchPresentation.ts` derives search status and checked domains from the planned candidate ranges.
+- `src/client/steps/` owns reusable parent Steps shared by update, composition, and init. Its responsibility modules cover search transitions, domain-request execution, and results-list updates. `src/client/domainPlanning.ts` selects the next required candidate range without creating Commands. A `DomainCandidateRange` identifies an offset/limit slice of the ordered candidate catalog; KeyedQuery retains its checked response. Required-domain loading covers the viewport and overscan area or the complete catalog for global filters and sorting. `src/client/searchViewState.ts` derives search status and checked domains from the planned candidate ranges.
 - `src/client/filterListboxes.ts` defines typed filter and sort Listbox Blocks. Selections belong to the parent Model. Desktop Listboxes and mobile sheets share transitions through `src/client/steps/filters.ts`; mobile choices apply directly and close their animated sheet. The TLD sheet searches the full supported catalog, with an independent search query that resets when the sheet opens.
 - `src/client/domainsQuery.ts` defines the KeyedQuery Block, one-minute freshness, a 100-settled-entry retention bound, and the typed RPC fetch handler. `src/client/subscription.ts` schedules provider cooldown expiry; `src/client/searchCooldown.ts` defines that Model-owned deadline.
 - `src/client/command.ts` defines the EffectsLayer, including Clock reads and URL synchronization; `src/client/services.ts` supplies the Runtime-scoped RPC client.
 - `src/shared/domainsRpc.ts` shares the RPC payload, success, and failure Schemas. `src/client/rpc.ts` constructs the typed client; `src/server/rpc.ts` supplies HTTP transport and request bounds. `src/server/coordinatedSearch.ts` forwards production lookups to a per-label Durable Object. `src/server/domainSearch.ts` supplies the Effect Service for completed quote storage and shared lookup fibers; `src/server/registrarSearch.ts` supplies provider admission, scoped concurrency permits, and persisted budgets and cooldown. The matching `*Coordinator.ts` files construct per-instance Effect handlers. `src/server/coordinatorRuntime.ts` registers them with Alchemy, and `src/server/coordinatorExports.ts` supplies the native classes through Alchemy’s Durable Object bridge. `src/server/search.ts` supplies the in-process development backend; `src/server/registrar.ts` validates registrar responses.
-- `src/shared/domain.ts` defines checked domains, quotes, labels, candidate names, and candidate ranges. `src/client/domain.ts` defines pending/ready listings, filters, sorting, price formatting, and candidate-range planning. `src/shared/demoDomains.ts` generates deterministic sample quotes for Demo mode and test fixtures.
+- `src/shared/domain.ts` defines checked domains, quotes, labels, candidate names, and candidate ranges. `src/client/domain/` exports pure domain code through its barrel: `domain.ts` defines listings, filters, sorting, price formatting, and candidate-range planning; `cart.ts` owns cart Schemas and operations scoped by data source. `src/shared/demoDomains.ts` generates deterministic sample quotes for Demo mode and test fixtures.
 - `src/client/route.ts` defines the bidirectional search router; its query Schema handles URL parsing and encoding. The Model stores the parsed Route. Input changes replace the URL, and `ChangedUrl` updates the Route and starts its lookup.
 - `src/client/resultsList.ts` creates the Foldkit UI VirtualList Block and locates pending listings within the measured or estimated viewport and overscan area. `src/client/composition.ts` binds it and the cart and filter Dialogs to the root Model; `src/client/resultListings.ts` selects the filtered and sorted listings.
 - `src/client/composition.ts` connects the root Definition; `src/client/block.ts` assembles the application.
@@ -88,9 +88,9 @@ Unknown paths render a NotFound page with a link back to search. Request-time re
 
 Start with `steps/search.ts`: input changes request URL replacement, and `ChangedUrl` stores the Route before starting the four Top Results. Changing or clearing the query cancels pending requests. A separate search generation rejects outdated planning Clock Messages; Query owns per-key fetch generations.
 
-`steps/domainLoading.ts` owns request execution. Scheduling reads Effect Clock through a Command. Its completion checks the current search, pending requests, cache freshness, and provider cooldown before calling the bound Query operation. Accepted Query completions enter `makeApplyDomainCompletionStep`, which applies completion timing and cooldown, then plans further domain requests and informs the results list.
+`steps/domainLoading.ts` owns request execution. Scheduling reads Effect Clock through a Command. Its completion checks the current search, pending requests, cache freshness, and provider cooldown before calling the bound Query operation. Accepted Query completions enter `applyDomainResultStep`, which applies completion timing and cooldown, then plans further domain requests and informs the results list.
 
-`domainPlanning.ts` answers which candidate range is needed next, returning an `Option<DomainCandidateRange>`. It selects the complete catalog for availability filtering or price sorting; otherwise it asks `resultsList.ts` for the first pending listing in the viewport and overscan area. The planner waits for pending work and leaves failed ranges for explicit retry. `loadRequiredDomainsStep` schedules the selected range. Query data supplies the displayed domain results through `searchPresentation.ts`, with no copied quote collection.
+`domainPlanning.ts` answers which candidate range is needed next, returning an `Option<DomainCandidateRange>`. It selects the complete catalog for availability filtering or price sorting; otherwise it asks `resultsList.ts` for the first pending listing in the viewport and overscan area. The planner waits for pending work and leaves failed ranges for explicit retry. `loadRequiredDomainsStep` schedules the selected range. Query data supplies the displayed domain results through `searchViewState.ts`, with no copied quote collection.
 
 Pending listings have no price, availability, or cart action until their quotes arrive. After the four Top Results, the rest of the first page uses a separate non-overlapping range. Scrolling requests missing pages while preserving checked domains. Progressive ranges bypass the input debounce.
 
@@ -218,7 +218,7 @@ lives in `src/client/site.ts` and `src/client/entry.server.ts`.
 
 ## Framework source
 
-`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `b75b14110d6ad3fc51c548c5d6c938dad2dc5016`. It supplies source, examples, and documentation matching the installed preview packages. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
+`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `90746b32d2ca8bc0476de7a051ace396ca590ae0`. It supplies source, examples, and documentation matching the installed preview packages. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
 
 The UI dependency patch preserves responsive scroll anchors and accepts native
 scroll observations when their offset changes during a pending row-layout update.

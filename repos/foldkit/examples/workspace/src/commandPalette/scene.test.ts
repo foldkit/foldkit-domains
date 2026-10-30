@@ -2,7 +2,6 @@ import { Array, Option } from 'effect'
 import { Scene } from 'foldkit'
 import {
   Command,
-  Mount,
   Subscription,
   click,
   expect,
@@ -47,10 +46,6 @@ const showDialog = Command.resolve(
   Dialog.test.ShowDialog,
   DialogBlock.Message.SucceededShowDialog(),
 )
-const acquireDialog = Mount.resolve(
-  Dialog.test.AcquireResources,
-  DialogBlock.Message.SucceededAcquireResources(),
-)
 const closeDialog = Command.resolve(
   Dialog.test.CloseDialog,
   DialogBlock.Message.CompletedCloseDialog(),
@@ -70,7 +65,6 @@ describe('command palette search', () => {
       given(CommandPaletteBlock.init().model),
       openFromShortcut,
       showDialog,
-      acquireDialog,
       type(label('Search issues and projects'), 'WSP-10'),
       scrollToResult(0),
       keydown(label('Search issues and projects'), 'ArrowUp'),
@@ -90,7 +84,6 @@ describe('command palette search', () => {
       expectHandled(),
       expectOutMessage(OutMessage.SelectedIssue({ issueId: secondIssue.id })),
       closeDialog,
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(label('Search issues and projects')).not.toExist(),
     )
   })
@@ -101,14 +94,12 @@ describe('command palette search', () => {
       given(CommandPaletteBlock.init().model),
       openFromShortcut,
       showDialog,
-      acquireDialog,
       type(label('Search issues and projects'), 'Platform'),
       scrollToResult(0),
       expect(role('option')).toContainText('Platform'),
       click(role('option')),
       expectOutMessage(OutMessage.SelectedProject({ projectId: 'platform' })),
       closeDialog,
-      Mount.expectEnded(Dialog.test.AcquireResources),
     )
   })
 
@@ -118,7 +109,6 @@ describe('command palette search', () => {
       given(CommandPaletteBlock.init().model),
       openFromShortcut,
       showDialog,
-      acquireDialog,
       type(label('Search issues and projects'), 'no matching workspace item'),
       scrollToResult(0),
       expect(text('No matching issues or projects.')).toExist(),

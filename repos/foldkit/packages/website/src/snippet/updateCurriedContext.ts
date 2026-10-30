@@ -1,7 +1,6 @@
 import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
 
 const Model = Schema.Struct({
@@ -27,9 +26,9 @@ const ContextualRefreshComposition =
   ContextualRefreshDefinition.makeComposition()
 const update = ContextualRefreshComposition.makeUpdate.withContext(
   ({ requestId }: DispatchContext) => ({
-    RequestedRefresh: model => ({
-      model: modifyFields(model, { lastRequestId: () => requestId }),
-    }),
+    RequestedRefresh: makeFieldsStep(() => ({
+      lastRequestId: () => requestId,
+    })),
   }),
 )
 

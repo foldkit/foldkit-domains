@@ -19,7 +19,7 @@ import {
   domainCandidates,
   domainTlds,
   queryToMaybeDomainLabel,
-} from '../shared/domain'
+} from '../../shared/domain'
 
 export const DomainListing = defineTaggedUnion({
   Pending: DomainName.fields,
@@ -35,8 +35,10 @@ export const TldFilter = Schema.Literals([
   ...Array.map(domainTlds, String.capitalize),
 ])
 export type TldFilter = typeof TldFilter.Type
+
 export const AvailabilityFilter = Schema.Literals(['All', 'Available'])
 export type AvailabilityFilter = typeof AvailabilityFilter.Type
+
 export const SortOrder = Schema.Literals([
   'Relevance',
   'Length',
@@ -72,7 +74,7 @@ const domainNameLengthOrder = Order.combine(
 export const TOP_RESULT_COUNT = 4
 export const DOMAIN_PAGE_SIZE = 60
 
-export const tldToMaybeDomainCandidateRange = (
+export const findDomainRangeForTld = (
   tld: string,
 ): Option.Option<DomainCandidateRange> =>
   pipe(
@@ -120,7 +122,9 @@ export const queryToDomainListings = (
   const domainsByName = Record.fromIterableBy(domains, domain => domain.name)
 
   return Array.map(queryToPendingDomainListings(query), pending =>
-    Record.get(domainsByName, pending.name).pipe(
+    pipe(
+      domainsByName,
+      Record.get(pending.name),
       Option.match({ onNone: () => pending, onSome: domainToReadyListing }),
     ),
   )

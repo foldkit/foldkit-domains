@@ -1,5 +1,10 @@
 # Blocks + Effect Layers stabilization feedback
 
+The user subsequently explicitly deferred #1662 and #1663 until after the
+Blocks + Effect Layers work merges to main. The original assessment below
+retains its historical scope. These two proposals are not requirements for
+the current preview.
+
 The [SSG contribution reconciliation](ssg-preview-1814-reconciliation-20261027.md)
 records the later #1814 patch and evening feedback refresh. It strengthens the
 existing #1811 repair without relabeling earlier verification.

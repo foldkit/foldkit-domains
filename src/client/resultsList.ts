@@ -58,7 +58,7 @@ const TABLET_RESULTS_WIDTH_PX = 944
 const MOBILE_RESULT_HEIGHT_PX = 61
 const DESKTOP_RESULT_HEIGHT_PX = 57
 
-export const estimateDomainListingGroupHeightPx = (
+export const estimateResultGroupHeightPx = (
   resultsList: ResultsListModel,
   listingCount = RESULTS_GROUP_SIZE,
 ): number => {
@@ -83,9 +83,11 @@ export const findFirstPendingListingInViewport = (
 ): Option.Option<DomainListing> => {
   const groups = groupDomainListings(listings)
   const groupHeightPx = (group: DomainListingGroup) =>
-    Record.get(resultsList.measuredRowHeights, group.id).pipe(
+    pipe(
+      resultsList.measuredRowHeights,
+      Record.get(group.id),
       Option.getOrElse(() =>
-        estimateDomainListingGroupHeightPx(resultsList, group.listings.length),
+        estimateResultGroupHeightPx(resultsList, group.listings.length),
       ),
     )
 
@@ -108,7 +110,7 @@ export const findFirstPendingListingInViewport = (
       ? resultsList.measurement.containerHeight
       : RESULTS_GROUP_HEIGHT_PX
   const overscanHeightPx =
-    estimateDomainListingGroupHeightPx(resultsList) * RESULTS_OVERSCAN_GROUPS
+    estimateResultGroupHeightPx(resultsList) * RESULTS_OVERSCAN_GROUPS
   const viewportStartPx = resultsList.scrollTop - overscanHeightPx
   const viewportEndPx =
     resultsList.scrollTop + viewportHeightPx + overscanHeightPx

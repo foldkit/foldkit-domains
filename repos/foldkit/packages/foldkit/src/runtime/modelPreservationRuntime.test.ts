@@ -1,4 +1,4 @@
-import { Array, Effect, HashMap, Option, Schema } from 'effect'
+import { Array, Duration, Effect, HashMap, Option, Schema } from 'effect'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as Block from '../block/public.js'
@@ -18,9 +18,9 @@ beforeEach(() => {
     Effect.succeed(undefined),
   )
   vi.spyOn(PreserveScheduler, 'makePreserveScheduler').mockImplementation(
-    (preserveCallbacks, delay) => {
+    preserveCallbacks => {
       callbacks.push(preserveCallbacks)
-      return originalMakePreserveScheduler(preserveCallbacks, delay)
+      return originalMakePreserveScheduler(preserveCallbacks, Duration.hours(1))
     },
   )
 })

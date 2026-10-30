@@ -20,6 +20,57 @@ const Save = Definition.makeCommand('Save', {
   messages: [Message.CompletedSave],
 })
 
+it('infers the Model and exact Message in inline Model-aware Steps', () => {
+  const update = Composition.makeUpdate({
+    RequestedIncrement: Definition.makeStep((model, message) => {
+      expectTypeOf(model).toEqualTypeOf<Model>()
+      expectTypeOf(message).toEqualTypeOf<
+        typeof Message.RequestedIncrement.Type
+      >()
+
+      return Update.combineSteps([
+        Definition.makeFieldsStep(() => ({
+          count: () => model.count + message.amount,
+        })),
+        Definition.makeCommandsStep(({ count }) => [Save({ count })]),
+      ])
+    }),
+    CompletedSave: Definition.makeNoopStep(),
+  })
+
+  const result = update(
+    Model.make({ count: 1 }),
+    Message.RequestedIncrement({ amount: 3 }),
+  )
+
+  expect(result.model.count).toBe(4)
+  expect(result.commands).toMatchObject([{ args: { count: 4 } }])
+})
+
+it('infers Model-aware Steps inside optional, default and rest dispatch context', () => {
+  const update = Composition.makeUpdate.withContext(
+    (multiplier: number = 2, ...offsets: ReadonlyArray<number>) => ({
+      RequestedIncrement: Definition.makeStep((model, message) => {
+        expectTypeOf(model).toEqualTypeOf<Model>()
+        expectTypeOf(message).toEqualTypeOf<
+          typeof Message.RequestedIncrement.Type
+        >()
+
+        return Definition.makeFieldsStep(() => ({
+          count: () =>
+            model.count + message.amount * multiplier + offsets.length,
+        }))
+      }),
+      CompletedSave: Definition.makeNoopStep(),
+    }),
+  )
+  const model = Model.make({ count: 1 })
+  const message = Message.RequestedIncrement({ amount: 3 })
+
+  expect(update(model, message).model.count).toBe(7)
+  expect(update(message)(model, 4, 0, 0).model.count).toBe(15)
+})
+
 it('contextually types an inline Message-only producer and applies its deferred Steps', () => {
   const update = Composition.makeUpdate({
     RequestedIncrement: Definition.makeStep.fromMessage(({ amount }) => {

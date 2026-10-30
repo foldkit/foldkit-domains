@@ -191,6 +191,7 @@ describe('workspace application', () => {
       type(label('Issue title'), 'Keep this local draft'),
       click(role('button', { name: 'Save changes' })),
       Command.keepPending(pendingSave),
+      Subscription.expectActive(ApplicationBlock.subscriptions.activity),
       Subscription.emit(
         ApplicationBlock.subscriptions.activity,
         Message.TickedActivityStream(),

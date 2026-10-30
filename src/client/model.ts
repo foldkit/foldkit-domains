@@ -3,13 +3,9 @@ import { Schema } from 'effect'
 import { DialogBlock } from '@foldkit/ui'
 
 import { DataSource } from '../shared/dataSource'
-import {
-  type AvailableDomain,
-  Domain,
-  DomainCandidateRange,
-} from '../shared/domain'
+import { DomainCandidateRange } from '../shared/domain'
 import { DataSourceControlBlock } from './dataSourceControl'
-import { AvailabilityFilter, SortOrder, TldFilter } from './domain'
+import { AvailabilityFilter, Cart, SortOrder, TldFilter } from './domain'
 import { DomainsQuery } from './domainsQuery'
 import {
   AvailabilityListboxBlock,
@@ -20,12 +16,6 @@ import { ResultsListBlock } from './resultsList'
 import { ApplicationRoute } from './route'
 import { SearchCooldown } from './searchCooldown'
 import { SearchLayout } from './searchInput'
-
-export const Carts = Schema.Struct({
-  Demo: Schema.Array(Domain.Available),
-  Live: Schema.Array(Domain.Available),
-})
-export type Carts = typeof Carts.Type
 
 export const Model = Schema.Struct({
   route: ApplicationRoute,
@@ -47,22 +37,10 @@ export const Model = Schema.Struct({
   tldFilter: TldFilter,
   availabilityFilter: AvailabilityFilter,
   sortOrder: SortOrder,
-  carts: Carts,
+  carts: Cart.Carts,
   cartDialog: DialogBlock.Model,
   filtersDialog: DialogBlock.Model,
   tldDialog: DialogBlock.Model,
   tldSearchQuery: Schema.String,
 })
 export type Model = typeof Model.Type
-
-export const activeCart = (model: Model) => model.carts[model.dataSource]
-
-export const updateActiveCart = (
-  model: Model,
-  transform: (
-    cart: ReadonlyArray<AvailableDomain>,
-  ) => ReadonlyArray<AvailableDomain>,
-): Carts => ({
-  ...model.carts,
-  [model.dataSource]: transform(activeCart(model)),
-})

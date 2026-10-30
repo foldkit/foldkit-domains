@@ -3,10 +3,10 @@ import { Match } from 'effect'
 import { DomainListing, filterAndSortDomainListings } from './domain'
 import { Model } from './model'
 import { routeToQuery } from './route'
-import { searchPresentation } from './searchPresentation'
+import { searchViewState } from './searchViewState'
 
 export const resultListings = (model: Model): ReadonlyArray<DomainListing> =>
-  Match.value(searchPresentation(model)).pipe(
+  Match.value(searchViewState(model)).pipe(
     Match.tag('Idle', 'Loading', () =>
       filterAndSortDomainListings(
         routeToQuery(model.route),

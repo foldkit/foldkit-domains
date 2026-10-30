@@ -2,7 +2,6 @@ import {
   Array,
   Effect,
   Equal,
-  Equivalence,
   Layer,
   Match,
   Option,
@@ -773,44 +772,34 @@ export const subscriptions = DragAndDropDefinition.makeSubscriptions(entry => ({
   autoScroll: entry(
     'DragAndDropAutoScroll',
     {
-      isDragging: Schema.Boolean,
       clientY: Schema.Number,
     },
     {
       messages: [Message.AdvancedAutoScrollFrame],
+      when: model => model.dragState._tag === 'Dragging',
       modelToDependencies: model => ({
-        isDragging: model.dragState._tag === 'Dragging',
         clientY:
           model.dragState._tag === 'Dragging'
             ? model.dragState.current.clientY
             : 0,
       }),
-      keepAliveEquivalence: Equivalence.Struct({
-        isDragging: Equivalence.Boolean,
-      }),
+      keepAliveEquivalence: () => true,
       handler: function* () {
-        return ({ isDragging }, readDependencies) =>
-          Stream.when(
-            Stream.callback<typeof Message.AdvancedAutoScrollFrame.Type>(
-              queue =>
-                Effect.acquireRelease(
-                  Effect.sync(() => {
-                    const ref = { id: 0 }
-                    const step = () => {
-                      autoScroll(readDependencies().clientY)
-                      Queue.offerUnsafe(
-                        queue,
-                        Message.AdvancedAutoScrollFrame(),
-                      )
-                      ref.id = requestAnimationFrame(step)
-                    }
-                    ref.id = requestAnimationFrame(step)
-                    return ref
-                  }),
-                  ref => Effect.sync(() => cancelAnimationFrame(ref.id)),
-                ).pipe(Effect.flatMap(() => Effect.never)),
-            ),
-            Effect.sync(() => isDragging),
+        return (_dependencies, readDependencies) =>
+          Stream.callback<typeof Message.AdvancedAutoScrollFrame.Type>(queue =>
+            Effect.acquireRelease(
+              Effect.sync(() => {
+                const ref = { id: 0 }
+                const step = () => {
+                  autoScroll(readDependencies().clientY)
+                  Queue.offerUnsafe(queue, Message.AdvancedAutoScrollFrame())
+                  ref.id = requestAnimationFrame(step)
+                }
+                ref.id = requestAnimationFrame(step)
+                return ref
+              }),
+              ref => Effect.sync(() => cancelAnimationFrame(ref.id)),
+            ).pipe(Effect.flatMap(() => Effect.never)),
           )
       },
     },

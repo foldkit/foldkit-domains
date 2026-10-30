@@ -1,19 +1,18 @@
 export {
-  makeChangeTldFilterStep,
-  makeChangeAvailabilityFilterStep,
-  makeChangeSortOrderStep,
+  changeTldFilterStep,
+  changeAvailabilityFilterStep,
+  changeSortOrderStep,
 } from './filters'
 export {
   loadRequiredDomainsStep,
-  makeScheduleDomainRequestStep,
+  scheduleDomainRequestStep,
   loadDomainsForRangeStep,
 } from './domainLoading'
 export { informResultsListStep } from './resultsList'
 export {
   clearSearchStep,
   continueToLiveStep,
-  makeChangeSearchQueryStep,
+  changeSearchQueryStep,
   retrySearchStep,
-  searchCurrentQueryStep,
-  makeSearchCurrentQueryStep,
+  searchQueryStep,
 } from './search'

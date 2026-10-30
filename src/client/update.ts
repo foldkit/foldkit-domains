@@ -2,7 +2,6 @@ import { Array, Match, Option, String } from 'effect'
 import { Update, Url } from 'foldkit'
 import { UrlRequest } from 'foldkit/navigation'
 
-import { Domain } from '../shared/domain'
 import {
   DismissSearchKeyboard,
   FocusCartCloseButton,
@@ -26,30 +25,25 @@ import {
   makeNoopStep,
   makeStep,
 } from './definition'
-import type {
-  ChangedUrlMessage,
-  ClickedRemoveCartDomainMessage,
-} from './message'
-import { activeCart, updateActiveCart } from './model'
+import { Cart } from './domain'
 import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
+  changeAvailabilityFilterStep,
+  changeSearchQueryStep,
+  changeSortOrderStep,
+  changeTldFilterStep,
   clearSearchStep,
   continueToLiveStep,
   loadDomainsForRangeStep,
-  makeChangeAvailabilityFilterStep,
-  makeChangeSearchQueryStep,
-  makeChangeSortOrderStep,
-  makeChangeTldFilterStep,
-  makeScheduleDomainRequestStep,
-  makeSearchCurrentQueryStep,
   retrySearchStep,
-  searchCurrentQueryStep,
-} from './steps/index'
+  scheduleDomainRequestStep,
+  searchQueryStep,
+} from './steps'
 
 export const update = ApplicationComposition.makeUpdate({
-  UpdatedSearch: (model, { value }) => makeChangeSearchQueryStep(value)(model),
+  UpdatedSearch: (model, { value }) => changeSearchQueryStep(value)(model),
 
-  RequestedSearch: searchCurrentQueryStep,
+  RequestedSearch: model => searchQueryStep(routeToQuery(model.route))(model),
 
   ReachedSearchCooldownExpiry: makeFieldsStep.fromMessage(({ nowMillis }) => ({
     maybeSearchCooldown: Option.filter(
@@ -58,13 +52,14 @@ export const update = ApplicationComposition.makeUpdate({
   })),
 
   RequestedDomains: makeStep.fromMessage(({ offset, limit }) =>
-    makeScheduleDomainRequestStep({ offset, limit }),
+    scheduleDomainRequestStep({ offset, limit }),
   ),
 
-  SubmittedSearch: Update.combineSteps([
-    makeSearchCurrentQueryStep(true),
-    makeCommandsStep(() => [DismissSearchKeyboard()]),
-  ]),
+  SubmittedSearch: model =>
+    Update.combineSteps(model, [
+      searchQueryStep(routeToQuery(model.route), true),
+      makeCommandsStep(() => [DismissSearchKeyboard()]),
+    ]),
 
   UpdatedLiveLatencyAcceptance: makeFieldsStep.fromMessage(
     ({ isAccepted }) => ({
@@ -97,22 +92,25 @@ export const update = ApplicationComposition.makeUpdate({
     makeCommandsStep(() => [FocusSearchInput()]),
   ]),
 
-  ChangedUrl: makeStep((model, { url }: ChangedUrlMessage) => {
+  ChangedUrl: (model, { url }) => {
     const nextRoute = urlToApplicationRoute(url)
+    const nextQuery = routeToQuery(nextRoute)
 
-    const isSearchRefreshNeeded =
-      routeToQuery(nextRoute) !== routeToQuery(model.route)
+    const isSearchRefreshNeeded = nextQuery !== routeToQuery(model.route)
 
-    return Update.combineSteps([
-      makeFieldsStep(() => ({ route: () => nextRoute })),
-      isSearchRefreshNeeded ? searchCurrentQueryStep : makeNoopStep(),
+    const shouldScrollToTop =
       isSearchRefreshNeeded &&
-      ApplicationRoute.isAnyOf(['Search'])(nextRoute) &&
-      String.isEmpty(routeToQuery(nextRoute))
+      ApplicationRoute.guards.Search(nextRoute) &&
+      String.isEmpty(nextQuery)
+
+    return Update.combineSteps(model, [
+      makeFieldsStep(() => ({ route: () => nextRoute })),
+      isSearchRefreshNeeded ? searchQueryStep(nextQuery) : makeNoopStep(),
+      shouldScrollToTop
         ? makeCommandsStep(() => [ScrollPageToTop()])
         : makeNoopStep(),
     ])
-  }),
+  },
 
   ClickedLink: makeCommandsStep.fromMessage(({ request }) =>
     UrlRequest.match(request, {
@@ -122,44 +120,50 @@ export const update = ApplicationComposition.makeUpdate({
   ),
 
   UpdatedTldFilter: makeStep.fromMessage(({ value }) =>
-    makeChangeTldFilterStep(value),
+    changeTldFilterStep(value),
   ),
 
   UpdatedAvailabilityFilter: makeStep.fromMessage(({ value }) =>
-    makeChangeAvailabilityFilterStep(value),
+    changeAvailabilityFilterStep(value),
   ),
 
   UpdatedSortOrder: makeStep.fromMessage(({ value }) =>
-    makeChangeSortOrderStep(value),
+    changeSortOrderStep(value),
   ),
 
-  ClickedAddDomain: makeFieldsStep((model, { domain }) =>
-    Domain.isAnyOf(['Available'])(domain) &&
-    !Array.some(activeCart(model), item => item.name === domain.name)
-      ? { carts: () => updateActiveCart(model, Array.append(domain)) }
-      : {},
-  ),
+  ClickedAddDomain: makeFieldsStep((model, { domain }) => {
+    const isDomainInCart = Array.some(
+      Cart.forDataSource(model.carts, model.dataSource),
+      item => item.name === domain.name,
+    )
+
+    return isDomainInCart
+      ? {}
+      : {
+          carts: Cart.updateForDataSource(
+            model.dataSource,
+            Array.append(domain),
+          ),
+        }
+  }),
 
   ClickedRemoveDomain: makeFieldsStep((model, { name }) => ({
-    carts: () =>
-      updateActiveCart(
-        model,
-        Array.filter(domain => domain.name !== name),
-      ),
+    carts: Cart.updateForDataSource(
+      model.dataSource,
+      Array.filter(domain => domain.name !== name),
+    ),
   })),
 
-  ClickedRemoveCartDomain: makeStep.fromMessage(
-    ({ name }: ClickedRemoveCartDomainMessage) =>
-      Update.combineSteps([
-        makeFieldsStep(model => ({
-          carts: () =>
-            updateActiveCart(
-              model,
-              Array.filter(domain => domain.name !== name),
-            ),
-        })),
-        makeCommandsStep(() => [FocusCartCloseButton()]),
-      ]),
+  ClickedRemoveCartDomain: makeStep.fromMessage(({ name }) =>
+    Update.combineSteps([
+      makeFieldsStep(model => ({
+        carts: Cart.updateForDataSource(
+          model.dataSource,
+          Array.filter(domain => domain.name !== name),
+        ),
+      })),
+      makeCommandsStep(() => [FocusCartCloseButton()]),
+    ]),
   ),
 
   ClickedCart: CartDialogBinding.requestOpen(),
@@ -177,26 +181,26 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedTldOption: makeStep.fromMessage(({ value }) =>
     Update.combineSteps([
-      makeChangeTldFilterStep(value),
+      changeTldFilterStep(value),
       TldDialogBinding.requestClose(),
     ]),
   ),
 
   ClickedAvailabilityOption: makeStep.fromMessage(({ value }) =>
     Update.combineSteps([
-      makeChangeAvailabilityFilterStep(value),
+      changeAvailabilityFilterStep(value),
       FiltersDialogBinding.requestClose(),
     ]),
   ),
 
   ClickedSortOption: makeStep.fromMessage(({ value }) =>
     Update.combineSteps([
-      makeChangeSortOrderStep(value),
+      changeSortOrderStep(value),
       FiltersDialogBinding.requestClose(),
     ]),
   ),
 
-  CompletedReadSearchPlanningTime: loadDomainsForRangeStep,
+  CompletedReadCurrentTime: loadDomainsForRangeStep,
 
   ClickedDomainsHome: makeNoopStep(),
   ClickedSkipToMain: makeNoopStep(),

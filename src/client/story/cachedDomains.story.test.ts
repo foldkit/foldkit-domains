@@ -13,9 +13,9 @@ import { emptyModel, withDomainsForRange } from '../model.fixture'
 import { ApplicationRoute } from '../route'
 import {
   DomainRequestPresentation,
-  SearchPresentation,
-  searchPresentation,
-} from '../searchPresentation'
+  SearchViewState,
+  searchViewState,
+} from '../searchViewState'
 import { update } from '../update'
 import {
   changeSearchQuery,
@@ -58,14 +58,14 @@ test('a normalized fresh label restores after another label fails', () => {
       220,
     ),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Failed({ error: 'Provider unavailable' }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Failed({ error: 'Provider unavailable' }),
       )
     }),
     changeSearchQuery('Acme.de', 6, 300),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains: acmeDomains }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: acmeDomains }),
       )
       expect(DomainsQuery.read(model.domainsQuery, otherArgs)._tag).toBe(
         'Failure',
@@ -104,15 +104,15 @@ test('a fresh hit touches recency without extending the completion deadline', ()
       expect(DomainsQuery.isFresh(model.domainsQuery, acmeArgs, 60_099)).toBe(
         true,
       )
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains: acmeDomains }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: acmeDomains }),
       )
     }),
     changeSearchQuery('other', 8, 60_099),
     changeSearchQuery('acme', 10, 60_100),
     Command.expectHas(makeDomainsFetch(acmeArgs, 3)),
     model(model => {
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Loading())
+      expect(searchViewState(model)).toEqual(SearchViewState.Loading())
       expect(DomainsQuery.read(model.domainsQuery, acmeArgs)._tag).toBe(
         'Refreshing',
       )
@@ -233,8 +233,8 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
     resolveSearchTime(1, 110, 60, 60),
     resolveDomainsFailure(secondArgs, 3, pageFailure, 115),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({
           domains: firstPageDomains,
           domainRequest: DomainRequestPresentation.Failed({
             offset: 60,
@@ -254,8 +254,8 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
       expect(model.activeDomainCandidateRanges).toEqual([
         { offset: 0, limit: domainTlds.length },
       ])
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({
           domains: allDomains,
           domainRequest: DomainRequestPresentation.Idle(),
         }),
@@ -313,15 +313,15 @@ test('backspacing to a fresh query reuses Top Results and the visible candidate 
     ),
     changeSearchQuery('acme', 6, 400),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains: Array.take(acmeDomains, 4) }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: Array.take(acmeDomains, 4) }),
       )
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
     resolveSearchTime(6, 400, 4, 56),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains: acmeDomains }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: acmeDomains }),
       )
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),

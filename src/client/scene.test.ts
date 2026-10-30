@@ -45,16 +45,10 @@ import {
   FocusFiltersButton,
   FocusSearchInput,
   FocusTldFilterButton,
-  ReadSearchPlanningTime,
+  ReadCurrentTime,
   ReplaceSearchUrl,
   ScrollPage,
 } from './command'
-import {
-  CART_DIALOG_ID,
-  FILTERS_DIALOG_ID,
-  LIVE_WARNING_DIALOG_ID,
-  TLD_DIALOG_ID,
-} from './composition'
 import {
   DATA_SOURCE_CONTROL_ID,
   DataSourceControlBlock,
@@ -129,13 +123,6 @@ const acknowledgeTldSheetOpen = (generation: number) => [
     Dialog.test.ShowDialog,
     DialogBlock.Message.SucceededShowDialog(),
   ),
-  Mount.resolve(
-    Dialog.test.AcquireResources({
-      id: TLD_DIALOG_ID,
-      focusSelector: Dialog.initialFocusMarkerSelector,
-    }),
-    DialogBlock.Message.SucceededAcquireResources(),
-  ),
   Command.resolveAll(
     [
       Animation.test.WaitForPaint,
@@ -169,7 +156,6 @@ const acknowledgeTldSheetClose = (generation: number) => [
     FocusTldFilterButton,
     Message.CompletedFocusTldFilterButton(),
   ),
-  Mount.expectEnded(Dialog.test.AcquireResources),
 ]
 
 const resolveResultsListScrolls = <Model, Message, OutMessage>(
@@ -195,12 +181,12 @@ const resolveSearchPlanningTime =
     simulation: SceneSimulation<Model, Message_, OutMessage>,
   ): SceneSimulation<Model, Message_, OutMessage> =>
     Array.reduce(simulation.commands, simulation, (current, command) =>
-      Option.match(Command.argsOf(ReadSearchPlanningTime)(command), {
+      Option.match(Command.argsOf(ReadCurrentTime)(command), {
         onNone: () => current,
         onSome: args =>
           Command.resolve(
-            ReadSearchPlanningTime(args),
-            Message.CompletedReadSearchPlanningTime({ ...args, nowMillis }),
+            ReadCurrentTime(args),
+            Message.CompletedReadCurrentTime({ ...args, nowMillis }),
           )(current),
       }),
     )
@@ -282,7 +268,7 @@ describe('domain search', () => {
       ]),
       Command.expectNone(),
       Navigation.changedUrl('/?q=acme'),
-      Command.expectHas(ReadSearchPlanningTime),
+      Command.expectHas(ReadCurrentTime),
       resolveSearchPlanningTime(),
       measureResultsList,
       inside(domainResults, expect(text(/\$/)).toBeAbsent()),
@@ -296,7 +282,7 @@ describe('domain search', () => {
       expect(label('Search domains')).toHaveValue('acme'),
       inside(allDomainResults, expect(text('acme.com')).toExist()),
       inside(firstDomainResult, expect(text('$12.00')).toExist()),
-      Command.expectHas(ReadSearchPlanningTime),
+      Command.expectHas(ReadCurrentTime),
       resolveSearchPlanningTime(1),
       resolveResultsListScrolls,
       Command.keepPending(DomainsQuery.Fetch),
@@ -578,13 +564,6 @@ describe('filters presentation', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      Mount.resolve(
-        Dialog.test.AcquireResources({
-          id: FILTERS_DIALOG_ID,
-          focusSelector: Dialog.initialFocusMarkerSelector,
-        }),
-        DialogBlock.Message.SucceededAcquireResources(),
-      ),
       Command.resolveAll(
         [
           Animation.test.WaitForPaint,
@@ -635,7 +614,6 @@ describe('filters presentation', () => {
         FocusFiltersButton,
         Message.CompletedFocusFiltersButton(),
       ),
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(selector('.filters-panel')).toBeAbsent(),
       expect(firstDomainResult).toHaveText('acme.space$1.99'),
     )
@@ -662,13 +640,6 @@ describe('cart presentation', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      Mount.resolve(
-        Dialog.test.AcquireResources({
-          id: CART_DIALOG_ID,
-          focusSelector: Dialog.initialFocusMarkerSelector,
-        }),
-        DialogBlock.Message.SucceededAcquireResources(),
-      ),
       inside(
         role('region', { name: 'Your cart' }),
         expect(text('Registration total$21.99')).toExist(),
@@ -685,7 +656,6 @@ describe('cart presentation', () => {
         DialogBlock.Message.CompletedCloseDialog(),
       ),
       Command.resolve(FocusCartButton, Message.CompletedFocusCartButton()),
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(role('button', { name: 'Cart, 1 domains' })).toExist(),
     )
   })
@@ -905,13 +875,6 @@ test('the data source listbox requires acknowledgment before selecting Live and 
       Dialog.test.ShowDialog,
       DialogBlock.Message.SucceededShowDialog(),
     ),
-    Mount.resolve(
-      Dialog.test.AcquireResources({
-        id: LIVE_WARNING_DIALOG_ID,
-        focusSelector: Dialog.initialFocusMarkerSelector,
-      }),
-      DialogBlock.Message.SucceededAcquireResources(),
-    ),
     expect(role('dialog', { name: 'Before you go Live' })).toExist(),
     expect(role('button', { name: 'Continue to Live' })).toBeDisabled(),
     click(
@@ -929,7 +892,6 @@ test('the data source listbox requires acknowledgment before selecting Live and 
       FocusDataSourceButton,
       Message.CompletedFocusDataSourceButton(),
     ),
-    Mount.expectEnded(Dialog.test.AcquireResources),
     resolveSearchPlanningTime(),
     resolveDomains(
       'acme',

@@ -1,8 +1,9 @@
 import { Cause, Clock, Duration, Effect, Option, Schema } from 'effect'
-import * as Query from 'foldkit/experimental/query'
+import { Query } from 'foldkit/experimental'
 
 import { DataSource } from '../shared/dataSource'
 import { Domain, DomainCandidateRange, DomainLabel } from '../shared/domain'
+import type { RateLimitedSearchError } from '../shared/domainsRpc'
 import { DomainsClient } from './rpc'
 import { SearchCooldown, formatRateLimitMessage } from './searchCooldown'
 
@@ -21,6 +22,28 @@ export const DomainsQueryFailure = Schema.Struct({
   maybeSearchCooldown: Schema.Option(SearchCooldown),
 })
 export type DomainsQueryFailure = typeof DomainsQueryFailure.Type
+
+const handleRateLimited = ({
+  source,
+  retryAfterSeconds,
+}: RateLimitedSearchError) =>
+  Effect.gen(function* () {
+    const nowMillis = yield* Clock.currentTimeMillis
+
+    return yield* Effect.fail(
+      DomainsQueryFailure.make({
+        error: formatRateLimitMessage(source, retryAfterSeconds),
+        maybeSearchCooldown: Option.some(
+          SearchCooldown.make({
+            source,
+            expiresAtMillis:
+              nowMillis +
+              Duration.toMillis(Duration.seconds(retryAfterSeconds)),
+          }),
+        ),
+      }),
+    )
+  })
 
 export const fetchDomains = (args: DomainsQueryArgs) => {
   const unavailable = (error: string) =>
@@ -44,23 +67,7 @@ export const fetchDomains = (args: DomainsQueryArgs) => {
   }).pipe(
     Effect.timeout(SEARCH_TIMEOUT),
     Effect.catchTags({
-      RateLimited: ({ source, retryAfterSeconds }) =>
-        Effect.gen(function* () {
-          const nowMillis = yield* Clock.currentTimeMillis
-          return yield* Effect.fail(
-            DomainsQueryFailure.make({
-              error: formatRateLimitMessage(source, retryAfterSeconds),
-              maybeSearchCooldown: Option.some(
-                SearchCooldown.make({
-                  source,
-                  expiresAtMillis:
-                    nowMillis +
-                    Duration.toMillis(Duration.seconds(retryAfterSeconds)),
-                }),
-              ),
-            }),
-          )
-        }),
+      RateLimited: handleRateLimited,
       Unavailable: () =>
         unavailable(
           'Could not check availability and prices. Please try again.',

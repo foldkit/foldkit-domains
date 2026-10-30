@@ -64,13 +64,13 @@ When a handler only applies an existing compatible Model-first Step, supply the 
 
 The retained precision depends on the visible handler and helper return types. A broad annotation or an already-erased helper contract cannot recover narrower Commands or OutMessages.
 
-Plain inline handlers infer the Model and exact Message from the record. A Model-aware callback wrapped in general `makeStep` currently needs a precise Message variant annotation, because that helper also supports arbitrary operation arguments. Use `makeStep.fromMessage` when only the payload constructs the Step; inline records infer its Message. An extracted producer needs its own precise parameter contract.
+Inline handlers and Model-aware `makeStep` producers infer the Model and exact Message from their `makeUpdate` entry, including entries returned by `.withContext`. Use `makeStep.fromMessage` when only the Message constructs the Step. An extracted producer needs its own precise parameter contract; operation arguments outside a handler record retain their explicit domain types.
 
 ### Updates with Dispatch Context
 
 Use `FeatureComposition.makeUpdate.withContext(context => handlers)` when local handlers need additional dispatch arguments. The factory receives those arguments and returns the exhaustive local handler record. Its handlers receive the Model and exact Message payload as usual. Required, defaulted, optional, and rest context arguments retain their call shapes.
 
-Creating the update is passive. The factory runs for each local dispatch and does not run for a routed child-only delivery. Context-factory handlers that use a generic Step may need the explicit adapter `model => step(model)` for inference; they do not need a Model annotation.
+Creating the update is passive. The factory runs for each local dispatch and does not run for a routed child-only delivery. Context-factory handlers do not need a Model annotation, and a compatible Step can be a record value directly, as in the plain handler record.
 
 ::Snippet{name="updateCurriedContext" label="Authoring an update with dispatch context"}
 

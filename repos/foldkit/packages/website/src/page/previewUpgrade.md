@@ -49,6 +49,22 @@ Run [the upgrade checks](#verify-the-upgrade), including public declaration outp
 
 The candidate accepts the tested Effect versions through `4.0.0 || 4.0.6` peers. The browser-platform peer accepts the same two versions. Keep one resolved Effect runtime and choose platform releases whose own Effect peer ranges accept it: platform 4.0.6 requires Effect 4.0.6 or newer. Application and development dependencies can stay exactly pinned for reproducibility. Unverified releases are excluded because some upstream APIs are marked unstable and changed between these patches. This does not require a Block API migration.
 
+### Authoring and lifecycle fixes
+
+Inline Model-aware `makeStep` producers now infer the exact Message from their handler-record entry, including `.withContext`. Redundant Message parameter annotations can be removed at those inline sites. Extracted Steps retain their own precise parameter contracts. See [handlers and Steps](/core/update#choosing-between-handlers-and-steps).
+
+Contextual update records now accept compatible Steps and Binding operations directly, including records that mix them with callback handlers. Remove an adapter such as `model => closeStep(model)` when it only forwards to the Step. Keep callbacks that map payloads, derive arguments or supply context.
+
+Extracting registration evidence from returned Commands now avoids TS2589 in the reported large Root composition, while retaining registration checks. This does not establish a general limit on the number of Blocks or remove all compiler costs in large graphs.
+
+Scene follows renderer element identity when tracking Mount lifetimes. A replaced element ends its old Mount; a patched element keeps its original Mount even if its `OnMount` attribute changes. Review Scene tests that resolved a Mount which never starts in the browser. Runtime teardown also releases the original Mount when its element is removed after dropping `OnMount`.
+
+`Scene.unhover(target)` now exercises hover exit through the element's `OnMouseLeave` handler, falling back to `OnMouseOut`. See [Scene interactions](/testing/scene#interactions).
+
+Subscription entries can declare a Model-based `when` gate. Scene adds explicit activity assertions; queued-event delivery stays supported. See [Subscriptions](/core/subscriptions) and [Scene testing](/testing/scene) for the contracts. Handler constructors still run at Runtime startup and retain their Service requirements and errors, even behind a closed Stream gate.
+
+SSR development reloads recreate Block Definitions together with their declarations. Server entries that own long-lived resources can register an HMR disposal callback. See [server entry cleanup](/core/server-rendering#releasing-resources-when-the-server-entry-reloads) for setup and reload limits.
+
 ### UI Block factories
 
 Rename `create` to `makeBlock` on Listbox, Combobox, Menu, RadioGroup, Tabs, and VirtualList, including the Listbox and Combobox Multi variants. Rename `Toast.make` to `Toast.makeBlock` too. Type parameters and Schema arguments stay the same; the old factory names have no compatibility aliases.

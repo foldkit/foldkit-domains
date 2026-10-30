@@ -15,17 +15,17 @@ import {
   LiveWarningDialogBinding,
 } from '../composition'
 import { DataSourceControlBlock } from '../dataSourceControl'
+import { Cart } from '../domain'
 import {
   DomainsQuery,
   DomainsQueryArgs,
   DomainsQueryFailure,
 } from '../domainsQuery'
 import { Message } from '../message'
-import { activeCart } from '../model'
 import { emptyModel, withDomainsForRange } from '../model.fixture'
 import { ApplicationRoute, routeToQuery } from '../route'
 import { SearchCooldown } from '../searchCooldown'
-import { SearchPresentation, searchPresentation } from '../searchPresentation'
+import { SearchViewState, searchViewState } from '../searchViewState'
 import { update } from '../update'
 import {
   domainsRequestKey,
@@ -98,7 +98,7 @@ test('switching data sources cancels a pending lookup and rejects its late quote
     update,
     given(searchModel),
     message(
-      Message.CompletedReadSearchPlanningTime({
+      Message.CompletedReadCurrentTime({
         searchGeneration: 0,
         offset: 0,
         limit: 4,
@@ -137,7 +137,7 @@ test('switching data sources cancels a pending lookup and rejects its late quote
       expect(model.dataSource).toBe('Live')
       expect(routeToQuery(model.route)).toBe('acme')
       expect(model.maybeSearchCooldown).toEqual(Option.none())
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Loading())
+      expect(searchViewState(model)).toEqual(SearchViewState.Loading())
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([liveArgs])
     }),
     resolveDomainsSuccess(liveArgs, 3, [liveDomain], 300),
@@ -159,20 +159,22 @@ test('data-source-specific cached results and carts restore without fetching or 
     ...selectDataSource('Live'),
     resolveSearchTime(1, 100),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains: [liveDomain] }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: [liveDomain] }),
       )
-      expect(activeCart(model)).toEqual([])
+      expect(Cart.forDataSource(model.carts, model.dataSource)).toEqual([])
     }),
     message(Message.ClickedAddDomain({ domain: liveDomain })),
     ...selectDataSource('Demo'),
     resolveSearchTime(2, 200),
     model(model => {
       expect(routeToQuery(model.route)).toBe('acme')
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains: [demoDomain] }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({ domains: [demoDomain] }),
       )
-      expect(activeCart(model)).toEqual([demoDomain])
+      expect(Cart.forDataSource(model.carts, model.dataSource)).toEqual([
+        demoDomain,
+      ])
       expect(model.carts.Live).toEqual([liveDomain])
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
@@ -202,7 +204,7 @@ test('a live provider cooldown permits Demo requests and applies again after ret
     resolveSearchTime(2, 300),
     model(model => {
       expect(model.maybeSearchCooldown).toEqual(Option.some(cooldown))
-      expect(searchPresentation(model)._tag).toBe('Failed')
+      expect(searchViewState(model)._tag).toBe('Failed')
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
     resolveResultsListScrolls,
@@ -210,7 +212,7 @@ test('a live provider cooldown permits Demo requests and applies again after ret
   )
 })
 
-test('Live requires acknowledgment and cancellation leaves Demo active with fresh consent on reopening', () => {
+test('dismissing the Live warning preserves Demo and resets acknowledgment on reopening', () => {
   story(
     update,
     given(searchModel),
@@ -219,7 +221,6 @@ test('Live requires acknowledgment and cancellation leaves Demo active with fres
       Dialog.test.ShowDialog,
       DialogBlock.Message.SucceededShowDialog(),
     ),
-    message(Message.ClickedContinueToLive()),
     model(model => {
       expect(model.dataSource).toBe('Demo')
       expect(model.liveWarningDialog.isOpen).toBe(true)
@@ -239,7 +240,6 @@ test('Live requires acknowledgment and cancellation leaves Demo active with fres
       expect(model.liveWarningDialog.isOpen).toBe(false)
       expect(model.isLiveLatencyAccepted).toBe(false)
     }),
-    message(Message.ClickedContinueToLive()),
     requestDataSource('Live'),
     Command.resolve(
       Dialog.test.ShowDialog,

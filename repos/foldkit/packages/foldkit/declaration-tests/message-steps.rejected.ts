@@ -96,6 +96,15 @@ const wrongTagStep = makeStep.fromMessage(
   (_message: typeof Message.RequestedReport.Type) =>
     CounterDefinition.makeNoopStep(),
 )
+const ordinaryWrongTagStep = makeStep(
+  (model, _message: typeof Message.RequestedReport.Type) => ({ model }),
+)
+CounterComposition.makeUpdate({
+  // @ts-expect-error A Model-aware Step cannot be installed under another Message tag.
+  RequestedIncrement: ordinaryWrongTagStep,
+  RequestedReport: CounterDefinition.makeNoopStep(),
+  CompletedSave: CounterDefinition.makeNoopStep(),
+})
 CounterComposition.makeUpdate({
   // @ts-expect-error Installing the handler under a different tag cannot change its accepted Message.
   RequestedIncrement: wrongTagStep,
@@ -134,6 +143,57 @@ ParentComposition.makeUpdate({
   RequestedQuiet: ParentDefinition.makeNoopStep(),
   // @ts-expect-error Sequential Steps cannot silently drop a connected OutMessage.
   RequestedReport: lossyStep,
+  RequestedSave: ParentDefinition.makeNoopStep(),
+  CompletedSave: ParentDefinition.makeNoopStep(),
+})
+
+CounterComposition.makeUpdate({
+  // @ts-expect-error Inline Step inference does not permit an erased Message parameter.
+  RequestedIncrement: makeStep((model, _message: any) => ({ model })),
+  RequestedReport: CounterDefinition.makeNoopStep(),
+  CompletedSave: CounterDefinition.makeNoopStep(),
+})
+CounterComposition.makeUpdate({
+  // @ts-expect-error A handler must accept its complete Message variant.
+  RequestedIncrement: makeStep(
+    (
+      model,
+      _message: typeof Message.RequestedIncrement.Type & { amount: 1 },
+    ) => ({ model }),
+  ),
+  RequestedReport: CounterDefinition.makeNoopStep(),
+  CompletedSave: CounterDefinition.makeNoopStep(),
+})
+CounterComposition.makeUpdate({
+  // @ts-expect-error A handler cannot require an impossible Message.
+  RequestedIncrement: makeStep((model, _message: never) => ({ model })),
+  RequestedReport: CounterDefinition.makeNoopStep(),
+  CompletedSave: CounterDefinition.makeNoopStep(),
+})
+CounterComposition.makeUpdate({
+  // @ts-expect-error Contextual Message inference does not allow erased result channels.
+  RequestedIncrement: makeStep((_model, _message) => erased),
+  RequestedReport: CounterDefinition.makeNoopStep(),
+  CompletedSave: CounterDefinition.makeNoopStep(),
+})
+UnregisteredComposition.makeUpdate({
+  RequestedQuiet: ParentDefinition.makeNoopStep(),
+  // @ts-expect-error Inline Model-aware Steps preserve child registration requirements.
+  RequestedReport: ParentDefinition.makeStep((model, _message) =>
+    ChildBinding.report({ amount: model.count }),
+  ),
+  RequestedSave: ParentDefinition.makeNoopStep(),
+  CompletedSave: ParentDefinition.makeNoopStep(),
+})
+ParentComposition.makeUpdate({
+  RequestedQuiet: ParentDefinition.makeNoopStep(),
+  // @ts-expect-error Inline Model-aware composition cannot discard connected OutMessages.
+  RequestedReport: ParentDefinition.makeStep((model, _message) =>
+    Update.combineSteps([
+      ParentDefinition.makeNoopStep(),
+      ChildBinding.report({ amount: model.count }),
+    ]),
+  ),
   RequestedSave: ParentDefinition.makeNoopStep(),
   CompletedSave: ParentDefinition.makeNoopStep(),
 })

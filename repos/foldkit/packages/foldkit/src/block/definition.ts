@@ -89,6 +89,7 @@ import type {
   ContextualMessageProducer,
   FocusedMessageOf,
   FocusedStepValidation,
+  StepContextHint,
   ValidateMessageProducer,
 } from './focusedStep.js'
 import {
@@ -491,6 +492,10 @@ export interface DefineView<
  * initialization recipe. The helper preserves graph obligations until the
  * matching Composition interprets them under its registered graph.
  *
+ * An inline `makeUpdate` entry supplies the producer's exact Message, including
+ * entries returned by `makeUpdate.withContext`. Extracted producers and other
+ * operation arguments retain their own precise parameter contracts.
+ *
  * Public parent-driven operations belong in `prepareBlock({ operations })`. Each
  * exposed producer returns a local Message and its update context instead of a
  * Model transformation.
@@ -526,7 +531,8 @@ export interface DefineStep<Model, Message, OutMessage> {
       | Update.ResultEvidenceChannelOf<DeferredStepReturn<Output>>
       | Update.GraphRequirementOf<Extract<Output, AnyFunction>>
     >
-  >
+  > &
+    StepContextHint<Context>
 
   /**
    * Authors a Model-first handler from a Message-only producer. In an inline
@@ -871,6 +877,7 @@ export interface OwnedSubscriptionEntryBuilder<
       keepAliveEquivalence: Equivalence.Equivalence<
         Schema.Struct.Type<NoInfer<Fields>>
       >
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -919,6 +926,7 @@ export interface OwnedSubscriptionEntryBuilder<
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
       modelToDependencies: (model: Model) => Schema.Struct.Type<NoInfer<Fields>>
       keepAliveEquivalence?: never
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -962,6 +970,7 @@ export interface OwnedSubscriptionEntryBuilder<
       : Name,
     config: Readonly<{
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -996,6 +1005,7 @@ export interface OwnedSubscriptionEntryBuilder<
       : Name,
     config: Readonly<{
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,
@@ -1021,6 +1031,7 @@ export interface OwnedSubscriptionEntryBuilder<
       keepAliveEquivalence: Equivalence.Equivalence<
         Schema.Struct.Type<NoInfer<Fields>>
       >
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,
@@ -1044,6 +1055,7 @@ export interface OwnedSubscriptionEntryBuilder<
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
       modelToDependencies: (model: Model) => Schema.Struct.Type<NoInfer<Fields>>
       keepAliveEquivalence?: never
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,

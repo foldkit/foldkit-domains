@@ -44,12 +44,10 @@ export const update = EditorComposition.makeUpdate({
   RequestedSaveTitle: makeCommandsStep((model, { title }) => [
     SaveTitle({ issueId: model.issueId, title }),
   ]),
-  SubmittedTitle: makeStep.fromMessage(({ title }) =>
+  SubmittedTitle: makeStep((model, { title }) =>
     Update.combineSteps([
       makeFieldsStep(() => ({ title: () => title })),
-      makeCommandsStep(model => [
-        SaveTitle({ issueId: model.issueId, title: model.title }),
-      ]),
+      makeCommandsStep(() => [SaveTitle({ issueId: model.issueId, title })]),
     ]),
   ),
   ClickedClose: makeOutMessageStep.fromMessage(({ reason }) =>

@@ -20,7 +20,7 @@ export const DomainRequestPresentation = defineTaggedUnion({
 })
 export type DomainRequestPresentation = typeof DomainRequestPresentation.Type
 
-export const SearchPresentation = defineTaggedUnion({
+export const SearchViewState = defineTaggedUnion({
   Idle: {},
   Loading: {},
   Ready: {
@@ -33,19 +33,19 @@ export const SearchPresentation = defineTaggedUnion({
   },
   Failed: { error: Schema.String },
 })
-export type SearchPresentation = typeof SearchPresentation.Type
+export type SearchViewState = typeof SearchViewState.Type
 
-export const searchPresentation = (model: Model): SearchPresentation => {
+export const searchViewState = (model: Model): SearchViewState => {
   const query = routeToQuery(model.route)
 
   if (String.isEmpty(query)) {
-    return SearchPresentation.Idle()
+    return SearchViewState.Idle()
   }
 
   const maybeLabel = queryToMaybeDomainLabel(query)
 
   if (Option.isNone(maybeLabel)) {
-    return SearchPresentation.Failed({
+    return SearchViewState.Failed({
       error:
         'Enter a domain name using letters, numbers, and hyphens (up to 63 characters).',
     })
@@ -112,8 +112,8 @@ export const searchPresentation = (model: Model): SearchPresentation => {
 
   if (!isAnyRangeChecked) {
     return Option.match(maybeFailure, {
-      onNone: SearchPresentation.Loading,
-      onSome: ({ error }) => SearchPresentation.Failed({ error }),
+      onNone: SearchViewState.Loading,
+      onSome: ({ error }) => SearchViewState.Failed({ error }),
     })
   }
 
@@ -126,5 +126,5 @@ export const searchPresentation = (model: Model): SearchPresentation => {
       }),
   })
 
-  return SearchPresentation.Ready({ domains, domainRequest })
+  return SearchViewState.Ready({ domains, domainRequest })
 }

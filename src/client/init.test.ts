@@ -2,19 +2,19 @@ import { Array } from 'effect'
 import { Command } from 'foldkit/story'
 import { describe, expect, test } from 'vitest'
 
-import { ReadSearchPlanningTime, ReleaseEarlySearchListeners } from './command'
+import { ReadCurrentTime, ReleaseEarlySearchListeners } from './command'
 import { init } from './init'
 import { urlOrThrow } from './model.fixture'
 import { routeToQuery } from './route'
-import { searchPresentation } from './searchPresentation'
+import { searchViewState } from './searchViewState'
 
 describe('startup', () => {
   test.each([
-    { path: '/', query: '', presentationTag: 'Idle', clocks: [] },
+    { path: '/', query: '', viewStateTag: 'Idle', clocks: [] },
     {
       path: '/?q=Acme.dev',
       query: 'Acme.dev',
-      presentationTag: 'Loading',
+      viewStateTag: 'Loading',
       clocks: [
         {
           searchGeneration: 1,
@@ -27,13 +27,13 @@ describe('startup', () => {
     {
       path: '/?q=not%20a%20domain!',
       query: 'not a domain!',
-      presentationTag: 'Failed',
+      viewStateTag: 'Failed',
       clocks: [],
     },
-    { path: '/?q=', query: '', presentationTag: 'Idle', clocks: [] },
+    { path: '/?q=', query: '', viewStateTag: 'Idle', clocks: [] },
   ])(
     'initializes $path from the URL and clocks valid searches before loading domain results',
-    ({ path, query, presentationTag, clocks }) => {
+    ({ path, query, viewStateTag, clocks }) => {
       const applicationInit = init(urlOrThrow(`http://localhost${path}`))
 
       expect(applicationInit.model.searchLayout).toBe(
@@ -42,14 +42,12 @@ describe('startup', () => {
       expect(applicationInit.model.dataSource).toBe('Demo')
       expect(applicationInit.model.carts).toEqual({ Demo: [], Live: [] })
       expect(routeToQuery(applicationInit.model.route)).toBe(query)
-      expect(searchPresentation(applicationInit.model)._tag).toBe(
-        presentationTag,
-      )
+      expect(searchViewState(applicationInit.model)._tag).toBe(viewStateTag)
       expect(
         Array.getSomes(
           Array.map(
             applicationInit.commands ?? [],
-            Command.argsOf(ReadSearchPlanningTime),
+            Command.argsOf(ReadCurrentTime),
           ),
         ),
       ).toEqual(clocks)

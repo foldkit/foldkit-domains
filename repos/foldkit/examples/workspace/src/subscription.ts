@@ -22,23 +22,15 @@ export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
       },
     },
   ),
-  activity: entry(
-    'Activity',
-    { isActive: Schema.Boolean },
-    {
-      messages: [Message.TickedActivityStream],
-      modelToDependencies: model => ({
-        isActive: AsyncData.hasData(model.workspaceAsyncData),
-      }),
-      handler: function* () {
-        return ({ isActive }) =>
-          isActive
-            ? Stream.tick(ACTIVITY_TICK_INTERVAL).pipe(
-                Stream.drop(1),
-                Stream.map(Message.TickedActivityStream),
-              )
-            : Stream.empty
-      },
+  activity: entry('Activity', {
+    messages: [Message.TickedActivityStream],
+    when: model => AsyncData.hasData(model.workspaceAsyncData),
+    handler: function* () {
+      return () =>
+        Stream.tick(ACTIVITY_TICK_INTERVAL).pipe(
+          Stream.drop(1),
+          Stream.map(Message.TickedActivityStream),
+        )
     },
-  ),
+  }),
 }))

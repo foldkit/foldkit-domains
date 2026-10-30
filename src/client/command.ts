@@ -11,20 +11,20 @@ import { searchRouter } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
 import { subscriptions } from './subscription'
 
-export const ReadSearchPlanningTime = ApplicationDefinition.makeCommand(
-  'ReadSearchPlanningTime',
+export const ReadCurrentTime = ApplicationDefinition.makeCommand(
+  'ReadCurrentTime',
   {
     args: {
       searchGeneration: Schema.Number,
       ...DomainCandidateRange.fields,
       isRefreshRequested: Schema.Boolean,
     },
-    messages: [Message.CompletedReadSearchPlanningTime],
+    messages: [Message.CompletedReadCurrentTime],
     handler: function* () {
       return args =>
         Effect.gen(function* () {
           const nowMillis = yield* Clock.currentTimeMillis
-          return Message.CompletedReadSearchPlanningTime({ ...args, nowMillis })
+          return Message.CompletedReadCurrentTime({ ...args, nowMillis })
         })
     },
   },
@@ -265,7 +265,7 @@ export const ReleaseEarlySearchListeners = ApplicationDefinition.makeCommand(
 
 export const EffectsLayer = Layer.mergeAll(
   subscriptions.layer,
-  ReadSearchPlanningTime.layer,
+  ReadCurrentTime.layer,
   ReplaceSearchUrl.layer,
   NavigateInternal.layer,
   LoadExternal.layer,

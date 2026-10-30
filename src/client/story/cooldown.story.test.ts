@@ -30,9 +30,9 @@ import { ApplicationRoute } from '../route'
 import { SearchCooldown } from '../searchCooldown'
 import {
   DomainRequestPresentation,
-  SearchPresentation,
-  searchPresentation,
-} from '../searchPresentation'
+  SearchViewState,
+  searchViewState,
+} from '../searchViewState'
 import { subscriptions } from '../subscription'
 import { update } from '../update'
 import {
@@ -111,8 +111,8 @@ test('a canceled completion stays silent before the route event, while the curre
     resolveDomainsFailure(otherArgs, 3, cooldownFailure, 220),
     model(model => {
       expect(model.maybeSearchCooldown).toEqual(maybeCooldown)
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Failed({ error: cooldownFailure.error }),
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Failed({ error: cooldownFailure.error }),
       )
     }),
     resolveResultsListScrolls,
@@ -152,9 +152,7 @@ test('fresh navigation passes cooldown preflight, forced refresh waits for the e
     ),
     resolveSearchTime(2, 100),
     model(model => {
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains }),
-      )
+      expect(searchViewState(model)).toEqual(SearchViewState.Ready({ domains }))
       expect(model.maybeBlockedDomainCandidateRange).toEqual(Option.none())
     }),
     message(Message.SubmittedSearch()),
@@ -167,8 +165,8 @@ test('fresh navigation passes cooldown preflight, forced refresh waits for the e
       expect(model.maybeBlockedDomainCandidateRange).toEqual(
         Option.some({ offset: 0, limit: 4 }),
       )
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({
+      expect(searchViewState(model)).toEqual(
+        SearchViewState.Ready({
           domains,
           domainRequest: DomainRequestPresentation.Failed({
             offset: 0,
@@ -197,9 +195,7 @@ test('fresh navigation passes cooldown preflight, forced refresh waits for the e
     resolveDomainsSuccess(args, 2, domains, 10_020),
     model(model => {
       expect(model.maybeSearchCooldown).toEqual(Option.none())
-      expect(searchPresentation(model)).toEqual(
-        SearchPresentation.Ready({ domains }),
-      )
+      expect(searchViewState(model)).toEqual(SearchViewState.Ready({ domains }))
     }),
     resolveResultsListScrolls,
     Command.expectNone(),

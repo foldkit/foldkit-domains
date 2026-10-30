@@ -9,7 +9,7 @@ import { VirtualList } from '@foldkit/ui'
 import { DataSource } from '../../shared/dataSource'
 import { domainTlds } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
-import { FocusSearchInput, ReadSearchPlanningTime } from '../command'
+import { FocusSearchInput, ReadCurrentTime } from '../command'
 import { ResultsListBinding } from '../composition'
 import { DomainListing, SortOrder } from '../domain'
 import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
@@ -20,9 +20,9 @@ import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute } from '../route'
 import {
   DomainRequestPresentation,
-  SearchPresentation,
-  searchPresentation,
-} from '../searchPresentation'
+  SearchViewState,
+  searchViewState,
+} from '../searchViewState'
 import { update } from '../update'
 import {
   makeDomainsFetch,
@@ -176,7 +176,7 @@ describe('progressive domain results', () => {
         }),
         resolveResultsListScrolls,
         Command.expectExact(
-          ReadSearchPlanningTime({
+          ReadCurrentTime({
             searchGeneration: 1,
             offset: 4,
             limit: 56,
@@ -191,7 +191,7 @@ describe('progressive domain results', () => {
         Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
         resolveResultsListScrolls,
         Command.expectExact(
-          ReadSearchPlanningTime({
+          ReadCurrentTime({
             searchGeneration: 1,
             offset: 4,
             limit: 56,
@@ -236,15 +236,15 @@ describe('progressive domain results', () => {
       Command.expectHas(makeDomainsFetch(topArgs, 1)),
       resolveDomainsSuccess(topArgs, 1, topDomains, 10),
       model(model => {
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: topDomains }),
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({ domains: topDomains }),
         )
       }),
       resolveSearchTime(1, 10, 4, 56),
       Command.expectHas(makeDomainsFetch(remainingArgs, 2)),
       model(model => {
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({
             domains: topDomains,
             domainRequest: DomainRequestPresentation.Loading({
               offset: 4,
@@ -260,8 +260,8 @@ describe('progressive domain results', () => {
         20,
       ),
       model(model => {
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: firstPageDomains }),
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({ domains: firstPageDomains }),
         )
       }),
       resolveResultsListScrolls,
@@ -279,7 +279,7 @@ describe('progressive domain results', () => {
       message(scroll(3762)),
       resolveDomainsSuccess(secondArgs, 2, secondPageDomains, 20),
       Command.expectHas(
-        ReadSearchPlanningTime({
+        ReadCurrentTime({
           searchGeneration: 1,
           offset: 180,
           limit: 60,
@@ -290,12 +290,12 @@ describe('progressive domain results', () => {
       Command.expectHas(makeDomainsFetch(laterArgs, 3)),
       resolveDomainsSuccess(laterArgs, 3, laterPageDomains, 40),
       model(model => {
-        const presentation = searchPresentation(model)
-        expect(presentation._tag).toBe('Ready')
+        const viewState = searchViewState(model)
+        expect(viewState._tag).toBe('Ready')
 
-        if (presentation._tag === 'Ready') {
-          expect(presentation.domains).toHaveLength(180)
-          expect(presentation.domainRequest._tag).toBe('Idle')
+        if (viewState._tag === 'Ready') {
+          expect(viewState.domains).toHaveLength(180)
+          expect(viewState.domainRequest._tag).toBe('Idle')
         }
       }),
       resolveResultsListScrolls,
@@ -311,8 +311,8 @@ describe('progressive domain results', () => {
       resolveSearchTime(1, 10, 60, 60),
       resolveDomainsFailure(secondArgs, 2, pageFailure, 20),
       model(model => {
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({
             domains: firstPageDomains,
             domainRequest: DomainRequestPresentation.Failed({
               offset: 60,
@@ -334,8 +334,8 @@ describe('progressive domain results', () => {
       resolveDomainsSuccess(catalogArgs, 4, allDomains, 60),
       model(model => {
         expect(model.sortOrder).toBe('PriceAscending')
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: allDomains }),
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({ domains: allDomains }),
         )
       }),
       resolveResultsListScrolls,
@@ -378,7 +378,7 @@ describe('progressive domain results', () => {
         resolveSearchTime(1, 10, 60, 60),
         failPageAroundCriteriaChange(criteriaMessage, isBeforeFailure),
         Command.expectHas(
-          ReadSearchPlanningTime({
+          ReadCurrentTime({
             searchGeneration: 1,
             offset: 0,
             limit: domainTlds.length,
@@ -388,8 +388,8 @@ describe('progressive domain results', () => {
         resolveSearchTime(1, 30, 0, domainTlds.length),
         Command.expectHas(makeDomainsFetch(catalogArgs, 3)),
         model(model => {
-          expect(searchPresentation(model)).toEqual(
-            SearchPresentation.Ready({
+          expect(searchViewState(model)).toEqual(
+            SearchViewState.Ready({
               domains: firstPageDomains,
               domainRequest: DomainRequestPresentation.Loading({
                 offset: 0,
@@ -411,8 +411,8 @@ describe('progressive domain results', () => {
           expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
             'Failure',
           )
-          expect(searchPresentation(model)).toEqual(
-            SearchPresentation.Ready({ domains: allDomains }),
+          expect(searchViewState(model)).toEqual(
+            SearchViewState.Ready({ domains: allDomains }),
           )
         }),
         resolveResultsListScrolls,
@@ -429,8 +429,8 @@ describe('progressive domain results', () => {
       resolveSearchTime(1, 10, 0, domainTlds.length),
       resolveDomainsFailure(catalogArgs, 2, pageFailure, 20),
       model(model => {
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({
             domains: firstPageDomains,
             domainRequest: DomainRequestPresentation.Failed({
               offset: 0,
@@ -452,8 +452,8 @@ describe('progressive domain results', () => {
         expect(model.activeDomainCandidateRanges).toEqual([
           { offset: 0, limit: domainTlds.length },
         ])
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Ready({ domains: allDomains }),
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Ready({ domains: allDomains }),
         )
       }),
       resolveResultsListScrolls,

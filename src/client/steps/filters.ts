@@ -5,21 +5,21 @@ import { AvailabilityFilter, SortOrder, TldFilter } from '../domain'
 import { loadRequiredDomainsStep } from './domainLoading'
 import { informResultsListStep } from './resultsList'
 
-export const makeChangeTldFilterStep = (value: TldFilter) =>
+export const changeTldFilterStep = (value: TldFilter) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ tldFilter: () => value })),
     loadRequiredDomainsStep,
     informResultsListStep,
   ])
 
-export const makeChangeAvailabilityFilterStep = (value: AvailabilityFilter) =>
+export const changeAvailabilityFilterStep = (value: AvailabilityFilter) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ availabilityFilter: () => value })),
     loadRequiredDomainsStep,
     informResultsListStep,
   ])
 
-export const makeChangeSortOrderStep = (value: SortOrder) =>
+export const changeSortOrderStep = (value: SortOrder) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ sortOrder: () => value })),
     loadRequiredDomainsStep,

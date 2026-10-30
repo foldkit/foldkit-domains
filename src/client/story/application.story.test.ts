@@ -22,7 +22,7 @@ import { Message } from '../message'
 import { emptyModel, readyModel, urlOrThrow } from '../model.fixture'
 import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from '../route'
-import { SearchPresentation, searchPresentation } from '../searchPresentation'
+import { SearchViewState, searchViewState } from '../searchViewState'
 import { update } from '../update'
 import {
   makeDomainsFetch,
@@ -49,7 +49,7 @@ test('typing synchronizes the URL before the route starts its domain request', (
       expect(model.route).toEqual(emptyModel.route)
       expect(model.searchGeneration).toBe(1)
       expect(model.searchLayout).toBe('Search')
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
     }),
     Command.expectExact(ReplaceSearchUrl({ q: Option.some('fresh') })),
     Command.resolve(
@@ -64,7 +64,7 @@ test('typing synchronizes the URL before the route starts its domain request', (
         ApplicationRoute.Search({ q: Option.some('fresh') }),
       )
       expect(model.searchGeneration).toBe(2)
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Loading())
+      expect(searchViewState(model)).toEqual(SearchViewState.Loading())
     }),
     resolveSearchTime(2, 100),
     Command.expectHas(makeDomainsFetch(args, 1)),
@@ -75,7 +75,7 @@ test('typing synchronizes the URL before the route starts its domain request', (
       120,
     ),
     model(model => {
-      expect(searchPresentation(model)._tag).toBe('Ready')
+      expect(searchViewState(model)._tag).toBe('Ready')
     }),
     resolveRemainingFirstPageDomains(
       'fresh',
@@ -115,7 +115,7 @@ describe('domain validation', () => {
       resolveDomainsSuccess(args, 1, Array.take(makeDomainFixtures(label), 4)),
       model(model => {
         expect(routeToQuery(model.route)).toBe(query)
-        expect(searchPresentation(model)._tag).toBe('Ready')
+        expect(searchViewState(model)._tag).toBe('Ready')
       }),
       resolveRemainingFirstPageDomains(
         label,
@@ -145,8 +145,8 @@ describe('domain validation', () => {
         }),
       ),
       model(model => {
-        expect(searchPresentation(model)).toEqual(
-          SearchPresentation.Failed({
+        expect(searchViewState(model)).toEqual(
+          SearchViewState.Failed({
             error:
               'Enter a domain name using letters, numbers, and hyphens (up to 63 characters).',
           }),
@@ -266,7 +266,7 @@ test('leaving search cancels its pending Query key', () => {
       expect(model.route).toEqual(
         ApplicationRoute.NotFound({ path: '/missing' }),
       )
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
       expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
     resolveDomainsCancellation(args, 1),
@@ -289,7 +289,7 @@ test('clearing the input returns to the idle route, restores focus, and scrolls 
     Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
     model(model => {
       expect(model.route).toEqual(ApplicationRoute.Search({ q: Option.none() }))
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
       expect(model.searchLayout).toBe('Search')
     }),
     resolveResultsListScrolls,
@@ -309,7 +309,7 @@ test('backspacing to an empty query scrolls to the top after the route changes',
     ),
     message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
     model(model => {
-      expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
       expect(model.searchLayout).toBe('Search')
     }),
     Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
@@ -332,9 +332,7 @@ test('unrelated URL changes do not restart a settled search', () => {
     model(model => {
       expect(model.searchGeneration).toBe(initialModel.searchGeneration)
       expect(model.domainsQuery).toBe(initialModel.domainsQuery)
-      expect(searchPresentation(model)).toEqual(
-        searchPresentation(initialModel),
-      )
+      expect(searchViewState(model)).toEqual(searchViewState(initialModel))
     }),
     Command.expectNone(),
   )
@@ -368,7 +366,7 @@ test('internal and external links use their respective navigation Commands', () 
   )
 })
 
-test('cart additions are unique and require confirmed availability', () => {
+test('cart additions are unique and removals are idempotent', () => {
   const domain = Domain.Available({
     name: 'acme.com',
     tld: 'com',
@@ -377,17 +375,12 @@ test('cart additions are unique and require confirmed availability', () => {
     years: 1,
     isPremium: false,
   })
-  const unconfirmedDomain = Domain.Unconfirmed({
-    name: 'foldkit.com',
-    tld: 'com',
-  })
 
   story(
     update,
     given(readyModel('acme')),
     message(Message.ClickedAddDomain({ domain })),
     message(Message.ClickedAddDomain({ domain })),
-    message(Message.ClickedAddDomain({ domain: unconfirmedDomain })),
     message(Message.ClickedRemoveDomain({ name: 'missing.com' })),
     model(model => {
       expect(model.carts.Demo).toEqual([domain])
@@ -455,7 +448,7 @@ test.each([true, false])(
       ),
       model(model => {
         expect(model.searchLayout).toBe(isSearchStarted ? 'Search' : 'Landing')
-        expect(searchPresentation(model)).toEqual(SearchPresentation.Idle())
+        expect(searchViewState(model)).toEqual(SearchViewState.Idle())
       }),
       Command.expectNone(),
     )

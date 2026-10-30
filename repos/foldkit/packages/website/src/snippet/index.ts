@@ -695,3 +695,5 @@ export { default as counterApplicationWithFlagsHighlighted } from './counterAppl
 
 export { default as serverRenderingBlockServerEntryRaw } from './serverRenderingBlockServerEntry.ts?raw'
 export { default as serverRenderingBlockServerEntryHighlighted } from './serverRenderingBlockServerEntry.ts?highlighted'
+export { default as serverRenderingHotDisposeRaw } from './serverRenderingHotDispose.ts?raw'
+export { default as serverRenderingHotDisposeHighlighted } from './serverRenderingHotDispose.ts?highlighted'

@@ -3,14 +3,14 @@ import { Update } from 'foldkit'
 
 import { DataSource } from '../../shared/dataSource'
 import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
-import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
+import { ReadCurrentTime, ReplaceSearchUrl } from '../command'
 import { DomainsQueryBinding, LiveWarningDialogBinding } from '../composition'
 import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
 import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
 import { routeToQuery } from '../route'
-import { searchPresentation } from '../searchPresentation'
-import { makeScheduleDomainRequestStep } from './domainLoading'
+import { searchViewState } from '../searchViewState'
+import { scheduleDomainRequestStep } from './domainLoading'
 import { informResultsListStep, resetResultsListStep } from './resultsList'
 
 export const cancelSearchStep = makeStep(model =>
@@ -21,68 +21,65 @@ export const cancelSearchStep = makeStep(model =>
   ),
 )
 
-export const makeSearchCurrentQueryStep = (isRefreshRequested = false) =>
+export const searchQueryStep = (query: string, isRefreshRequested = false) =>
   makeStep(model => {
     const nextSearchGeneration = Number.increment(model.searchGeneration)
-    const maybeLabel = queryToMaybeDomainLabel(routeToQuery(model.route))
+    const maybeDomainLabel = queryToMaybeDomainLabel(query)
 
     return Update.combineSteps([
       cancelSearchStep,
       makeFieldsStep(() => ({
         searchGeneration: () => nextSearchGeneration,
         searchLayout: currentLayout =>
-          String.isNonEmpty(routeToQuery(model.route))
-            ? 'Search'
-            : currentLayout,
+          String.isNonEmpty(query) ? 'Search' : currentLayout,
         activeDomainCandidateRanges: () => [],
         maybeBlockedDomainCandidateRange: () => Option.none(),
       })),
       makeCommandsStep(() =>
-        Option.match(maybeLabel, {
-          onNone: () => [],
-          onSome: () => [
-            ReadSearchPlanningTime({
+        Array.filter(
+          [
+            ReadCurrentTime({
               searchGeneration: nextSearchGeneration,
               offset: 0,
               limit: TOP_RESULT_COUNT,
               isRefreshRequested,
             }),
           ],
-        }),
+          () => Option.isSome(maybeDomainLabel),
+        ),
       ),
-      String.isEmpty(routeToQuery(model.route))
-        ? resetResultsListStep
-        : informResultsListStep,
+      String.isEmpty(query) ? resetResultsListStep : informResultsListStep,
     ])
   })
 
-export const searchCurrentQueryStep = makeSearchCurrentQueryStep()
+const replaceSearchUrlStep = (query: string) =>
+  makeCommandsStep(() => [
+    ReplaceSearchUrl({ q: Option.liftPredicate(query, String.isNonEmpty) }),
+  ])
 
-export const makeChangeSearchQueryStep = (query: string) =>
+export const changeSearchQueryStep = (query: string) =>
   makeStep(model => {
-    const replaceSearchUrl = makeCommandsStep(() => [
-      ReplaceSearchUrl({ q: Option.liftPredicate(query, String.isNonEmpty) }),
-    ])
+    const isQueryChanged = query !== routeToQuery(model.route)
 
-    if (query === routeToQuery(model.route)) {
-      return replaceSearchUrl
-    } else {
-      return Update.combineSteps([
-        cancelSearchStep,
-        makeFieldsStep(() => ({
-          searchGeneration: Number.increment,
-          searchLayout: currentLayout =>
-            String.isNonEmpty(query) ? 'Search' : currentLayout,
-        })),
-        replaceSearchUrl,
-      ])
-    }
+    return Update.combineSteps([
+      ...(isQueryChanged
+        ? [
+            cancelSearchStep,
+            makeFieldsStep(() => ({
+              searchGeneration: Number.increment,
+              searchLayout: currentLayout =>
+                String.isNonEmpty(query) ? 'Search' : currentLayout,
+            })),
+          ]
+        : []),
+      replaceSearchUrlStep(query),
+    ])
   })
 
-export const clearSearchStep = makeChangeSearchQueryStep('')
+export const clearSearchStep = changeSearchQueryStep('')
 
 export const retrySearchStep = makeStep(model => {
-  const search = searchPresentation(model)
+  const search = searchViewState(model)
 
   if (search._tag === 'Ready' && search.domainRequest._tag === 'Failed') {
     const range = isCompleteCatalogRequired(
@@ -92,13 +89,13 @@ export const retrySearchStep = makeStep(model => {
       ? { offset: 0, limit: domainTlds.length }
       : search.domainRequest
 
-    return makeScheduleDomainRequestStep(range, true)
+    return scheduleDomainRequestStep(range, true)
   } else {
-    return makeSearchCurrentQueryStep(true)
+    return searchQueryStep(routeToQuery(model.route), true)
   }
 })
 
-export const makeChangeDataSourceStep = (dataSource: DataSource) =>
+export const changeDataSourceStep = (dataSource: DataSource) =>
   makeStep(model => {
     if (dataSource === model.dataSource) {
       return { model }
@@ -106,11 +103,11 @@ export const makeChangeDataSourceStep = (dataSource: DataSource) =>
 
     return Update.combineSteps([
       makeFieldsStep(() => ({ dataSource: () => dataSource })),
-      searchCurrentQueryStep,
+      searchQueryStep(routeToQuery(model.route)),
     ])
   })
 
-export const makeRequestDataSourceStep = (dataSource: DataSource) =>
+export const requestDataSourceStep = (dataSource: DataSource) =>
   makeStep(model => {
     if (dataSource === 'Live' && model.dataSource === 'Demo') {
       return Update.combineSteps([
@@ -118,21 +115,13 @@ export const makeRequestDataSourceStep = (dataSource: DataSource) =>
         LiveWarningDialogBinding.requestOpen(),
       ])
     } else {
-      return makeChangeDataSourceStep(dataSource)
+      return changeDataSourceStep(dataSource)
     }
   })
 
-export const continueToLiveStep = makeStep(model => {
-  if (
-    !model.liveWarningDialog.isOpen ||
-    !model.isLiveLatencyAccepted ||
-    model.dataSource !== 'Demo'
-  ) {
-    return { model }
-  }
-
-  return Update.combineSteps([
-    makeChangeDataSourceStep('Live'),
+export const continueToLiveStep = makeStep(() =>
+  Update.combineSteps([
+    changeDataSourceStep('Live'),
     LiveWarningDialogBinding.requestClose(),
-  ])
-})
+  ]),
+)

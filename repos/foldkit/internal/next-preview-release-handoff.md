@@ -1,5 +1,19 @@
 # Next preview release handoff
 
+## Approved follow-up after the frozen review
+
+The user requested adoption work for Model-aware general `makeStep` Message
+inference and `Scene.unhover` after the `564adb49e9` review. These are currently
+implemented and verified in source, relocated declarations and paired editor
+workflows. [Follow-up evidence](step-inference-unhover-20261029.md). The exact
+`d35d3ceb7a` follow-up now passes independent review, an approved Daybreak
+addendum and a fresh nine-package build/pack rehearsal. [Final scope and receipts](preview-followup-final-20261029.md).
+Earlier full installed-app and browser results retain their source pins.
+
+The user explicitly deferred #1662's OutMessage propagation and #1663's derived
+view slots until after Blocks + Effect Layers merges to main. Neither is a
+requirement for this preview. Publication remains held for separate approval.
+
 ## Current release documentation scope, October 28
 
 Include Machine, Query/KeyedQuery and VirtualList in the next preview update,
@@ -34,6 +48,21 @@ covers the new APIs and affected migrations. Detailed implementation and
 verification are recorded in the [Machine report](machine-authoring-20261027.md),
 [VirtualList report](virtual-list-preview-integration-20261027.md) and
 [Query report](keyed-query-capabilities-20261028.md).
+
+The [October 28 feedback integration](preview-feedback-integration-20261028.md)
+adds contextual update inference repairs, large-Root registration-evidence
+extraction, SSR development reload/disposal, renderer-aligned Scene Mounts,
+Runtime cleanup and entry-owned Subscription gates/activity assertions. The
+mixed-result inferred-`any` report remains unconfirmed after bounded regression
+probes; do not announce it as fixed or close it from this evidence alone.
+
+The [final preparation](preview-final-prep-20261028.md) repairs the Website's
+Playground declaration collection and lazy loading, verifies ordinary development
+SSR, and records the bounded inferred-`any` disposition. The final nine-package
+consumer rehearsal and Website checks pass at reviewed source `564adb49e9`.
+The [completed Daybreak review](preview-daybreak-20261028.md) returns PASS for
+that same source after the user approved the transfer. Dependency findings and
+review limits remain explicit. Publication awaits separate release approval.
 
 Publication stays held for approval. Preserve the PR's three starting paths,
 user-authored content and verified Ready snapshot. Link the updated guide to

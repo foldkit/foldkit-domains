@@ -31,15 +31,15 @@ import {
 } from './filterListboxes'
 import { ResultsListBlock, resultsListConfig } from './resultsList'
 import {
+  applyDomainResultStep,
   loadRequiredDomainsStep,
-  makeApplyDomainCompletionStep,
 } from './steps/domainLoading'
 import {
-  makeChangeAvailabilityFilterStep,
-  makeChangeSortOrderStep,
-  makeChangeTldFilterStep,
+  changeAvailabilityFilterStep,
+  changeSortOrderStep,
+  changeTldFilterStep,
 } from './steps/filters'
-import { makeRequestDataSourceStep } from './steps/search'
+import { requestDataSourceStep } from './steps/search'
 
 export const ResultsListBinding = makeBinding(ResultsListBlock, {
   field: 'resultsList',
@@ -114,7 +114,7 @@ export const DataSourceBinding = makeBinding(DataSourceControlBlock, {
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DataSourceControlBlock, {
-    Selected: ({ value }) => makeRequestDataSourceStep(value),
+    Selected: ({ value }) => requestDataSourceStep(value),
   }),
 })
 
@@ -122,25 +122,18 @@ export const DomainsQueryBinding = makeBinding(DomainsQuery, {
   field: 'domainsQuery',
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DomainsQuery, {
-    CompletedFetch: makeApplyDomainCompletionStep,
+    CompletedFetch: applyDomainResultStep,
   }),
-})
-
-const foldTldListboxOutMessage = makeOutMessageFold(TldListboxBlock, {
-  Selected: ({ value }) => makeChangeTldFilterStep(value),
 })
 
 export const TldListboxBinding = makeBinding(TldListboxBlock, {
   field: 'tldListbox',
   init: { contextToArgs: () => [{ id: TLD_FILTER_ID }] },
-}).withOutMessagePolicy({ fold: foldTldListboxOutMessage })
-
-const foldAvailabilityListboxOutMessage = makeOutMessageFold(
-  AvailabilityListboxBlock,
-  {
-    Selected: ({ value }) => makeChangeAvailabilityFilterStep(value),
-  },
-)
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(TldListboxBlock, {
+    Selected: ({ value }) => changeTldFilterStep(value),
+  }),
+})
 
 export const AvailabilityListboxBinding = makeBinding(
   AvailabilityListboxBlock,
@@ -148,16 +141,20 @@ export const AvailabilityListboxBinding = makeBinding(
     field: 'availabilityListbox',
     init: { contextToArgs: () => [{ id: AVAILABILITY_FILTER_ID }] },
   },
-).withOutMessagePolicy({ fold: foldAvailabilityListboxOutMessage })
-
-const foldSortListboxOutMessage = makeOutMessageFold(SortListboxBlock, {
-  Selected: ({ value }) => makeChangeSortOrderStep(value),
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(AvailabilityListboxBlock, {
+    Selected: ({ value }) => changeAvailabilityFilterStep(value),
+  }),
 })
 
 export const SortListboxBinding = makeBinding(SortListboxBlock, {
   field: 'sortListbox',
   init: { contextToArgs: () => [{ id: SORT_ORDER_ID }] },
-}).withOutMessagePolicy({ fold: foldSortListboxOutMessage })
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(SortListboxBlock, {
+    Selected: ({ value }) => changeSortOrderStep(value),
+  }),
+})
 
 export const ApplicationComposition = makeComposition({
   bindings: [

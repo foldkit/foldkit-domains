@@ -1,14 +1,5 @@
 import { Option } from 'effect'
-import {
-  Command,
-  Mount,
-  click,
-  expect,
-  given,
-  role,
-  scene,
-  text,
-} from 'foldkit/scene'
+import { Command, click, expect, given, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
@@ -30,11 +21,6 @@ import { view } from './view'
 const resolveFocusOption = Command.resolve(
   RadioGroup.test.FocusOption,
   ToolRadioGroupBlock.Message.CompletedFocusOption(),
-)
-
-const resolveDialogResources = Mount.resolve(
-  Dialog.test.AcquireResources,
-  DialogBlock.Message.SucceededAcquireResources(),
 )
 
 const createTestModel = (): Model => ({
@@ -96,7 +82,6 @@ describe('export workflow', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      resolveDialogResources,
       expect(text('Export Failed')).toExist(),
       expect(text('Canvas 2D context not available')).toExist(),
       expect(role('button', { name: 'Dismiss' })).toExist(),
@@ -116,14 +101,12 @@ describe('export workflow', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      resolveDialogResources,
       expect(text('Export Failed')).toExist(),
       click(role('button', { name: 'Dismiss' })),
       Command.resolve(
         Dialog.test.CloseDialog,
         DialogBlock.Message.CompletedCloseDialog(),
       ),
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(text('Export Failed')).toBeAbsent(),
     )
   })
@@ -235,7 +218,6 @@ describe('grid size change', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      resolveDialogResources,
       expect(text('Change to 8\u00d78?')).toExist(),
       expect(
         text('This will clear your canvas and reset undo history.'),
@@ -259,14 +241,12 @@ describe('grid size change', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      resolveDialogResources,
       expect(text('Change to 8\u00d78?')).toExist(),
       click(role('button', { name: 'Clear and Resize' })),
       Command.resolve(
         Dialog.test.CloseDialog,
         DialogBlock.Message.CompletedCloseDialog(),
       ),
-      Mount.expectEnded(Dialog.test.AcquireResources),
       Command.resolve(SaveCanvas, Message.CompletedSaveCanvas()),
       expect(text('Change to 8\u00d78?')).toBeAbsent(),
     )
@@ -282,14 +262,12 @@ describe('grid size change', () => {
         Dialog.test.ShowDialog,
         DialogBlock.Message.SucceededShowDialog(),
       ),
-      resolveDialogResources,
       expect(text('Change to 8\u00d78?')).toExist(),
       click(role('button', { name: 'Cancel' })),
       Command.resolve(
         Dialog.test.CloseDialog,
         DialogBlock.Message.CompletedCloseDialog(),
       ),
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(text('Change to 8\u00d78?')).toBeAbsent(),
     )
   })

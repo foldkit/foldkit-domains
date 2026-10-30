@@ -5,7 +5,7 @@ import { VirtualList } from '@foldkit/ui'
 
 import { DataSource } from '../../shared/dataSource'
 import { Domain } from '../../shared/domain'
-import { ReadSearchPlanningTime, ReplaceSearchUrl } from '../command'
+import { ReadCurrentTime, ReplaceSearchUrl } from '../command'
 import {
   DomainsQuery,
   DomainsQueryArgs,
@@ -46,13 +46,13 @@ export const resolveSearchTime = (
   isRefreshRequested = false,
 ) =>
   Command.resolve(
-    ReadSearchPlanningTime({
+    ReadCurrentTime({
       searchGeneration,
       offset,
       limit,
       isRefreshRequested,
     }),
-    Message.CompletedReadSearchPlanningTime({
+    Message.CompletedReadCurrentTime({
       searchGeneration,
       nowMillis,
       offset,

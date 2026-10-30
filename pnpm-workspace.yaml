@@ -4,14 +4,19 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   workerd: true
+minimumReleaseAgeExclude:
+  - '@foldkit/devtools-mcp@0.25.0-canary.90746b32d2ca'
+  - '@foldkit/devtools@0.169.0-canary.90746b32d2ca'
+  - '@foldkit/oxlint-plugin@0.15.3-canary.90746b32d2ca'
+  - '@foldkit/ui@0.169.0-canary.90746b32d2ca'
+  - '@foldkit/vite-plugin@0.28.0-canary.90746b32d2ca'
+  - foldkit@0.169.0-canary.90746b32d2ca
 overrides:
-  foldkit: file:vendor/foldkit-preview/foldkit-0.169.0-canary.b75b14110d6a.tgz
-  '@foldkit/ui': file:vendor/foldkit-preview/foldkit-ui-0.169.0-canary.b75b14110d6a.tgz
   effect: 4.0.6
   '@effect/platform-browser': 4.0.6
   '@effect/platform-node': 4.0.6
   '@effect/platform-node-shared': 4.0.6
   '@effect/platform-bun': 4.0.6
 patchedDependencies:
-  '@foldkit/ui@0.169.0-canary.b75b14110d6a': patches/@foldkit__ui@0.169.0-canary.b75b14110d6a.patch
+  '@foldkit/ui@0.169.0-canary.90746b32d2ca': patches/@foldkit__ui@0.169.0-canary.90746b32d2ca.patch
   '@alchemy.run/cloudflare@2.0.0-beta.84': patches/@alchemy.run__cloudflare@2.0.0-beta.84.patch

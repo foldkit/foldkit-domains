@@ -7,13 +7,6 @@ export default defineConfig(({ command, isPreview }) => ({
   define: { 'globalThis.__ALCHEMY_RUNTIME__': 'true' },
   plugins: [
     tailwindcss(),
-    {
-      name: 'domains:refresh-ssr-definitions',
-      apply: 'serve',
-      handleHotUpdate({ server }) {
-        server.environments.ssr?.moduleGraph.invalidateAll()
-      },
-    },
     foldkit({
       // NOTE: This preview assigns separate dev identities to client and SSR environments; use one shared development identity.
       ...(command === 'serve' && !isPreview ? { buildId: 'development' } : {}),

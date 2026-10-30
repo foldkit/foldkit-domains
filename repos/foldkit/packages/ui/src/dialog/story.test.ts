@@ -182,7 +182,6 @@ const renderGroup = <RequiredMountRequirements>(
           }),
         ),
         Scene.Command.resolve(CloseDialog, Message.CompletedCloseDialog()),
-        Scene.Mount.expectEnded(AcquireResources),
       )
     } else {
       Scene.scene(

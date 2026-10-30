@@ -155,7 +155,6 @@ describe('Create Issue view', () => {
       Command.resolve(CreateIssue, Message.SucceededCreateIssue({ issue })),
       expectOutMessage(OutMessage.Created({ issue })),
       closeDialog,
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(label('Title')).not.toExist(),
     )
   })
@@ -277,7 +276,6 @@ describe('Create Issue view', () => {
       type(label('Title'), 'An unsent issue'),
       click(role('button', { name: 'Cancel' })),
       closeDialog,
-      Mount.expectEnded(Dialog.test.AcquireResources),
       expect(label('Title')).not.toExist(),
       expectNoOutMessage(),
       Command.expectNone(),

@@ -1,9 +1,8 @@
 import { Array, Number, Option, Schema, String, pipe } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
 
-import * as Checkbox from '@foldkit/ui/checkbox'
+import { Checkbox, type Listbox } from '@foldkit/ui'
 import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
-import type * as Listbox from '@foldkit/ui/listbox'
 
 import {
   Domain,
@@ -30,6 +29,7 @@ import {
 import { DATA_SOURCE_CONTROL_ID } from './dataSourceControl'
 import {
   AvailabilityFilter,
+  Cart,
   DomainListing,
   SortOrder,
   TOP_RESULT_COUNT,
@@ -42,13 +42,13 @@ import {
 } from './domain'
 import * as Icon from './icon'
 import { Message } from './message'
-import { Model, activeCart } from './model'
+import { Model } from './model'
 import { resultListings } from './resultListings'
 import {
   RESULTS_LIST_ID,
   RESULTS_OVERSCAN_GROUPS,
   ResultsListScrollKey,
-  estimateDomainListingGroupHeightPx,
+  estimateResultGroupHeightPx,
   groupDomainListings,
 } from './resultsList'
 import {
@@ -58,12 +58,12 @@ import {
   searchHref,
 } from './route'
 import { SEARCH_INPUT_SELECTOR, searchInputConfig } from './searchInput'
-import { SearchPresentation, searchPresentation } from './searchPresentation'
+import { SearchViewState, searchViewState } from './searchViewState'
 
 const PREVIEW_RESULT_COUNT = 36
 
 const searchFormView = (model: Model, h: ApplicationViewBuilder): Html => {
-  const search = searchPresentation(model)
+  const search = searchViewState(model)
 
   return h.form(
     [
@@ -216,14 +216,16 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
               h.Id('cart-button'),
               h.Class('button cart-button'),
               h.OnClick(Message.ClickedCart()),
-              h.AriaLabel(`Cart, ${Array.length(activeCart(model))} domains`),
+              h.AriaLabel(
+                `Cart, ${Array.length(Cart.forDataSource(model.carts, model.dataSource))} domains`,
+              ),
               h.AriaHasPopup('dialog'),
               h.AriaControls(CART_DIALOG_ID),
             ],
             [
               Icon.cart(),
               h.span([], ['Cart']),
-              Array.match(activeCart(model), {
+              Array.match(Cart.forDataSource(model.carts, model.dataSource), {
                 onEmpty: () => h.empty,
                 onNonEmpty: cart =>
                   h.span(
@@ -254,7 +256,7 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
           h.AriaAtomic(true),
         ],
         [
-          Array.match(activeCart(model), {
+          Array.match(Cart.forDataSource(model.carts, model.dataSource), {
             onEmpty: () => 'Your cart is empty.',
             onNonEmpty: cart =>
               `${Array.length(cart)} ${Array.length(cart) === 1 ? 'domain' : 'domains'} in your cart.`,
@@ -313,7 +315,7 @@ const readyDomainActionView = (
   h: ApplicationViewBuilder,
 ): Html => {
   const isInCart = Array.some(
-    activeCart(model),
+    Cart.forDataSource(model.carts, model.dataSource),
     item => item.name === domain.name,
   )
   return Domain.match(domain, {
@@ -847,7 +849,7 @@ const resultsListView = (
   model: Model,
   h: ApplicationViewBuilder,
 ): Html => {
-  const search = searchPresentation(model)
+  const search = searchViewState(model)
 
   return h.div(
     [h.Class('all-results')],
@@ -870,7 +872,7 @@ const resultsListView = (
                   ),
                 dynamicRowHeights: true,
                 itemToEstimatedRowHeightPx: group =>
-                  estimateDomainListingGroupHeightPx(
+                  estimateResultGroupHeightPx(
                     model.resultsList,
                     group.listings.length,
                   ),
@@ -962,7 +964,7 @@ const resultCountText = (
   model: Model,
   results: ReadonlyArray<DomainListing>,
 ) => {
-  const search = searchPresentation(model)
+  const search = searchViewState(model)
 
   if (search._tag === 'Ready' && search.domains.length < domainTlds.length) {
     return `${search.domains.length} of ${domainTlds.length} domains checked · Registration prices in USD`
@@ -972,9 +974,9 @@ const resultCountText = (
 }
 
 const searchResultsView = (model: Model, h: ApplicationViewBuilder): Html => {
-  const search = searchPresentation(model)
+  const search = searchViewState(model)
   const results = resultListings(model)
-  const domains = SearchPresentation.match(search, {
+  const domains = SearchViewState.match(search, {
     Idle: () => queryToPendingDomainListings(routeToQuery(model.route)),
     Loading: () => queryToPendingDomainListings(routeToQuery(model.route)),
     Ready: ({ domains }) =>
@@ -1046,7 +1048,7 @@ const searchErrorView = (error: string, h: ApplicationViewBuilder): Html =>
   )
 
 const resultsView = (model: Model, h: ApplicationViewBuilder): Html => {
-  const search = searchPresentation(model)
+  const search = searchViewState(model)
 
   return h.section(
     [h.Class('results'), h.AriaLabel('Domain results')],
@@ -1064,7 +1066,7 @@ const cartPanelView = (
   h: ApplicationViewBuilder,
 ): Html => {
   const total = pipe(
-    activeCart(model),
+    Cart.forDataSource(model.carts, model.dataSource),
     Array.map(domain => domain.price),
     Number.sumAll,
   )
@@ -1087,7 +1089,7 @@ const cartPanelView = (
           ),
         ],
       ),
-      Array.match(activeCart(model), {
+      Array.match(Cart.forDataSource(model.carts, model.dataSource), {
         onEmpty: () =>
           h.p(
             [h.Class('empty-cart')],

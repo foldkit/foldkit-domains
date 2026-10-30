@@ -110,10 +110,6 @@ export const DomainsRpcLayer = DomainsRpcRoutes.pipe(
   ),
 )
 
-export const domainsRpc = HttpRouter.toWebHandler(DomainsRpcLayer, {
-  disableLogger: true,
-})
-
 export const makeCoordinatedDomainsRpc = (environment: SearchEnvironment) =>
   HttpRouter.toWebHandler(
     DomainsRpcRoutes.pipe(

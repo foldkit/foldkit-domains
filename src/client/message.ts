@@ -24,7 +24,7 @@ export const Message = defineMessageUnion({
   UpdatedTldFilter: { value: TldFilter },
   UpdatedAvailabilityFilter: { value: AvailabilityFilter },
   UpdatedSortOrder: { value: SortOrder },
-  ClickedAddDomain: { domain: Domain },
+  ClickedAddDomain: { domain: Domain.Available },
   ClickedRemoveDomain: { name: Schema.String },
   ClickedRemoveCartDomain: { name: Schema.String },
   ClickedCart: {},
@@ -38,7 +38,7 @@ export const Message = defineMessageUnion({
   UpdatedLiveLatencyAcceptance: { isAccepted: Schema.Boolean },
   ClickedContinueToLive: {},
   CompletedFocusDataSourceButton: {},
-  CompletedReadSearchPlanningTime: {
+  CompletedReadCurrentTime: {
     searchGeneration: Schema.Number,
     nowMillis: Schema.Number,
     ...DomainCandidateRange.fields,
@@ -63,5 +63,5 @@ export type Message = typeof Message.Type
 export type ChangedUrlMessage = typeof Message.ChangedUrl.Type
 export type ClickedRemoveCartDomainMessage =
   typeof Message.ClickedRemoveCartDomain.Type
-export type CompletedReadSearchPlanningTimeMessage =
-  typeof Message.CompletedReadSearchPlanningTime.Type
+export type CompletedReadCurrentTimeMessage =
+  typeof Message.CompletedReadCurrentTime.Type

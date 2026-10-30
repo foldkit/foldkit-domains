@@ -14,6 +14,80 @@ original status, source pins and publication holds as historical evidence.
 
 ## Current Blocks + Effect Layers release scope
 
+- [x] Reassess Model-aware general `makeStep` Message inference against the
+      current optimized implementation. Verify ordinary/contextual records,
+      source and relocated declarations, exact channels and registration,
+      compiler costs and paired editor workflows before adoption. Adopt the
+      protected Context hint with shared tag extraction; seven current compiler
+      ceilings, source/emitted checks and paired editor workflows pass.
+      [Follow-up evidence](step-inference-unhover-20261029.md).
+- [x] Integrate contributor PR #1823's `Scene.unhover`, adapt it to the preview
+      and verify handler priority, fallback, scoped interaction and public usage.
+      Update active testing guidance and release notes. The 786-test Scene suite
+      and fallback mutation pass. [Follow-up evidence](step-inference-unhover-20261029.md).
+
+The user explicitly deferred #1662 (typed OutMessage propagation) and #1663
+(derived/default view slots and stronger collision validation) until after
+Blocks + Effect Layers merges to main. Keep existing explicit forwarding and
+slot identities with runtime collision checks for this preview.
+
+These follow-ups change the previously frozen source. The broader Daybreak
+review and full installed-app rehearsal below retain their exact `564adb49e9`
+pin. The affected final verification now covers `d35d3ceb7a`:
+
+- [x] Complete the explicitly approved Daybreak addendum for the exact follow-up.
+      PASS; all 7,191 source hashes match before and after review.
+- [x] Rebuild and pack all nine packages from the frozen follow-up, verify
+      artifact hashes and representative consumer types, and match the final
+      core's public files to the tarball used by the external type fixtures.
+      This is local preparation, not public registry or deployment acceptance.
+      [Final scope and receipts](preview-followup-final-20261029.md).
+
+- [x] Assess the October 28 Blocks/Layers feedback and integrate verified fixes
+      for #1844, #1834, #1837/#1832, #1833/#1835 and #1838. Keep the mixed-result
+      inferred-`any` report explicitly unconfirmed: bounded published/current
+      probes retain exact types; a complete failing consumer is still needed.
+      Record compiler-cost decisions and paired editor/rendering evidence rather
+      than inheriting contributor budgets or claiming every proposal shipped.
+      [Integration and remaining limits](preview-feedback-integration-20261028.md).
+
+- [x] Complete bounded triage of the mixed-result inferred-`any` report. No
+      runnable consumer was supplied and reconstructed published/current TS6/TS7
+      probes retain exact types. Add source/emitted coverage for the separate,
+      verified canonical-local-Step boundary. The original `any` claim stays
+      unconfirmed and visible for follow-up; do not announce it as fixed.
+      [Disposition and limits](preview-final-prep-20261028.md#feedback-disposition).
+
+- [x] Repair and verify the Website development SSR native-parser failure.
+      The Playground declaration collector traversed dependency directories and
+      symlink cycles; collect package-owned files and load editor types lazily.
+      Normal development HTTP and browser hydration now pass, with the existing
+      rich-snapshot preservation recovery warning disclosed.
+      [Repair and checks](preview-final-prep-20261028.md#website-development-ssr).
+
+- [x] Freeze reviewed source `564adb49e9` and refresh all nine local packages,
+      installed Coverchart, SPA/SSG/SSR scaffolds, Website tests/builds and
+      artifact/source provenance. The final rehearsal passes 54 consumer tests
+      and eight browser flows; actual Coverchart is preserved.
+      [Final preparation and limits](preview-final-prep-20261028.md#frozen-candidate-and-final-gates).
+
+- [x] Assess the fresh dependency audit's 30 entries and actual Monaco vendor
+      code without claiming dependencies are patched. No additional current
+      owned-entry-point blocker is demonstrated; downstream Undici transport
+      risk and maintenance recommendations remain visible.
+      [Dependency disposition](preview-dependency-disposition-20261028.md).
+
+- [x] Complete fresh Daybreak review after the user's explicit source-transfer
+      approval. Exact frozen source `564adb49e9` receives PASS; 7,181 file hashes
+      match and no source changed. Preserve the original report and provenance
+      correction, unresolved dependency findings and shared-network limits.
+      [Review and execution records](preview-daybreak-20261028.md).
+
+- [ ] Obtain the user's separate release approval before publication. Registry
+      and immutable-deployment acceptance, actual Coverchart upgrade and PR Ready
+      promotion follow that approval. The verified published snapshot remains
+      unchanged. [Prepared candidate](preview-final-prep-20261028.md).
+
 - [x] Widen published Effect peers to `4.0.0 || 4.0.6` and verify both versions
       through strict packed installs, public types, SSR and hydration. Check
       platform peer floors and one resolved Effect runtime; preserve exact
@@ -28,13 +102,13 @@ original status, source pins and publication holds as historical evidence.
       material. Verify source, emitted declarations, lint and compiler costs.
       [Adoption and verification](schema-type-alias-adoption-20261028.md).
 
-- [ ] Resolve the Machine compiler fixture's broad experimental-barrel cost.
-      Fresh package builds reproduce 110,086 instantiations and 27,144 types
-      against the unchanged 83,700/18,800 ceilings, including on the pre-alias
-      packed core. Query exports account for the additional work in temporary
-      controls. Do not describe this gate as passed or increase budgets as part
-      of the alias migration.
-      [Paired diagnosis](schema-type-alias-adoption-20261028.md#open-compiler-performance-release-check).
+- [x] Resolve the Machine compiler fixture's broad experimental-barrel cost.
+      The October 28 evidence/inference integration reduces the final fixture to
+      71,432 instantiations and 13,728 types, within the unchanged 83,700/18,800
+      ceilings. The earlier alias-migration failure and its Query-barrel controls
+      remain in the [historical diagnosis](schema-type-alias-adoption-20261028.md#open-compiler-performance-release-check);
+      the [later integration](preview-feedback-integration-20261028.md) owns the
+      passing result and its separate compiler-cost assessment.
 
 - [x] Standardize generic UI Block factories as `makeBlock`: replace `create`
       on selection components and VirtualList, and replace `Toast.make`.
@@ -69,11 +143,11 @@ original status, source pins and publication holds as historical evidence.
       superseded. Preserve the published Ready snapshot and approval hold.
       [Release documentation scope](next-preview-release-handoff.md#current-release-documentation-scope-october-28).
 
-- [x] Assess inline Model-aware `makeStep` Message inference against the optimized
-      candidate. A safe context-hint prototype passes source checks but fails the
-      unchanged eight-group type-count ceiling. Restore the existing API and
-      document the exact encodings, counters and verification limits.
-      [Assessment](step-message-context-assessment-20261027.md).
+- [x] Retain the October 27 inline Model-aware `makeStep` assessment and its
+      failed eight-group compiler control as historical evidence. The user
+      subsequently approved reassessment against the newer implementation;
+      the current follow-up at the top of this board owns that work.
+      [Earlier assessment](step-message-context-assessment-20261027.md).
 - [x] Standardize reusable owner-local Steps shared by update, composition or
       init under `steps.ts` or `steps/<responsibility>.ts` with an explicit barrel.
       Preserve policy/registration ownership, deferred Binding access, contracts,
@@ -150,6 +224,17 @@ regressions. General feature proposals do not automatically join its scope.
       stable migration guide, and retain the permanent API/architecture guides.
       Preserve historical published material. This follows the remaining
       feedback previews and does not hold the current stabilization preview.
+
+## Explicitly deferred until after merging to main
+
+- [ ] [#1662](https://github.com/foldkit/foldkit/issues/1662): typed OutMessage
+      propagation across Block boundaries. The user explicitly deferred this
+      work until after Blocks + Effect Layers merges to main. Existing explicit
+      fold/forward policies remain the preview contract.
+- [ ] [#1663](https://github.com/foldkit/foldkit/issues/1663): derived/default view
+      slots and stronger collision validation. The user explicitly deferred this
+      work until after that merge. Keep explicit stable slots and mandatory
+      runtime collision rejection.
 
 ## Followups after the published preview
 
