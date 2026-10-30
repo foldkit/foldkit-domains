@@ -29,9 +29,9 @@ import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
   changeSearchQuery,
   clearSearch,
-  loadDomainsForRange,
+  loadDomainRange,
+  requestDomainRange,
   retrySearch,
-  scheduleDomainRequest,
   searchQuery,
   updateAvailabilityFilter,
   updateSortOrder,
@@ -44,7 +44,7 @@ export const update = ApplicationComposition.makeUpdate({
   RequestedSearch: model => searchQuery(routeToQuery(model.route))(model),
 
   RequestedDomains: makeStep.fromMessage(({ offset, limit }) =>
-    scheduleDomainRequest({ offset, limit }),
+    requestDomainRange({ offset, limit }),
   ),
 
   SubmittedSearch: model =>
@@ -165,7 +165,7 @@ export const update = ApplicationComposition.makeUpdate({
     ]),
   ),
 
-  CompletedReadCurrentTime: loadDomainsForRange,
+  CompletedReadCurrentTime: loadDomainRange,
 
   CompletedReleaseEarlySearchListeners: makeFieldsStep.fromMessage(
     ({ isSearchStarted }) => ({

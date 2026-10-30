@@ -1,14 +1,13 @@
 import { Array, Option, pipe } from 'effect'
-import { AsyncData, Update } from 'foldkit'
+import { Update } from 'foldkit'
 
 import {
   DomainCandidateRange,
-  domainTlds,
   queryToMaybeDomainLabel,
 } from '../../shared/domain'
 import { ReadCurrentTime } from '../command'
 import { DomainsQueryBinding } from '../composition'
-import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
+import { makeCommandsStep, makeStep } from '../definition'
 import { findNextDomainRangeToLoad } from '../domainPlanning'
 import {
   DomainsQuery,
@@ -17,39 +16,20 @@ import {
 } from '../domainsQuery'
 import type { CompletedReadCurrentTimeMessage } from '../message'
 import { routeToQuery } from '../route'
+import {
+  includeDomainRangeInResults,
+  useFullCatalogResultsIfLoaded,
+} from './resultSelection'
 import { informResultsList } from './resultsList'
 
-const selectDomainRange = (range: DomainCandidateRange) =>
-  makeFieldsStep(() => ({
-    selectedDomainRanges: ranges => {
-      const isRangeSelected = Array.some(
-        ranges,
-        existing =>
-          existing.offset === range.offset && existing.limit === range.limit,
-      )
+export const requestNextDomainRange = makeStep(model =>
+  Option.match(findNextDomainRangeToLoad(model), {
+    onNone: () => ({ model }),
+    onSome: range => requestDomainRange(range)(model),
+  }),
+)
 
-      return isRangeSelected ? ranges : Array.append(ranges, range)
-    },
-  }))
-
-const selectFullCatalogIfReady = (args: DomainsQueryArgs) =>
-  makeFieldsStep(model => {
-    const isFullCatalogRange =
-      args.offset === 0 && args.limit === domainTlds.length
-    const isFullCatalogChecked =
-      isFullCatalogRange &&
-      AsyncData.isSuccess(DomainsQuery.read(model.domainsQuery, args))
-
-    return isFullCatalogChecked
-      ? {
-          selectedDomainRanges: () => [
-            { offset: args.offset, limit: args.limit },
-          ],
-        }
-      : {}
-  })
-
-export const scheduleDomainRequest = (
+export const requestDomainRange = (
   { offset, limit }: DomainCandidateRange,
   isRefreshRequested = false,
 ) =>
@@ -62,14 +42,7 @@ export const scheduleDomainRequest = (
     }),
   ])
 
-export const loadRequiredDomains = makeStep(model =>
-  Option.match(findNextDomainRangeToLoad(model), {
-    onNone: () => ({ model }),
-    onSome: range => scheduleDomainRequest(range)(model),
-  }),
-)
-
-export const loadDomainsForRange = makeStep(
+export const loadDomainRange = makeStep(
   (model, message: CompletedReadCurrentTimeMessage) => {
     if (message.searchGeneration !== model.searchGeneration) {
       return { model }
@@ -85,12 +58,12 @@ export const loadDomainsForRange = makeStep(
       return { model }
     }
 
-    const isSearchPending = Array.some(
+    const isDomainRequestPending = Array.some(
       DomainsQuery.pendingArgs(model.domainsQuery),
       args => args.label === maybeDomainLabel.value,
     )
 
-    if (isSearchPending) {
+    if (isDomainRequestPending) {
       return { model }
     }
 
@@ -98,24 +71,26 @@ export const loadDomainsForRange = makeStep(
       offset: message.offset,
       limit: message.limit,
     }
-    const args = {
+    const args: DomainsQueryArgs = {
       label: maybeDomainLabel.value,
       ...range,
     }
 
     return Update.combineSteps([
-      selectDomainRange(range),
+      includeDomainRangeInResults(range),
       message.isRefreshRequested
         ? DomainsQueryBinding.requestRevalidationOrLoad(args)
         : DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis),
-      selectFullCatalogIfReady(args),
-      loadRequiredDomains,
+      useFullCatalogResultsIfLoaded(args),
+      requestNextDomainRange,
       informResultsList,
     ])
   },
 )
 
-export const applyDomainResult = ({ args }: DomainsQueryCompletedFetch) =>
+export const continueSearchAfterDomainRequest = ({
+  args,
+}: DomainsQueryCompletedFetch) =>
   makeStep(model => {
     const isCurrentSearch = Option.contains(
       queryToMaybeDomainLabel(routeToQuery(model.route)),
@@ -127,8 +102,8 @@ export const applyDomainResult = ({ args }: DomainsQueryCompletedFetch) =>
     }
 
     return Update.combineSteps([
-      selectFullCatalogIfReady(args),
-      loadRequiredDomains,
+      useFullCatalogResultsIfLoaded(args),
+      requestNextDomainRange,
       informResultsList,
     ])
   })

@@ -24,7 +24,10 @@ import {
   TldListboxBlock,
 } from './filterListboxes'
 import { ResultsListBlock, resultsListConfig } from './resultsList'
-import { applyDomainResult, loadRequiredDomains } from './steps/domainLoading'
+import {
+  continueSearchAfterDomainRequest,
+  requestNextDomainRange,
+} from './steps/domainRequests'
 import {
   updateAvailabilityFilter,
   updateSortOrder,
@@ -38,7 +41,7 @@ export const ResultsListBinding = makeBinding(ResultsListBlock, {
   },
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(ResultsListBlock, {
-    ObservedContainerScroll: () => loadRequiredDomains,
+    ObservedContainerScroll: () => requestNextDomainRange,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
   }),
@@ -87,7 +90,7 @@ export const DomainsQueryBinding = makeBinding(DomainsQuery, {
   field: 'domainsQuery',
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DomainsQuery, {
-    CompletedFetch: applyDomainResult,
+    CompletedFetch: continueSearchAfterDomainRequest,
   }),
 })
 

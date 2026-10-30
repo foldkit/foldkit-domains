@@ -4,10 +4,10 @@ export {
   updateSortOrder,
 } from './filters'
 export {
-  loadRequiredDomains,
-  scheduleDomainRequest,
-  loadDomainsForRange,
-} from './domainLoading'
+  requestNextDomainRange,
+  requestDomainRange,
+  loadDomainRange,
+} from './domainRequests'
 export { informResultsList } from './resultsList'
 export {
   clearSearch,

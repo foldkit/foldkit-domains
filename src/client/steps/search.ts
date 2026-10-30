@@ -2,7 +2,7 @@ import { Array, Number, Option, String } from 'effect'
 import { Update } from 'foldkit'
 
 import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
-import { ReadCurrentTime, ReplaceSearchUrl } from '../command'
+import { ReplaceSearchUrl } from '../command'
 import { DomainsQueryBinding } from '../composition'
 import {
   makeCommandsStep,
@@ -14,7 +14,7 @@ import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
 import { routeToQuery } from '../route'
 import { searchViewState } from '../searchViewState'
-import { scheduleDomainRequest } from './domainLoading'
+import { requestDomainRange } from './domainRequests'
 import { informResultsList, resetResultsList } from './resultsList'
 
 export const cancelSearch = makeStep(model =>
@@ -39,18 +39,13 @@ export const searchQuery = (query: string, isRefreshRequested = false) =>
   Update.combineSteps([
     invalidateSearch(query),
     makeFieldsStep(() => ({ selectedDomainRanges: () => [] })),
-    makeCommandsStep(model =>
-      Array.filter(
-        [
-          ReadCurrentTime({
-            searchGeneration: model.searchGeneration,
-            offset: 0,
-            limit: TOP_RESULT_COUNT,
+    makeStep(model =>
+      Option.isSome(queryToMaybeDomainLabel(query))
+        ? requestDomainRange(
+            { offset: 0, limit: TOP_RESULT_COUNT },
             isRefreshRequested,
-          }),
-        ],
-        () => Option.isSome(queryToMaybeDomainLabel(query)),
-      ),
+          )
+        : { model },
     ),
     String.isEmpty(query) ? resetResultsList : informResultsList,
   ])
@@ -80,7 +75,7 @@ export const retrySearch = makeStep(model => {
       ? { offset: 0, limit: domainTlds.length }
       : search.domainRequest
 
-    return scheduleDomainRequest(range, true)
+    return requestDomainRange(range, true)
   } else {
     return searchQuery(routeToQuery(model.route), true)
   }

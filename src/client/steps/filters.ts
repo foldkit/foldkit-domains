@@ -2,26 +2,26 @@ import { Update } from 'foldkit'
 
 import { makeFieldsStep } from '../definition'
 import { AvailabilityFilter, SortOrder, TldFilter } from '../domain'
-import { loadRequiredDomains } from './domainLoading'
+import { requestNextDomainRange } from './domainRequests'
 import { informResultsList } from './resultsList'
 
 export const updateTldFilter = (value: TldFilter) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ tldFilter: () => value })),
-    loadRequiredDomains,
+    requestNextDomainRange,
     informResultsList,
   ])
 
 export const updateAvailabilityFilter = (value: AvailabilityFilter) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ availabilityFilter: () => value })),
-    loadRequiredDomains,
+    requestNextDomainRange,
     informResultsList,
   ])
 
 export const updateSortOrder = (value: SortOrder) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ sortOrder: () => value })),
-    loadRequiredDomains,
+    requestNextDomainRange,
     informResultsList,
   ])
