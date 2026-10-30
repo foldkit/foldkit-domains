@@ -2,7 +2,7 @@
 
 ## Lucide icons
 
-The icons in `src/icon.ts` and the dropdown chevron in `src/styles.css` are from
+The icons in `src/client/icon.ts` and the dropdown chevron in `src/client/styles.css` are from
 [Lucide](https://github.com/lucide-icons/lucide/tree/7faf87628a1ad6175975bc595344337ce14a7db4/icons).
 
 ISC License

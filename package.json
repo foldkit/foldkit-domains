@@ -49,7 +49,7 @@
     "wrangler": "4.152.0"
   },
   "private": true,
-  "description": "A statically rendered domain search example built with Foldkit",
+  "description": "A domain-search showcase built with Cloudflare, Alchemy, Foldkit, and Effect",
   "license": "MIT",
   "packageManager": "pnpm@12.4.2",
   "engines": {

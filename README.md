@@ -1,6 +1,8 @@
 # Foldkit Domains
 
-A [Foldkit](https://foldkit.dev) example of the [Vercel Domains](https://vercel.com/domains) search interaction. The search field arrives in static HTML, accepts edits before hydration, and moves into the header without replacing the input. Domain names update as you type; prices and availability use placeholders until the lookup completes. The first lookup checks the four Top Results, then the visible list loads further domain results.
+[Try the demo](https://domains.foldkit.dev)
+
+A [Vercel Domains](https://vercel.com/domains) search example built with the CAFE stack: Cloudflare, Alchemy, [Foldkit](https://foldkit.dev), and Effect. The search field arrives in static HTML, accepts edits before hydration, and moves into the header without replacing the input. Domain names update as you type; prices and availability use placeholders until the lookup completes. The first lookup checks the four Top Results, then the visible list loads further domain results.
 
 The catalog contains 556 extensions from Vercel’s [supported domains](https://vercel.com/docs/domains/supported-domains) list. All availability and prices are deterministic sample data, served by an Effect RPC backend on the same Cloudflare Worker. Domain searches make no external API calls and require no registrar credentials. The demo cart supports adding and removing domains; it does not reserve or purchase them.
 
@@ -43,21 +45,21 @@ The application and infrastructure use Effect `4.0.6`, one of the patch versions
 Connect a Cloudflare account through Alchemy’s profile command, then preview and deploy the `preview` stage:
 
 ```sh
-pnpm --dir infra exec alchemy profile edit --add Cloudflare
+pnpm --dir infra exec alchemy profile edit --profile default --add Cloudflare
 pnpm run plan --stage preview
 pnpm run deploy --stage preview
 ```
 
 The deploy command reports the public URL. Cloudflare deployment credentials belong in the local Alchemy profile or deployment environment, and generated infrastructure output is gitignored. `pnpm dev:cloudflare` runs Alchemy’s native Foldkit development host on port 5195. Both development and production use the same sample-domain RPC handlers.
 
-The local Workers check builds the application and runs the production browser regressions against workerd, including HTTP 404 recovery. `wrangler.jsonc` configures this local check; the Alchemy Stack owns deployment. Test a deployed preview with its URL:
+The local Workers check builds the application and runs the production browser regressions against workerd, including HTTP 404 recovery. `wrangler.jsonc` configures this local check; the Alchemy Stack owns deployment. The deployed suite checks browser behavior and the real RPC endpoint, including concurrent searches. Set `DOMAINS_BASE_URL` to the deployment to test:
 
 ```sh
 pnpm test:e2e:worker
-DOMAINS_BASE_URL=https://your-preview.workers.dev pnpm test:e2e:preview
+DOMAINS_BASE_URL=https://domains.foldkit.dev pnpm test:e2e:preview
 ```
 
-Input readiness does not wait for a lookup. Uncached first-range requests use a 150 ms debounce; progressive ranges bypass it. Rendering, RPC transport, and sample-data generation remain asynchronous from the browser’s perspective.
+Input readiness does not wait for a lookup. Uncached first-range requests use a 150 ms debounce; progressive ranges bypass it. The browser loads sample data asynchronously through RPC.
 
 ## Code map
 
@@ -82,11 +84,11 @@ Start with `steps/search.ts`: input changes request URL replacement, and `Change
 
 `steps/domainLoading.ts` owns request execution. Scheduling reads Effect Clock through a Command. Its completion checks the current search, pending requests, and cache freshness before calling the bound Query operation. Accepted Query completions enter `applyDomainResult`, which plans further domain requests and informs the results list.
 
-`domainPlanning.ts` answers which candidate range is needed next, returning an `Option<DomainCandidateRange>`. It selects the complete catalog for availability filtering or price sorting; otherwise it asks `resultsList.ts` for the first pending listing in the viewport and overscan area. The planner waits for pending work and leaves failed ranges for explicit retry. `loadRequiredDomains` schedules the selected range. Query data supplies the displayed domain results through `searchViewState.ts`, with no copied quote collection.
+`domainPlanning.ts` answers which candidate range is needed next, returning an `Option<DomainCandidateRange>`. It selects the complete catalog for availability filtering or price sorting; otherwise it asks `resultsList.ts` for the first pending listing in the viewport and overscan area. The planner waits for pending work and leaves failed ranges for explicit retry. `loadRequiredDomains` schedules the selected range. Query data supplies the displayed domain results through `searchViewState.ts`, without copying the cached domains into another Model field.
 
-Pending listings have no price, availability, or cart action until their quotes arrive. After the four Top Results, the rest of the first page uses a separate non-overlapping range. Scrolling requests missing pages while preserving checked domains. Progressive ranges bypass the input debounce.
+Pending listings have no price, availability, or cart action until their results arrive. After the four Top Results, the rest of the first page uses a separate non-overlapping range. Scrolling requests missing pages while preserving checked domains. Progressive ranges bypass the input debounce.
 
-All Results uses Foldkit UI’s VirtualList with `ScrollContainer.Window()` and positioned rows. The document scrolls beneath the sticky navigation, and the results occupy their full content height. Groups of six domains preserve the responsive three-column, two-column, and single-column grid, and matching width-based estimates guide layout and progressive quote loading. Measured heights account for wrapping and viewport changes. VirtualList preserves the scroll anchor as results change. A bounded static skeleton preview covers the initial measurement before VirtualList renders its visible window.
+All Results uses Foldkit UI’s VirtualList with `ScrollContainer.Window()` and positioned rows. The document scrolls beneath the sticky navigation, and the results occupy their full content height. Groups of six domains preserve the responsive three-column, two-column, and single-column grid, and matching width-based estimates guide layout and progressive domain loading. Measured heights account for wrapping and viewport changes. VirtualList preserves the scroll anchor as results change. A bounded static skeleton preview covers the initial measurement before VirtualList renders its visible window.
 
 ## Sample domain search
 
@@ -98,7 +100,7 @@ The browser requests four candidates initially, then the other 56 first-page can
 
 KeyedQuery owns the frontend cache in the root Model. Its key includes the normalized label, offset, and limit. Fresh results are reused for one minute after completion, bypassing debounce and RPC. Hits update recency without extending freshness. At most 100 settled entries are retained; pending entries are protected. Changing a query cancels its pending requests, and Query generations reject stale, canceled, and duplicate completions. Cached results are not copied into another Model collection.
 
-Requests larger than 1 KiB or without JSON content are rejected at the HTTP boundary. The browser Command has a twenty-second deadline and maps transport failures to a retriable error. Interrupting a superseded Command aborts the browser HTTP request. Cache, retry, progressive loading, and cancellation remain part of the application behavior even though the domain data is simulated.
+Requests larger than 1 KiB or without JSON content are rejected at the HTTP boundary. The browser Command has a twenty-second deadline and maps transport failures to a retriable error. Interrupting a superseded Command aborts the browser HTTP request. The app exercises caching, retry, progressive loading, and cancellation against the sample backend.
 
 ## Before hydration
 
@@ -106,7 +108,7 @@ Requests larger than 1 KiB or without JSON content are rejected at the HTTP boun
 
 Foldkit adopts the existing input node and preserves focus. A controlled `h.Value` reconciles with the initial Model; early edits are not automatically replayed into that Model. The bootstrap stores the query in the URL so init reads it before hydration. A Command removes its listeners when the Runtime takes ownership. Framework support for this handoff is tracked in [foldkit/foldkit#1784](https://github.com/foldkit/foldkit/issues/1784).
 
-The input is editable before the main bundle executes. Measuring page load to interaction across regions requires deployment, network, and device measurements.
+The input is editable before the main bundle executes.
 
 ## Check the app
 
@@ -144,11 +146,11 @@ The regression suite protects these contracts:
 
 Mobile browser regressions in `e2e/domains.mobile.spec.ts` cover narrow portrait and landscape layouts, viewport resizing, readable filter selections, touch target sizes, and submitting or clearing the search. Submission dismisses the touch keyboard before and after hydration. The cart uses Foldkit UI’s Dialog for modal focus, Escape and backdrop dismissal, and page scroll locking; a parent Command returns focus to the cart button after close, including browsers where tapping a button does not focus it.
 
-Accessibility regressions in `e2e/domains.a11y.spec.ts` run axe scans across the landing page, focused empty search, pending and ready results, empty filters, lookup failures, empty and populated carts, and unknown routes at 320, 390, and 1440 CSS pixels. Keyboard tests cover the visible skip link, the complete virtual catalog, modal focus containment and return, cart removal, retry, reduced-motion skeletons, accessible quote and error descriptions, and narrow-screen text spacing. Status announcements retain their DOM nodes and sit outside busy results content. Cart count changes use a persistent polite live region. Arrow keys, Page Up, Page Down, and Home scroll the page instantly through a Command while the results list is focused. End requests the final virtual row through the bound VirtualList operation. VirtualList observes the document viewport. The macOS WebKit tests use [Option-Tab for full webpage navigation](https://support.apple.com/en-gb/guide/safari/cpsh003/mac). These checks exercise browser semantics and keyboard behavior; listening with a screen reader is a separate manual check.
+Accessibility regressions in `e2e/domains.a11y.spec.ts` run axe scans across the landing page, focused empty search, pending and ready results, empty filters, lookup failures, empty and populated carts, and unknown routes at 320, 390, and 1440 CSS pixels. Keyboard tests cover the visible skip link, the complete virtual catalog, modal focus containment and return, cart removal, retry, reduced-motion skeletons, accessible pricing and error descriptions, and narrow-screen text spacing. Status announcements retain their DOM nodes and sit outside busy results content. Cart count changes use a persistent polite live region. Arrow keys, Page Up, Page Down, and Home scroll the page instantly through a Command while the results list is focused. End requests the final virtual row through the bound VirtualList operation. VirtualList observes the document viewport. The macOS WebKit tests use [Option-Tab for full webpage navigation](https://support.apple.com/en-gb/guide/safari/cpsh003/mac). These checks exercise browser semantics and keyboard behavior; listening with a screen reader is a separate manual check.
 
-Stories and Scenes resolve Commands with explicit Messages. They test Model transitions, view wiring, and declared lifecycle behavior without running handlers. Root update Stories under `src/client/story/` cover URL ownership, validation, planning Clock admission, cached query/range reuse, progressive loading, explicit page retry, cancellation races, and cart admission. Generic Query freshness, retention, and completion admission also have framework coverage. App tests exercise the public bound operations and their application consequences. Assert domain results, scheduled work, and user-visible recovery rather than the incidental order of internal bookkeeping. Add browser coverage when real focus, hydration, scrolling, or geometry is the contract; use execution tests for transport, interruption, and shared backend resources.
+Stories and Scenes resolve Commands with explicit Messages. They test Model transitions, view wiring, and declared lifecycle behavior without running handlers. Root update Stories under `src/client/story/` cover URL ownership, validation, planning Clock admission, cached query/range reuse, progressive loading, explicit page retry, cancellation races, and cart admission. Generic Query freshness, retention, and completion admission also have framework coverage. App tests exercise the public bound operations and their application consequences. Assert domain results, scheduled work, and user-visible recovery rather than the incidental order of internal bookkeeping. Add browser coverage when real focus, hydration, scrolling, or geometry is the contract; use execution tests for transport, interruption, and RPC request lifetimes.
 
-The search Scene types into the accessible input, resolves URL replacement, explicitly delivers `Navigation.changedUrl`, resolves the Clock and Query fetch, and checks the displayed domain results. Other Scenes protect filters, quote/action visibility, cart totals, multi-year pricing, accessibility semantics, and keyboard scrolling. `src/client/domainsQuery.test.ts` executes the domain-fetching Effect with the production RPC client, a controlled transport, and Effect TestClock to cover typed failures, timeout, and transport abortion. Query wiring tests cover debounce and the originating request metadata. Direct init tests protect URL-derived startup and bootstrap handoff.
+The search Scene types into the accessible input, resolves URL replacement, explicitly delivers `Navigation.changedUrl`, resolves the Clock and Query fetch, and checks the displayed domain results. Other Scenes protect filters, pricing and cart-action visibility, cart totals, multi-year pricing, accessibility semantics, and keyboard scrolling. `src/client/domainsQuery.test.ts` executes the domain-fetching Effect with the production RPC client, a controlled transport, and Effect TestClock to cover typed failures, timeout, and transport abortion. Query wiring tests cover debounce and the originating request metadata. Direct init tests protect URL-derived startup and bootstrap handoff.
 
 Backend tests execute the production RPC Layer through the typed client. They cover deterministic sample results, complete and partial catalog ranges, label and range validation, malformed JSON, oversized streamed bodies, JSON content requirements, response caching headers, and the absence of outbound HTTP requests.
 
@@ -171,7 +173,7 @@ and branded card. The 1200 × 630 sharing image lives at `public/og/domains.png`
 Edit `assets/social-card.svg` or `public/favicon.svg`, then run
 `pnpm generate:social` to regenerate the PNG sharing image, favicon, and Apple
 touch icon. Commit the generated assets alongside their sources. Page metadata
-lives in `src/client/site.ts` and `src/client/entry.server.ts`.
+lives in `src/client/site.ts` and `src/client/documentHead.ts`.
 
 ## Framework source
 

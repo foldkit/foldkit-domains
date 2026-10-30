@@ -17,5 +17,14 @@ export default defineConfig({
     '**/domains.worker.spec.ts',
   ],
   use: { ...productionConfig.use, baseURL },
+  projects: [
+    ...(productionConfig.projects ?? []),
+    {
+      name: 'rpc',
+      testMatch: '**/domains.rpc.spec.ts',
+      use: { baseURL },
+      workers: 1,
+    },
+  ],
   webServer: [],
 })
