@@ -10,7 +10,7 @@
     <text x="130" y="96" fill="#ededed" font-size="29" font-weight="600">Foldkit <tspan fill="#55555e">/</tspan> Domains</text>
     <text x="64" y="246" fill="#ededed" font-size="66" font-weight="700" letter-spacing="-2.8">Find your next</text>
     <text x="64" y="324" fill="#909098" font-size="66" font-weight="700" letter-spacing="-2.8">great domain.</text>
-    <text x="66" y="392" fill="#b0b0b8" font-size="25">Domain search, rebuilt with Foldkit.</text>
+    <text x="66" y="392" fill="#b0b0b8" font-size="25">An unofficial domain-search demo.</text>
     <text x="66" y="428" fill="#777780" font-size="22">Explore the CAFE stack in action.</text>
     <g transform="translate(752 178)">
       <rect width="384" height="86" rx="14" fill="#121215" stroke="#55555e"/>

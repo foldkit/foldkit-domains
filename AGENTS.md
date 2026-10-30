@@ -36,7 +36,7 @@ Styling follows the Foldkit website: Tailwind Vite integration, a local theme, b
 
 Foldkit’s Vite plugin invalidates the SSR module graph during development updates. The server entry owns the development RPC handler and disposes it through `import.meta.hot.dispose` before reevaluation.
 
-All domain availability and prices are deterministic sample data served by the same-origin Effect RPC backend. Searches must not make outbound API requests or require registrar credentials. Label sample results visibly and preserve the demo-cart disclaimer. Keep the single input node and pre-hydration edits when changing search layout or startup.
+All domain availability and prices are deterministic sample data served by the same-origin Effect RPC backend. Searches must not make outbound API requests or require registrar credentials. Keep the persistent unofficial-demo label, visible sample-data labels, and demo-cart disclaimer. External Vercel links must identify their destination; the demo has no account or purchase flow. Keep the single input node and pre-hydration edits when changing search layout or startup.
 
 `bootstrap.ts` is a native browser boundary that runs before Foldkit starts. Its listeners end at the `domains:ready` handoff. After hydration, Model, Messages, and Commands own the search. `searchLayout` distinguishes the initial landing hero from an opened search; clearing the query preserves the opened layout after keyboard dismissal. The bootstrap transfers early search activity through a temporary document marker consumed by `ReleaseEarlySearchListeners`. Keep `ReplaceSearchUrl` written with `Effect.gen`.
 

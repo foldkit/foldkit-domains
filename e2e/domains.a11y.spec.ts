@@ -84,7 +84,7 @@ for (const javaScriptEnabled of [false, true]) {
         javaScriptEnabled ? 0 : 1,
       )
 
-      const pricing = page.getByRole('link', { name: 'View pricing.' })
+      const pricing = page.getByRole('link', { name: 'Vercel pricing' })
       const input = page.getByRole('searchbox', { name: 'Search domains' })
       const source = page.getByRole('link', { name: 'View source' })
       const keys = tabKeys(browserName)
@@ -404,8 +404,6 @@ test('keyboard users can skip navigation, scroll the complete catalog, and leave
   await expect(page.locator('.domain-card .price').first()).toBeVisible()
   await input.focus()
   for (const target of [
-    page.getByRole('link', { name: 'Sign Up', exact: true }),
-    page.getByRole('link', { name: 'Login', exact: true }),
     page.getByRole('button', { name: 'Cart, 0 domains' }),
     page.getByRole('link', { name: 'Domains home' }),
     page.getByRole('link', { name: 'Skip to main content' }),

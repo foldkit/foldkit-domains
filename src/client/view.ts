@@ -146,6 +146,7 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
           h.span([], ['Domains']),
         ],
       ),
+      h.span([h.Class('demo-label')], ['Unofficial demo']),
       h.div(
         [h.Class('ml-auto flex items-center gap-2 max-[700px]:gap-1.5')],
         [
@@ -170,17 +171,6 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
                   ),
               }),
             ],
-          ),
-          h.a(
-            [h.Href('https://vercel.com/login'), h.Class('button login')],
-            ['Login'],
-          ),
-          h.a(
-            [
-              h.Href('https://vercel.com/signup'),
-              h.Class('button primary signup'),
-            ],
-            ['Sign Up'],
           ),
         ],
       ),
@@ -213,10 +203,10 @@ const heroView = (model: Model, h: ApplicationViewBuilder): Html =>
       h.p(
         [],
         [
-          'Fast. At-cost. Private. ',
+          'Sample data. ',
           h.a(
             [h.Href('https://vercel.com/domains/pricing')],
-            ['View pricing.'],
+            ['Vercel pricing'],
           ),
         ],
       ),
@@ -236,9 +226,7 @@ const beginSearchView = (h: ApplicationViewBuilder): Html =>
           h.h2([], ['Begin your search']),
           h.p(
             [],
-            [
-              'Enter a domain name to find available domains for your next project.',
-            ],
+            ['Enter a domain name to explore sample prices and availability.'],
           ),
         ],
       ),
@@ -1113,7 +1101,7 @@ const footerView = (h: ApplicationViewBuilder): Html =>
   h.footer(
     [h.Class('footer')],
     [
-      h.span([], ['A Foldkit example']),
+      h.span([], ['A Foldkit demo · Not affiliated with Vercel']),
       h.span([], ['Sample data · Demo cart']),
       h.a(
         [h.Href('https://github.com/foldkit/foldkit-domains')],

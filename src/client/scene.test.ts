@@ -245,6 +245,11 @@ describe('domain search', () => {
     scene(
       { update, view },
       given(emptyModel),
+      expect(text('Unofficial demo')).toExist(),
+      expect(role('link', { name: 'Vercel pricing' })).toHaveAttr(
+        'href',
+        'https://vercel.com/domains/pricing',
+      ),
       expect(selector('.results-preview')).toExist(),
       expect(allDomainResults).toBeAbsent(),
       Mount.expectNone(),

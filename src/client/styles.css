@@ -150,8 +150,8 @@
     @apply border-[#555] bg-gray-900;
   }
 
-  .primary {
-    @apply border-gray-50 bg-gray-50 text-black hover:bg-gray-100;
+  .demo-label {
+    @apply inline-flex h-[34px] shrink-0 items-center text-[11px] whitespace-nowrap text-gray-300;
   }
 
   .icon {
@@ -658,11 +658,6 @@
   }
 
   @media (max-width: 1200px) {
-    [data-search-layout='Search'] .login,
-    [data-search-layout='Search'] .signup {
-      @apply hidden;
-    }
-
     [data-search-layout='Search'] .search {
       width: calc(100vw - 600px);
     }
@@ -699,9 +694,8 @@
       @apply min-h-11 min-w-11 gap-3;
     }
 
-    .login,
-    .signup {
-      @apply hidden;
+    .demo-label {
+      @apply h-11 text-[10px];
     }
 
     .hero h1 {
@@ -863,7 +857,6 @@
       width: calc(100vw - 32px);
     }
 
-    .app:has(.search input:focus) .signup,
     .app:has(.search input:focus) .cart-button > span:not(.cart-count) {
       @apply hidden;
     }
