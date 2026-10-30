@@ -19,20 +19,20 @@ import type { CompletedReadCurrentTimeMessage } from '../message'
 import { routeToQuery } from '../route'
 import { informResultsList } from './resultsList'
 
-const trackDomainRange = (range: DomainCandidateRange) =>
+const selectDomainRange = (range: DomainCandidateRange) =>
   makeFieldsStep(() => ({
-    activeDomainCandidateRanges: ranges => {
-      const isRangeActive = Array.some(
+    selectedDomainRanges: ranges => {
+      const isRangeSelected = Array.some(
         ranges,
         existing =>
           existing.offset === range.offset && existing.limit === range.limit,
       )
 
-      return isRangeActive ? ranges : Array.append(ranges, range)
+      return isRangeSelected ? ranges : Array.append(ranges, range)
     },
   }))
 
-const replaceActiveRangesWithFullCatalog = (args: DomainsQueryArgs) =>
+const selectFullCatalogIfReady = (args: DomainsQueryArgs) =>
   makeFieldsStep(model => {
     const isFullCatalogRange =
       args.offset === 0 && args.limit === domainTlds.length
@@ -42,7 +42,7 @@ const replaceActiveRangesWithFullCatalog = (args: DomainsQueryArgs) =>
 
     return isFullCatalogChecked
       ? {
-          activeDomainCandidateRanges: () => [
+          selectedDomainRanges: () => [
             { offset: args.offset, limit: args.limit },
           ],
         }
@@ -104,11 +104,11 @@ export const loadDomainsForRange = makeStep(
     }
 
     return Update.combineSteps([
-      trackDomainRange(range),
+      selectDomainRange(range),
       message.isRefreshRequested
         ? DomainsQueryBinding.requestRevalidationOrLoad(args)
         : DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis),
-      replaceActiveRangesWithFullCatalog(args),
+      selectFullCatalogIfReady(args),
       loadRequiredDomains,
       informResultsList,
     ])
@@ -127,7 +127,7 @@ export const applyDomainResult = ({ args }: DomainsQueryCompletedFetch) =>
     }
 
     return Update.combineSteps([
-      replaceActiveRangesWithFullCatalog(args),
+      selectFullCatalogIfReady(args),
       loadRequiredDomains,
       informResultsList,
     ])

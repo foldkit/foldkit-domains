@@ -4,6 +4,12 @@ import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
 import { DomainCandidateRange } from '../shared/domain'
 import { ApplicationDefinition } from './definition'
+import {
+  CART_BUTTON_ID,
+  CART_CLOSE_BUTTON_ID,
+  FILTERS_BUTTON_ID,
+  TLD_FILTER_BUTTON_ID,
+} from './focusTarget'
 import { Message } from './message'
 import { PageScrollKey, RESULTS_LIST_ID } from './resultsList'
 import { searchRouter } from './route'
@@ -85,9 +91,10 @@ export const FocusCartButton = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedFocusCartButton],
     handler: function* () {
       return () =>
-        Effect.sync(() => {
-          document.getElementById('cart-button')?.focus({ preventScroll: true })
-        }).pipe(Effect.as(Message.CompletedFocusCartButton()))
+        Dom.focus(`#${CART_BUTTON_ID}`, { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusCartButton()),
+        )
     },
   },
 )
@@ -98,11 +105,10 @@ export const FocusFiltersButton = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedFocusFiltersButton],
     handler: function* () {
       return () =>
-        Effect.sync(() => {
-          document
-            .getElementById('filters-button')
-            ?.focus({ preventScroll: true })
-        }).pipe(Effect.as(Message.CompletedFocusFiltersButton()))
+        Dom.focus(`#${FILTERS_BUTTON_ID}`, { preventScroll: true }).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusFiltersButton()),
+        )
     },
   },
 )
@@ -113,7 +119,7 @@ export const FocusTldFilterButton = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedFocusTldFilterButton],
     handler: function* () {
       return () =>
-        Dom.focus('#mobile-tld-filter', { preventScroll: true }).pipe(
+        Dom.focus(`#${TLD_FILTER_BUTTON_ID}`, { preventScroll: true }).pipe(
           Effect.ignore,
           Effect.as(Message.CompletedFocusTldFilterButton()),
         )
@@ -127,7 +133,7 @@ export const FocusCartCloseButton = ApplicationDefinition.makeCommand(
     messages: [Message.CompletedFocusCartCloseButton],
     handler: function* () {
       return () =>
-        Dom.focus('.cart-heading button', { preventScroll: true }).pipe(
+        Dom.focus(`#${CART_CLOSE_BUTTON_ID}`, { preventScroll: true }).pipe(
           Effect.ignore,
           Effect.as(Message.CompletedFocusCartCloseButton()),
         )

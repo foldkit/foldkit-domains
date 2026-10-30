@@ -4,7 +4,12 @@ import { Update } from 'foldkit'
 import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
 import { ReadCurrentTime, ReplaceSearchUrl } from '../command'
 import { DomainsQueryBinding } from '../composition'
-import { makeCommandsStep, makeFieldsStep, makeStep } from '../definition'
+import {
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+} from '../definition'
 import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
 import { routeToQuery } from '../route'
@@ -20,51 +25,42 @@ export const cancelSearch = makeStep(model =>
   ),
 )
 
-export const searchQuery = (query: string, isRefreshRequested = false) =>
-  makeStep(model => {
-    const nextSearchGeneration = Number.increment(model.searchGeneration)
-    const maybeDomainLabel = queryToMaybeDomainLabel(query)
+const invalidateSearch = (query: string) =>
+  Update.combineSteps([
+    cancelSearch,
+    makeFieldsStep(() => ({
+      searchGeneration: Number.increment,
+      searchLayout: currentLayout =>
+        String.isNonEmpty(query) ? 'Search' : currentLayout,
+    })),
+  ])
 
-    return Update.combineSteps([
-      cancelSearch,
-      makeFieldsStep(() => ({
-        searchGeneration: () => nextSearchGeneration,
-        searchLayout: currentLayout =>
-          String.isNonEmpty(query) ? 'Search' : currentLayout,
-        activeDomainCandidateRanges: () => [],
-      })),
-      makeCommandsStep(() =>
-        Array.filter(
-          [
-            ReadCurrentTime({
-              searchGeneration: nextSearchGeneration,
-              offset: 0,
-              limit: TOP_RESULT_COUNT,
-              isRefreshRequested,
-            }),
-          ],
-          () => Option.isSome(maybeDomainLabel),
-        ),
+export const searchQuery = (query: string, isRefreshRequested = false) =>
+  Update.combineSteps([
+    invalidateSearch(query),
+    makeFieldsStep(() => ({ selectedDomainRanges: () => [] })),
+    makeCommandsStep(model =>
+      Array.filter(
+        [
+          ReadCurrentTime({
+            searchGeneration: model.searchGeneration,
+            offset: 0,
+            limit: TOP_RESULT_COUNT,
+            isRefreshRequested,
+          }),
+        ],
+        () => Option.isSome(queryToMaybeDomainLabel(query)),
       ),
-      String.isEmpty(query) ? resetResultsList : informResultsList,
-    ])
-  })
+    ),
+    String.isEmpty(query) ? resetResultsList : informResultsList,
+  ])
 
 export const changeSearchQuery = (query: string) =>
   makeStep(model => {
     const isQueryChanged = query !== routeToQuery(model.route)
 
     return Update.combineSteps([
-      ...(isQueryChanged
-        ? [
-            cancelSearch,
-            makeFieldsStep(() => ({
-              searchGeneration: Number.increment,
-              searchLayout: currentLayout =>
-                String.isNonEmpty(query) ? 'Search' : currentLayout,
-            })),
-          ]
-        : []),
+      isQueryChanged ? invalidateSearch(query) : makeNoopStep(),
       makeCommandsStep(() => [
         ReplaceSearchUrl({ q: Option.liftPredicate(query, String.isNonEmpty) }),
       ]),

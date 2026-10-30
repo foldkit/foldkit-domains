@@ -426,7 +426,7 @@ describe('progressive domain results', () => {
       Command.expectHas(makeDomainsFetch(catalogArgs, 3)),
       resolveDomainsSuccess(catalogArgs, 3, allDomains, 40),
       model(model => {
-        expect(model.activeDomainCandidateRanges).toEqual([
+        expect(model.selectedDomainRanges).toEqual([
           { offset: 0, limit: domainTlds.length },
         ])
         expect(searchViewState(model)).toEqual(

@@ -266,7 +266,7 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
       firstPageDomains,
       100,
     ),
-    { activeDomainCandidateRanges: () => [{ offset: 0, limit: 60 }] },
+    { selectedDomainRanges: () => [{ offset: 0, limit: 60 }] },
   )
   const pageFailure = DomainsQueryFailure.make({
     error: 'Sample service unavailable',
@@ -297,7 +297,7 @@ test('global criteria reuse a fresh catalog and prune an active failed page', ()
       expect(DomainsQuery.read(model.domainsQuery, secondArgs)._tag).toBe(
         'Failure',
       )
-      expect(model.activeDomainCandidateRanges).toEqual([
+      expect(model.selectedDomainRanges).toEqual([
         { offset: 0, limit: domainTlds.length },
       ])
       expect(searchViewState(model)).toEqual(

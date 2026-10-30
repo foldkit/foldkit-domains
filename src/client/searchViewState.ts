@@ -50,7 +50,7 @@ export const searchViewState = (model: Model): SearchViewState => {
     })
   }
 
-  const rangeQueries = Array.map(model.activeDomainCandidateRanges, range => ({
+  const rangeQueries = Array.map(model.selectedDomainRanges, range => ({
     range,
     data: DomainsQuery.read(model.domainsQuery, {
       label: maybeLabel.value,

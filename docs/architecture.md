@@ -14,6 +14,7 @@ The search input arrives in static HTML, accepts edits before hydration, and mov
 - `src/client/filterListboxes.ts` defines typed filter and sort Listbox Blocks. Desktop Listboxes and mobile sheets share transitions through `steps/filters.ts`; mobile choices apply directly and close their animated sheet. The TLD sheet searches the full catalog.
 - `src/client/route.ts` defines the bidirectional search router. The Model stores the parsed Route. Input changes replace the URL, and `ChangedUrl` updates the Route before starting its lookup.
 - `src/client/resultsList.ts` creates the VirtualList Block and locates pending listings in the viewport and overscan area. `composition.ts` binds it, Query, filter Listboxes, and cart/filter Dialogs to the root Model. `resultListings.ts` selects the displayed listings; `block.ts` assembles the application.
+- `src/client/focusTarget.ts` shares stable control IDs between the view and focus Commands. Focus uses `Dom.focus` after the render commits, with scrolling suppressed.
 - `src/client/view.ts` contains named views and layout utilities; `styles.css` defines the Tailwind theme, reusable components, and single-input positioning. `icon.ts` renders Lucide icons; attribution is in `THIRD_PARTY_NOTICES.md`.
 - `src/client/entry.server.ts` renders the same Block for static generation and request-time SSR. `src/server/entry.ts` delegates page rendering, routes `/rpc` and `/rpc/` to the Effect RPC server, and disposes its handler on development reload.
 
@@ -21,11 +22,13 @@ Unknown paths render a NotFound page with a link back to search and return HTTP 
 
 ## Following a search
 
-Start with `steps/search.ts`: input changes request URL replacement, and `ChangedUrl` stores the Route before starting the four Top Results. Changing or clearing the query cancels pending requests. A separate search generation rejects outdated planning Clock Messages; Query owns per-key fetch generations.
+Start with `steps/search.ts`: input changes request URL replacement, and `ChangedUrl` stores the Route before starting the four Top Results. The shared `invalidateSearch` operation cancels pending requests and invalidates planning Clock Messages. Input changes invoke it before URL delivery; URL changes invoke it independently to handle history navigation and direct routing. Query owns per-key fetch generations.
 
 `steps/domainLoading.ts` owns request execution. Scheduling reads Effect Clock through a Command. Its completion checks the current search, pending requests, and cache freshness before calling the bound Query operation. Accepted Query completions enter `applyDomainResult`, which plans further domain requests and informs the results list.
 
 `domainPlanning.ts` answers which candidate range is needed next, returning an `Option<DomainCandidateRange>`. It selects the complete catalog for availability filtering or price sorting; otherwise it asks `resultsList.ts` for the first pending listing in the viewport and overscan area. The planner waits for pending work and leaves failed ranges for explicit retry. `loadRequiredDomains` schedules the selected range. Query data supplies the displayed domain results through `searchViewState.ts`, without copying the cached domains into another Model field.
+
+`selectedDomainRanges` chooses which Query entries contribute to this search view; the cache also retains entries from previous searches and other range sizes. A successful complete-catalog lookup replaces the partial selection so older page failures and results do not override it. Starting a search resets the selection while retaining the cache.
 
 Pending listings have no price, availability, or cart action until their results arrive. After the four Top Results, the rest of the first page uses a separate non-overlapping range. Scrolling requests missing pages while preserving checked domains. Progressive ranges bypass the input debounce.
 

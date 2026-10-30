@@ -36,6 +36,12 @@ import {
   queryToDomainListings,
   queryToPendingDomainListings,
 } from './domain'
+import {
+  CART_BUTTON_ID,
+  CART_CLOSE_BUTTON_ID,
+  FILTERS_BUTTON_ID,
+  TLD_FILTER_BUTTON_ID,
+} from './focusTarget'
 import * as Icon from './icon'
 import { Message } from './message'
 import { Model } from './model'
@@ -152,7 +158,7 @@ const headerView = (model: Model, h: ApplicationViewBuilder): Html =>
         [
           h.button(
             [
-              h.Id('cart-button'),
+              h.Id(CART_BUTTON_ID),
               h.Class('button cart-button'),
               h.OnClick(Message.ClickedCart()),
               h.AriaLabel(`Cart, ${Array.length(model.cart)} domains`),
@@ -485,7 +491,7 @@ const filtersView = (model: Model, h: ApplicationViewBuilder): Html => {
       ),
       h.button(
         [
-          h.Id('mobile-tld-filter'),
+          h.Id(TLD_FILTER_BUTTON_ID),
           h.Type('button'),
           h.Class('filter-trigger mobile-tld-filter'),
           h.AriaLabel(`Filter by TLD: ${tldFilterLabel(model.tldFilter)}`),
@@ -512,7 +518,7 @@ const filtersView = (model: Model, h: ApplicationViewBuilder): Html => {
       ),
       h.button(
         [
-          h.Id('filters-button'),
+          h.Id(FILTERS_BUTTON_ID),
           h.Class(
             `filters-button${isFilterOrSortActive ? ' has-active-filters' : ''}`,
           ),
@@ -1006,6 +1012,7 @@ const cartPanelView = (
             [
               ...render.closeButton,
               ...render.initialFocus,
+              h.Id(CART_CLOSE_BUTTON_ID),
               h.Class('icon-button'),
               h.AriaLabel('Close cart panel'),
             ],

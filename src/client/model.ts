@@ -18,7 +18,7 @@ export const Model = Schema.Struct({
   route: ApplicationRoute,
   searchLayout: SearchLayout,
   searchGeneration: Schema.Number,
-  activeDomainCandidateRanges: Schema.Array(DomainCandidateRange),
+  selectedDomainRanges: Schema.Array(DomainCandidateRange),
   domainsQuery: DomainsQuery.Model,
   resultsList: ResultsListBlock.Model,
   tldListbox: TldListboxBlock.Model,

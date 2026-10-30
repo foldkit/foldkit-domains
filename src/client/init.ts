@@ -15,7 +15,7 @@ export const init = ApplicationComposition.makeInit((url: Url.Url) => {
       route,
       searchLayout: String.isNonEmpty(query) ? 'Search' : 'Landing',
       searchGeneration: 0,
-      activeDomainCandidateRanges: [],
+      selectedDomainRanges: [],
       tldFilter: 'All',
       tldSearchQuery: '',
       availabilityFilter: 'All',

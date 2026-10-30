@@ -25,7 +25,7 @@ export const emptyModel = Model.make({
   route: ApplicationRoute.Search({ q: Option.none() }),
   searchLayout: 'Landing',
   searchGeneration: 0,
-  activeDomainCandidateRanges: [],
+  selectedDomainRanges: [],
   domainsQuery: DomainsQuery.init().model,
   resultsList: ResultsListBlock.init(resultsListConfig).model,
   tldListbox: TldListboxBlock.init({ id: TLD_FILTER_ID }).model,
@@ -76,7 +76,7 @@ export const withDomainsForRange = (
 
   return modifyFields(model, {
     domainsQuery: () => domainsCompletion.model,
-    activeDomainCandidateRanges: ranges =>
+    selectedDomainRanges: ranges =>
       Array.some(
         ranges,
         range => range.offset === args.offset && range.limit === args.limit,
