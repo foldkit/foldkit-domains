@@ -31,12 +31,12 @@ const demoPrices: Readonly<Record<string, number>> = {
 
 export const makeDemoDomains = (label: string): ReadonlyArray<Domain> =>
   Array.map(domainCandidates(label), domain => {
-    const isUnconfirmed =
+    const isUnavailable =
       Array.contains(['vercel', 'google', 'github', 'foldkit'], label) &&
       Array.contains(['com', 'dev'], domain.tld)
 
-    if (isUnconfirmed) {
-      return Domain.Unconfirmed(domain)
+    if (isUnavailable) {
+      return Domain.Unavailable(domain)
     } else {
       const price = demoPrices[domain.tld] ?? 19.99
       return Domain.Available({

@@ -22,13 +22,13 @@ import {
 } from '../../shared/domain'
 
 export const DomainListing = defineTaggedUnion({
-  Pending: DomainName.fields,
-  Ready: { ...DomainName.fields, domain: Domain },
+  Unchecked: DomainName.fields,
+  Checked: { ...DomainName.fields, domain: Domain },
 })
 export type DomainListing = typeof DomainListing.Type
 
-export const domainToReadyListing = (domain: Domain) =>
-  DomainListing.Ready({ name: domain.name, tld: domain.tld, domain })
+export const domainToCheckedListing = (domain: Domain) =>
+  DomainListing.Checked({ name: domain.name, tld: domain.tld, domain })
 
 export const TldFilter = Schema.Literals([
   'All',
@@ -121,20 +121,20 @@ export const queryToDomainListings = (
 ) => {
   const domainsByName = Record.fromIterableBy(domains, domain => domain.name)
 
-  return Array.map(queryToPendingDomainListings(query), pending =>
+  return Array.map(queryToUncheckedDomainListings(query), unchecked =>
     pipe(
       domainsByName,
-      Record.get(pending.name),
-      Option.match({ onNone: () => pending, onSome: domainToReadyListing }),
+      Record.get(unchecked.name),
+      Option.match({ onNone: () => unchecked, onSome: domainToCheckedListing }),
     ),
   )
 }
 
-// NOTE: Static landing HTML includes pending cards so bootstrap can fill
+// NOTE: Static landing HTML includes unchecked cards so bootstrap can fill
 // query results before the client bundle runs.
-export const queryToPendingDomainListings = (query: string) => {
+export const queryToUncheckedDomainListings = (query: string) => {
   const label = Option.getOrElse(queryToMaybeDomainLabel(query), () => '')
-  return Array.map(domainCandidates(label), DomainListing.Pending)
+  return Array.map(domainCandidates(label), DomainListing.Unchecked)
 }
 
 export const matchesTldFilter =
@@ -172,9 +172,9 @@ export const filterAndSortDomains = (
     filteredDomains,
     Domain.guards.Available,
   )
-  const unconfirmedDomains = Array.filter(
+  const unavailableDomains = Array.filter(
     filteredDomains,
-    Domain.guards.Unconfirmed,
+    Domain.guards.Unavailable,
   )
 
   return Match.value(sortOrder).pipe(
@@ -188,13 +188,13 @@ export const filterAndSortDomains = (
     Match.when('PriceAscending', () =>
       Array.appendAll(
         Array.sort(availableDomains, priceOrder),
-        unconfirmedDomains,
+        unavailableDomains,
       ),
     ),
     Match.when('PriceDescending', () =>
       Array.appendAll(
         Array.sort(availableDomains, Order.flip(priceOrder)),
-        unconfirmedDomains,
+        unavailableDomains,
       ),
     ),
     Match.exhaustive,
@@ -213,7 +213,7 @@ export const filterAndSortDomainListings = (
     listing => {
       const isAvailabilityMatch =
         availabilityFilter === 'All' ||
-        listing._tag === 'Pending' ||
+        listing._tag === 'Unchecked' ||
         listing.domain._tag === 'Available'
 
       return matchesTldFilter(tldFilter)(listing) && isAvailabilityMatch
@@ -233,9 +233,9 @@ export const filterAndSortDomainListings = (
             availabilityFilter,
             sortOrder,
           ),
-          domainToReadyListing,
+          domainToCheckedListing,
         ),
-        Array.filter(listings, DomainListing.guards.Pending),
+        Array.filter(listings, DomainListing.guards.Unchecked),
       ),
     ),
     Match.exhaustive,

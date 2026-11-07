@@ -41,7 +41,7 @@ export const mockDomainSearch = async (
                     Array.findFirst(
                       domains,
                       domain => domain.name === name.name,
-                    ).pipe(Option.getOrElse(() => Domain.Unconfirmed(name))),
+                    ).pipe(Option.getOrElse(() => Domain.Unavailable(name))),
                 ),
               ),
             ),

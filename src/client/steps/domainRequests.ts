@@ -18,7 +18,7 @@ import type { CompletedReadCurrentTimeMessage } from '../message'
 import { routeToQuery } from '../route'
 import {
   includeDomainRangeInResults,
-  useFullCatalogResultsIfLoaded,
+  useCompleteCatalogResultsIfLoaded,
 } from './resultSelection'
 import { informResultsList } from './resultsList'
 
@@ -81,7 +81,7 @@ export const loadDomainRange = makeStep(
       message.isRefreshRequested
         ? DomainsQueryBinding.requestRevalidationOrLoad(args)
         : DomainsQueryBinding.requestLoadIfStale(args, message.nowMillis),
-      useFullCatalogResultsIfLoaded(args),
+      useCompleteCatalogResultsIfLoaded(args),
       requestNextDomainRange,
       informResultsList,
     ])
@@ -102,7 +102,7 @@ export const continueSearchAfterDomainRequest = ({
     }
 
     return Update.combineSteps([
-      useFullCatalogResultsIfLoaded(args),
+      useCompleteCatalogResultsIfLoaded(args),
       requestNextDomainRange,
       informResultsList,
     ])

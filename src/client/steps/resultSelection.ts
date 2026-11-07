@@ -18,15 +18,15 @@ export const includeDomainRangeInResults = (range: DomainCandidateRange) =>
     },
   }))
 
-export const useFullCatalogResultsIfLoaded = (args: DomainsQueryArgs) =>
+export const useCompleteCatalogResultsIfLoaded = (args: DomainsQueryArgs) =>
   makeFieldsStep(model => {
-    const isFullCatalogRange =
+    const isCompleteCatalogRange =
       args.offset === 0 && args.limit === domainTlds.length
-    const isFullCatalogLoaded =
-      isFullCatalogRange &&
+    const isCompleteCatalogLoaded =
+      isCompleteCatalogRange &&
       AsyncData.isSuccess(DomainsQuery.read(model.domainsQuery, args))
 
-    return isFullCatalogLoaded
+    return isCompleteCatalogLoaded
       ? {
           selectedDomainRanges: () => [
             { offset: args.offset, limit: args.limit },

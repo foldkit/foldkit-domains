@@ -20,7 +20,7 @@ import { resultListings } from '../resultListings'
 import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute } from '../route'
 import {
-  DomainRequestPresentation,
+  DomainRequestViewState,
   SearchViewState,
   searchViewState,
 } from '../searchViewState'
@@ -103,7 +103,7 @@ describe('progressive domain results', () => {
       sortOrder => sortOrder === 'Length' || sortOrder === 'Alphabetical',
     ),
   )(
-    '%s sorts pending names immediately and retries only the visible candidate range',
+    '%s sorts unchecked names immediately and retries only the visible candidate range',
     sortOrder =>
       Effect.gen(function* () {
         const initialEmptyModel = yield* emptyModel
@@ -142,7 +142,7 @@ describe('progressive domain results', () => {
             expect(
               Array.map(Array.take(listings, 5), listing => listing.name),
             ).toEqual(expectedNames)
-            expect(Array.every(listings, DomainListing.guards.Pending)).toBe(
+            expect(Array.every(listings, DomainListing.guards.Unchecked)).toBe(
               true,
             )
           }),
@@ -159,13 +159,13 @@ describe('progressive domain results', () => {
               Array.map(Array.take(listings, 5), listing => listing.name),
             ).toEqual(expectedNames)
             expect(Option.getOrThrow(Array.head(listings))).toEqual(
-              DomainListing.Pending({ name: 'acme.ac', tld: 'ac' }),
+              DomainListing.Unchecked({ name: 'acme.ac', tld: 'ac' }),
             )
             expect(
               Array.findFirst(listings, listing => listing.name === 'acme.com'),
             ).toEqual(
               Option.some(
-                DomainListing.Ready({
+                DomainListing.Checked({
                   name: 'acme.com',
                   tld: 'com',
                   domain: Option.getOrThrow(Array.head(allDomains)),
@@ -251,7 +251,7 @@ describe('progressive domain results', () => {
             expect(searchViewState(model)).toEqual(
               SearchViewState.Ready({
                 domains: topDomains,
-                domainRequest: DomainRequestPresentation.Loading({
+                domainRequest: DomainRequestViewState.Loading({
                   offset: 4,
                   limit: 56,
                 }),
@@ -325,7 +325,7 @@ describe('progressive domain results', () => {
             expect(searchViewState(model)).toEqual(
               SearchViewState.Ready({
                 domains: firstPageDomains,
-                domainRequest: DomainRequestPresentation.Failed({
+                domainRequest: DomainRequestViewState.Failed({
                   offset: 60,
                   limit: 60,
                   error: 'Sample service unavailable',
@@ -407,7 +407,7 @@ describe('progressive domain results', () => {
             expect(searchViewState(model)).toEqual(
               SearchViewState.Ready({
                 domains: firstPageDomains,
-                domainRequest: DomainRequestPresentation.Loading({
+                domainRequest: DomainRequestViewState.Loading({
                   offset: 0,
                   limit: domainTlds.length,
                 }),
@@ -440,7 +440,7 @@ describe('progressive domain results', () => {
             expect(searchViewState(model)).toEqual(
               SearchViewState.Ready({
                 domains: firstPageDomains,
-                domainRequest: DomainRequestPresentation.Failed({
+                domainRequest: DomainRequestViewState.Failed({
                   offset: 0,
                   limit: domainTlds.length,
                   error: pageFailure.error,

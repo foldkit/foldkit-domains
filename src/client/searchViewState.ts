@@ -12,21 +12,21 @@ import { DomainsQuery } from './domainsQuery'
 import type { Model } from './model'
 import { routeToQuery } from './route'
 
-export const DomainRequestPresentation = defineTaggedUnion({
+export const DomainRequestViewState = defineTaggedUnion({
   Idle: {},
   Loading: DomainCandidateRange.fields,
   Failed: { ...DomainCandidateRange.fields, error: Schema.String },
 })
-export type DomainRequestPresentation = typeof DomainRequestPresentation.Type
+export type DomainRequestViewState = typeof DomainRequestViewState.Type
 
 export const SearchViewState = defineTaggedUnion({
   Idle: {},
   Loading: {},
   Ready: {
     domains: Schema.Array(Domain),
-    domainRequest: DomainRequestPresentation.pipe(
+    domainRequest: DomainRequestViewState.pipe(
       Schema.withConstructorDefault(
-        Effect.succeed(DomainRequestPresentation.Idle()),
+        Effect.succeed(DomainRequestViewState.Idle()),
       ),
     ),
   },
@@ -94,11 +94,11 @@ export const searchViewState = (model: Model): SearchViewState => {
   }
 
   const domainRequest = Option.match(maybePendingRangeQuery, {
-    onSome: ({ range }) => DomainRequestPresentation.Loading(range),
+    onSome: ({ range }) => DomainRequestViewState.Loading(range),
     onNone: () =>
       Option.match(maybeFailure, {
-        onNone: DomainRequestPresentation.Idle,
-        onSome: failure => DomainRequestPresentation.Failed(failure),
+        onNone: DomainRequestViewState.Idle,
+        onSome: failure => DomainRequestViewState.Failed(failure),
       }),
   })
 

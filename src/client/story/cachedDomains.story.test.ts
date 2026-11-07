@@ -16,7 +16,7 @@ import { Message } from '../message'
 import { emptyModel, withDomainsForRange } from '../model.fixture'
 import { ApplicationRoute } from '../route'
 import {
-  DomainRequestPresentation,
+  DomainRequestViewState,
   SearchViewState,
   searchViewState,
 } from '../searchViewState'
@@ -145,7 +145,7 @@ it.effect(
       const nextDomains = Array.map(domains, domain =>
         Domain.match(domain, {
           Available: domain => Domain.Available({ ...domain, price: 25 }),
-          Unconfirmed: domain => domain,
+          Unavailable: domain => domain,
         }),
       )
       const failure = DomainsQueryFailure.make({
@@ -174,7 +174,7 @@ it.effect(
           expect(searchViewState(model)).toEqual(
             SearchViewState.Ready({
               domains,
-              domainRequest: DomainRequestPresentation.Failed({
+              domainRequest: DomainRequestViewState.Failed({
                 offset: 0,
                 limit: 4,
                 error: failure.error,
@@ -317,7 +317,7 @@ it.effect(
           expect(searchViewState(model)).toEqual(
             SearchViewState.Ready({
               domains: firstPageDomains,
-              domainRequest: DomainRequestPresentation.Failed({
+              domainRequest: DomainRequestViewState.Failed({
                 offset: 60,
                 limit: 60,
                 error: pageFailure.error,
@@ -340,7 +340,7 @@ it.effect(
           expect(searchViewState(model)).toEqual(
             SearchViewState.Ready({
               domains: allDomains,
-              domainRequest: DomainRequestPresentation.Idle(),
+              domainRequest: DomainRequestViewState.Idle(),
             }),
           )
         }),

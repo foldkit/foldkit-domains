@@ -34,7 +34,7 @@ import {
   formatRegistrationPrice,
   formatRenewalPrice,
   queryToDomainListings,
-  queryToPendingDomainListings,
+  queryToUncheckedDomainListings,
 } from './domain'
 import {
   CART_BUTTON_ID,
@@ -239,14 +239,14 @@ const beginSearchView = (h: ApplicationViewBuilder): Html =>
     ],
   )
 
-const readyDomainActionView = (
+const checkedDomainActionView = (
   domain: Domain,
   model: Model,
   h: ApplicationViewBuilder,
 ): Html => {
   const isInCart = Array.some(model.cart, item => item.name === domain.name)
   return Domain.match(domain, {
-    Unconfirmed: () =>
+    Unavailable: () =>
       h.div(
         [h.Class('domain-action')],
         [
@@ -304,7 +304,7 @@ const domainActionView = (
   h: ApplicationViewBuilder,
 ): Html =>
   DomainListing.match(listing, {
-    Pending: () =>
+    Unchecked: () =>
       h.div(
         [h.Class('domain-action'), h.AriaHidden(true)],
         [
@@ -312,12 +312,12 @@ const domainActionView = (
           h.span([h.Class('skeleton skeleton-action')]),
         ],
       ),
-    Ready: ({ domain }) => readyDomainActionView(domain, model, h),
+    Checked: ({ domain }) => checkedDomainActionView(domain, model, h),
   })
 
-const isUnconfirmedListing = DomainListing.match({
-  Pending: () => false,
-  Ready: ({ domain }) => domain._tag === 'Unconfirmed',
+const isUnavailableListing = DomainListing.match({
+  Unchecked: () => false,
+  Checked: ({ domain }) => domain._tag === 'Unavailable',
 })
 
 const domainNameView = (
@@ -340,7 +340,7 @@ const domainCardView = (
     listing.name,
     [
       h.Class(
-        `domain-card${isUnconfirmedListing(listing) ? ' is-unavailable' : ''}`,
+        `domain-card${isUnavailableListing(listing) ? ' is-unavailable' : ''}`,
       ),
     ],
     [h.h3([], domainNameView(listing, h)), domainActionView(listing, model, h)],
@@ -355,7 +355,7 @@ const domainRowView = (
     listing.name,
     [
       h.Class(
-        `domain-row${isUnconfirmedListing(listing) ? ' is-unavailable' : ''}`,
+        `domain-row${isUnavailableListing(listing) ? ' is-unavailable' : ''}`,
       ),
     ],
     [
@@ -837,7 +837,7 @@ const resultsListView = (
         [h.Class('results-preview'), h.AriaHidden(true)],
         Array.map(Array.take(results, PREVIEW_RESULT_COUNT), domain =>
           domainRowView(
-            DomainListing.Pending({
+            DomainListing.Unchecked({
               name: domain.name,
               tld: domain.tld,
             }),
@@ -908,8 +908,8 @@ const searchResultsView = (model: Model, h: ApplicationViewBuilder): Html => {
   const search = searchViewState(model)
   const results = resultListings(model)
   const domains = SearchViewState.match(search, {
-    Idle: () => queryToPendingDomainListings(routeToQuery(model.route)),
-    Loading: () => queryToPendingDomainListings(routeToQuery(model.route)),
+    Idle: () => queryToUncheckedDomainListings(routeToQuery(model.route)),
+    Loading: () => queryToUncheckedDomainListings(routeToQuery(model.route)),
     Ready: ({ domains }) =>
       queryToDomainListings(routeToQuery(model.route), domains),
     Failed: () => [],

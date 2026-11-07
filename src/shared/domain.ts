@@ -21,7 +21,7 @@ export type DomainQuote = typeof DomainQuote.Type
 
 export const Domain = defineTaggedUnion({
   Available: { ...DomainName.fields, ...DomainQuote.fields },
-  Unconfirmed: DomainName.fields,
+  Unavailable: DomainName.fields,
 })
 export type Domain = typeof Domain.Type
 export type AvailableDomain = typeof Domain.Available.Type

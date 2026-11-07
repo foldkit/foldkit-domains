@@ -1,7 +1,7 @@
 export * as Cart from './cart'
 export {
   DomainListing,
-  domainToReadyListing,
+  domainToCheckedListing,
   TldFilter,
   AvailabilityFilter,
   SortOrder,
@@ -11,7 +11,7 @@ export {
   findDomainRangeForTld,
   mergeDomainsByName,
   queryToDomainListings,
-  queryToPendingDomainListings,
+  queryToUncheckedDomainListings,
   matchesTldFilter,
   filterAndSortDomains,
   filterAndSortDomainListings,

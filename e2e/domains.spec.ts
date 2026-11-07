@@ -860,12 +860,12 @@ test('failed lookups hide prices and recover through explicit retry', async ({
   ).toHaveValue('retry-idea')
 })
 
-test('shows multi-year registration and renewal quotes without treating an unconfirmed name as purchasable', async ({
+test('shows multi-year registration and renewal quotes without treating an unavailable name as purchasable', async ({
   page,
 }) => {
   await mockDomainSearch(page, () =>
     Effect.succeed([
-      Domain.Unconfirmed({ name: 'quoted.com', tld: 'com' }),
+      Domain.Unavailable({ name: 'quoted.com', tld: 'com' }),
       Domain.Available({
         name: 'quoted.ai',
         tld: 'ai',
@@ -877,13 +877,13 @@ test('shows multi-year registration and renewal quotes without treating an uncon
     ]),
   )
   await page.goto('/?q=quoted')
-  const unconfirmed = page.locator('.domain-card').first()
-  await expect(unconfirmed).toContainText('Not available')
-  await expect(unconfirmed.locator('.unavailable')).toHaveAttribute(
+  const unavailable = page.locator('.domain-card').first()
+  await expect(unavailable).toContainText('Not available')
+  await expect(unavailable.locator('.unavailable')).toHaveAttribute(
     'title',
     'This sample domain is marked unavailable in the demo data.',
   )
-  await expect(unconfirmed.getByRole('button')).toHaveCount(0)
+  await expect(unavailable.getByRole('button')).toHaveCount(0)
   await Page.chooseFilterOption(page, 'Filter by TLD', '.ai')
   const quoted = page.locator('#domain-results .domain-row').first()
   await expect(quoted.locator('.price')).toHaveText('$160.00 / 2 years')

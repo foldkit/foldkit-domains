@@ -103,15 +103,15 @@ describe('demo domain search RPC', () => {
     ])
   })
 
-  test('unconfirmed sample domains contain no prices or purchase terms', async () => {
+  test('unavailable sample domains contain no prices or purchase terms', async () => {
     const handler = makeApi()
     const domains = await Effect.runPromise(
       callSearch(handler, 'foldkit', { offset: 0, limit: 2 }),
     )
 
     expect(domains).toEqual([
-      { _tag: 'Unconfirmed', name: 'foldkit.com', tld: 'com' },
-      { _tag: 'Unconfirmed', name: 'foldkit.dev', tld: 'dev' },
+      { _tag: 'Unavailable', name: 'foldkit.com', tld: 'com' },
+      { _tag: 'Unavailable', name: 'foldkit.dev', tld: 'dev' },
     ])
   })
 

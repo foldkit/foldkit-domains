@@ -77,7 +77,7 @@ export const estimateResultGroupHeightPx = (
   }
 }
 
-export const findFirstPendingListingInViewport = (
+export const findFirstUncheckedListingNearViewport = (
   listings: ReadonlyArray<DomainListing>,
   resultsList: ResultsListModel,
 ): Option.Option<DomainListing> => {
@@ -123,6 +123,6 @@ export const findFirstPendingListingInViewport = (
         offsetPx <= viewportEndPx,
     ),
     Array.flatMap(({ group }) => group.listings),
-    Array.findFirst(DomainListing.guards.Pending),
+    Array.findFirst(DomainListing.guards.Unchecked),
   )
 }

@@ -788,7 +788,7 @@ describe('cart presentation', () => {
       }),
   )
 
-  it.effect('unconfirmed domains expose no purchase action', () =>
+  it.effect('unavailable domains expose no purchase action', () =>
     Effect.gen(function* () {
       yield* Scene.scene(
         { block: ApplicationBlock, layer },
@@ -824,7 +824,7 @@ it.effect(
           Option.getOrElse(
             Array.findFirst(
               [
-                Domain.Unconfirmed({ name: 'acme.com', tld: 'com' }),
+                Domain.Unavailable({ name: 'acme.com', tld: 'com' }),
                 Domain.Available({
                   name: 'acme.ai',
                   tld: 'ai',
@@ -844,7 +844,7 @@ it.effect(
               ],
               domain => domain.name === candidate.name,
             ),
-            () => Domain.Unconfirmed(candidate),
+            () => Domain.Unavailable(candidate),
           ),
         ),
       )

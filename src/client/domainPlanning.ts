@@ -10,7 +10,7 @@ import { findDomainRangeForTld, isCompleteCatalogRequired } from './domain'
 import { DomainsQuery } from './domainsQuery'
 import type { Model } from './model'
 import { resultListings } from './resultListings'
-import { findFirstPendingListingInViewport } from './resultsList'
+import { findFirstUncheckedListingNearViewport } from './resultsList'
 import { routeToQuery } from './route'
 import { searchViewState } from './searchViewState'
 
@@ -54,7 +54,10 @@ export const findNextDomainRangeToLoad = (
   }
 
   return pipe(
-    findFirstPendingListingInViewport(resultListings(model), model.resultsList),
+    findFirstUncheckedListingNearViewport(
+      resultListings(model),
+      model.resultsList,
+    ),
     Option.flatMap(listing => findDomainRangeForTld(listing.tld)),
   )
 }
