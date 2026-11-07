@@ -19,11 +19,14 @@ type Equal<Left, Right> =
     : false
 type Expect<Value extends true> = Value
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = Message.defineMessageUnion({
   RequestedPing: {},
   CompletedWork: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 const ChildOutMessage = Message.defineMessageUnion({ Pinged: {} })
+type ChildOutMessage = typeof ChildOutMessage.Type
 const AlphaDefinition = Block.makeDefinition('Alpha', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -77,10 +80,12 @@ const ParentModel = Schema.Struct({
   alpha: AlphaBlock.Model,
   beta: BetaBlock.Model,
 })
+type ParentModel = typeof ParentModel.Type
 const ParentMessage = Message.defineMessageUnion({
   RequestedStart: {},
   CompletedParentWork: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const ParentDefinition = Block.makeDefinition('Alpha', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -91,10 +96,12 @@ const ParentWork = ParentDefinition.makeCommand('ParentWork', {
     return () => Effect.succeed(ParentMessage.CompletedParentWork())
   },
 })
-const AlphaBinding = ParentDefinition.makeBinding(AlphaBlock, {
+const AlphaBinding = ParentDefinition.makeRequiredFieldBinding(AlphaBlock, {
   field: 'alpha',
 })
-const BetaBinding = ParentDefinition.makeBinding(BetaBlock, { field: 'beta' })
+const BetaBinding = ParentDefinition.makeRequiredFieldBinding(BetaBlock, {
+  field: 'beta',
+})
 const ConfiguredAlphaBinding = AlphaBinding.withOutMessagePolicy({
   fold: ParentDefinition.makeOutMessageFold(AlphaBlock, {
     Pinged: () => BetaBinding.ping(),

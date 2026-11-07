@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { Effect, Schema, SchemaIssue, SchemaTransformation } from 'effect'
-import { expect } from 'vitest'
+import { expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
@@ -229,6 +229,7 @@ describe('renderToString', () => {
           }),
         ),
       )
+      type TrimmedTheme = typeof TrimmedTheme.Type
       const rendered = yield* renderToString(
         { ...routingConfig, Flags: Schema.Struct({ theme: TrimmedTheme }) },
         { url: 'https://example.com/', flags: { theme: '  dark  ' } },
@@ -261,6 +262,7 @@ describe('renderToString', () => {
             }),
           ),
         )
+        type PrefixedTheme = typeof PrefixedTheme.Type
         const error = yield* Effect.flip(
           renderToString(
             {
@@ -325,6 +327,17 @@ describe('renderToString', () => {
         )
 
         expect(error).toMatchObject({ _tag: 'MissingBuildId' })
+        expect(error.message).toContain(
+          'Hydratable rendering requires a nonempty build id',
+        )
+        expect(error.message).toContain('@foldkit/vite-plugin')
+        expect(error.message).toContain(
+          'same FOLDKIT_BUILD_ID during both builds',
+        )
+        expect(error.message).toContain(
+          'same options.buildId to renderToString and Runtime.hydrate',
+        )
+        expect(error.message).toContain('isHydratable: false')
       }),
   )
 
@@ -866,6 +879,7 @@ describe('renderToString', () => {
     () =>
       Effect.gen(function* () {
         const RatioFlags = Schema.Struct({ ratio: Schema.Number })
+        type RatioFlags = typeof RatioFlags.Type
         const RatioModel = Schema.Struct({ ratio: Schema.Number })
         type RatioModel = typeof RatioModel.Type
         const rendered = yield* renderToString(
@@ -903,6 +917,7 @@ describe('renderToString', () => {
             }),
           ),
         )
+        type AsyncTheme = typeof AsyncTheme.Type
         const error = yield* Effect.flip(
           renderToString(
             { ...routingConfig, Flags: Schema.Struct({ theme: AsyncTheme }) },
@@ -910,8 +925,91 @@ describe('renderToString', () => {
           ),
         )
 
-        expect(error).toMatchObject({ _tag: 'FlagsEncodeError' })
+        expect(error).toMatchObject({
+          _tag: 'FlagsEncodeError',
+          cause: {
+            _tag: 'SerializationError',
+            boundary: 'Flags handoff decoding for runtime "app"',
+            message: expect.stringContaining('must complete synchronously'),
+          },
+        })
       }),
+  )
+
+  it.effect('rejects asynchronous Flags encoding before init', () =>
+    Effect.gen(function* () {
+      const encode = vi.fn((theme: string) =>
+        Effect.promise(() => Promise.resolve(theme)),
+      )
+      const Theme = Schema.String.pipe(
+        Schema.decodeTo(
+          Schema.String,
+          SchemaTransformation.transformEffect({
+            decode: Effect.succeed,
+            encode,
+          }),
+        ),
+      )
+      type Theme = typeof Theme.Type
+      const init = vi.fn(routingConfig.init)
+      const config = {
+        ...routingConfig,
+        Flags: Schema.Struct({ theme: Theme }),
+        init,
+      }
+
+      expect(encode).not.toHaveBeenCalled()
+
+      const error = yield* Effect.flip(
+        renderToString(config, {
+          url: 'https://example.com/',
+          flags: { theme: 'dark' },
+        }),
+      )
+
+      expect(error).toMatchObject({
+        _tag: 'FlagsEncodeError',
+        cause: {
+          _tag: 'SerializationError',
+          boundary: 'Flags handoff encoding for runtime "app"',
+          message: expect.stringContaining('must complete synchronously'),
+        },
+      })
+      expect(encode).toHaveBeenCalledTimes(1)
+      expect(init).not.toHaveBeenCalled()
+    }),
+  )
+
+  it.effect('skips Flags serialization for markup that will not hydrate', () =>
+    Effect.gen(function* () {
+      const decode = vi.fn((theme: string) =>
+        Effect.promise(() => Promise.resolve(theme)),
+      )
+      const encode = vi.fn((theme: string) =>
+        Effect.promise(() => Promise.resolve(theme)),
+      )
+      const Theme = Schema.String.pipe(
+        Schema.decodeTo(
+          Schema.String,
+          SchemaTransformation.transformEffect({ decode, encode }),
+        ),
+      )
+      type Theme = typeof Theme.Type
+      const config = {
+        ...routingConfig,
+        Flags: Schema.Struct({ theme: Theme }),
+      }
+      const rendered = yield* renderToStringWithOptions(config, {
+        url: 'https://example.com/',
+        flags: { theme: 'dark' },
+        isHydratable: false,
+      })
+
+      expect(rendered.html).toContain('class="dark"')
+      expect(rendered.html).not.toContain('data-foldkit-flags')
+      expect(decode).not.toHaveBeenCalled()
+      expect(encode).not.toHaveBeenCalled()
+    }),
   )
 
   it.effect('omits canonical and ogUrl when a routing view omits them', () =>

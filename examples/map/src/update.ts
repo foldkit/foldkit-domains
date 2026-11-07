@@ -1,6 +1,7 @@
 import { Array, Equal, Option } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeFieldsStep, makeNoopStep } from './block'
 import {
   FlyTo,
   Geolocate,
@@ -10,14 +11,13 @@ import {
   UnlockBodyScroll,
 } from './command'
 import { ApplicationComposition } from './composition'
-import { makeFieldsStep, makeNoopStep } from './definition'
 import type { Location } from './locations'
 import { GeolocateState, type Model } from './model'
 
 const findLocation = (
-  model: typeof Model.Type,
+  model: Model,
   locationId: string,
-): Option.Option<typeof Location.Type> =>
+): Option.Option<Location> =>
   Array.findFirst(model.locations, ({ id }) => Equal.equals(id, locationId))
 
 export const update = ApplicationComposition.makeUpdate({

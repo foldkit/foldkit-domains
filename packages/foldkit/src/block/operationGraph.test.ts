@@ -17,12 +17,14 @@ const Message = defineMessageUnion({
   CompletedRecordBeforeReplay: {},
   CompletedRecordAfterReplay: {},
 })
+type Message = typeof Message.Type
 const ParentMessage = defineMessageUnion({
   Advanced: {},
   CompletedRecordBeforeReplay: {},
   CompletedRecordAfterReplay: {},
   RequestedInitChild: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 
 const ParentModel = Schema.Struct({
   primary: ChildModel,
@@ -41,7 +43,7 @@ const ChildDefinition = ChildNamespace.makeDefinition({
   Message,
 })
 const resetInvocation = vi.fn()
-const resetStep = ChildDefinition.makeStep(_model => {
+const reset = ChildDefinition.makeStep(_model => {
   resetInvocation()
 
   return { model: ChildModel.make({ count: 0 }) }
@@ -52,7 +54,7 @@ const prepareChildBlock = () =>
     view: ChildComposition.makeView((_model, h) => h.div([])),
     init: () => ({ model: ChildModel.make({ count: 0 }) }),
     update: ChildComposition.makeUpdate({
-      RequestedReset: model => resetStep(model),
+      RequestedReset: model => reset(model),
       Advanced: model => ({
         model: modifyFields(model, { count: count => count + 1 }),
       }),
@@ -77,14 +79,17 @@ const OmittedParentDefinition = makeNamespace(
   Model: ParentModel,
   Message: ParentMessage,
 })
-const OmittedChildBinding = OmittedParentDefinition.makeBinding(ChildBlock, {
-  placement: 'omitted-child',
-  read: (model: ParentModel) => Option.some(model.primary),
-  write: (model, nextChild) =>
-    modifyFields(model, { primary: () => nextChild }),
-})
+const OmittedChildBinding = OmittedParentDefinition.makeCustomBinding(
+  ChildBlock,
+  {
+    placement: 'omitted-child',
+    read: (model: ParentModel) => Option.some(model.primary),
+    write: (model, nextChild) =>
+      modifyFields(model, { primary: () => nextChild }),
+  },
+)
 
-const initOmittedChildStep = OmittedParentDefinition.makeStep(model =>
+const initOmittedChild = OmittedParentDefinition.makeStep(model =>
   OmittedChildBinding.init({
     args: [],
     toParentModel: child => modifyFields(model, { primary: () => child }),
@@ -98,7 +103,7 @@ const prepareOmittedParent = () =>
     view: omittedParentComposition.makeView((_model, h) => h.div([])),
     init: () => ({ model: initialModel }),
     update: omittedParentComposition.makeUpdate({
-      RequestedInitChild: model => initOmittedChildStep(model),
+      RequestedInitChild: model => initOmittedChild(model),
       Advanced: model => OmittedParentDefinition.makeNoopStep()(model),
       CompletedRecordBeforeReplay: model =>
         OmittedParentDefinition.makeNoopStep()(model),
@@ -115,7 +120,7 @@ const OmittedParent: Block.FromAssemblyWithView<
   typeof prepareOmittedParent
 > = Block.assemble(prepareOmittedParent)
 
-const ForeignOmittedChildBinding = OmittedParentDefinition.makeBinding(
+const ForeignOmittedChildBinding = OmittedParentDefinition.makeCustomBinding(
   ChildBlock,
   {
     placement: 'foreign-child',
@@ -173,7 +178,7 @@ const unregisteredDiscardedReset = unregisteredParentComposition.makeUpdate({
 })
 
 it('runs a completed exposed operation in its registered child graph', () => {
-  const recipe = Reflect.apply(initOmittedChildStep, undefined, [initialModel])
+  const recipe = Reflect.apply(initOmittedChild, undefined, [initialModel])
 
   expect(recipe).not.toHaveProperty('model')
   expect(recipe).not.toHaveProperty('commands')
@@ -288,9 +293,8 @@ const ExactParentBaseDefinition = makeNamespace(
   Model: ParentModel,
   Message: ParentMessage,
 })
-const RegisteredPlacementBinding = ExactParentBaseDefinition.makeBinding(
-  ChildBlock,
-  {
+const RegisteredPlacementBinding =
+  ExactParentBaseDefinition.makeCustomKeyedBinding(ChildBlock, {
     placement: 'same-placement',
     readAll: (model: ParentModel) => [model.primary],
     key: () => 'only',
@@ -298,9 +302,8 @@ const RegisteredPlacementBinding = ExactParentBaseDefinition.makeBinding(
     read: (child: ChildModel) => child,
     writeAt: (model, _key, nextChild) =>
       modifyFields(model, { primary: () => nextChild }),
-  },
-)
-const WrongPlacementBinding = ExactParentBaseDefinition.makeBinding(
+  })
+const WrongPlacementBinding = ExactParentBaseDefinition.makeCustomKeyedBinding(
   ChildBlock,
   {
     placement: 'same-placement',
@@ -315,7 +318,7 @@ const WrongPlacementBinding = ExactParentBaseDefinition.makeBinding(
 const exactParentComposition = ExactParentBaseDefinition.makeComposition({
   bindings: [RegisteredPlacementBinding],
 })
-const initWrongPlacementStep = ExactParentBaseDefinition.makeStep(model =>
+const initWrongPlacement = ExactParentBaseDefinition.makeStep(model =>
   WrongPlacementBinding.init({
     key: 'only',
     args: [],
@@ -327,7 +330,7 @@ const prepareExactParent = () =>
     view: exactParentComposition.makeView((_model, h) => h.div([])),
     init: () => ({ model: initialModel }),
     update: exactParentComposition.makeUpdate({
-      RequestedInitChild: model => initWrongPlacementStep(model),
+      RequestedInitChild: model => initWrongPlacement(model),
       Advanced: model =>
         ExactParentBaseDefinition.makeStep(() =>
           WrongPlacementBinding.fold(model, 'only', Message.Advanced()),
@@ -368,15 +371,17 @@ const PendingEntry = Schema.Struct({
   id: Schema.String,
   child: ChildModel,
 })
+type PendingEntry = typeof PendingEntry.Type
 const PendingParentModel = Schema.Struct({
   entries: Schema.Array(PendingEntry),
   status: Schema.String,
 })
+type PendingParentModel = typeof PendingParentModel.Type
 const PendingParent = makeDefinition('PendingParent', {
   Model: PendingParentModel,
   Message: ParentMessage,
 })
-const PendingChildBinding = PendingParent.makeBinding(ChildBlock, {
+const PendingChildBinding = PendingParent.makeKeyedArrayBinding(ChildBlock, {
   field: 'entries',
   key: 'id',
   childField: 'child',
@@ -439,12 +444,12 @@ it('replays a deferred combined operation from the active Model without restorin
   const pending = Reflect.apply(Update.combineSteps, undefined, [
     capturedPendingModel,
     [
-      (model: typeof PendingParentModel.Type) => ({
+      (model: PendingParentModel) => ({
         model: modifyFields(model, { status: status => `${status}/Before` }),
         commands: [RecordBeforeReplay()],
       }),
       () => pendingRegisteredKeyedReset,
-      (model: typeof PendingParentModel.Type) => ({
+      (model: PendingParentModel) => ({
         model: modifyFields(model, { status: status => `${status}/After` }),
         commands: [RecordAfterReplay()],
       }),
@@ -507,24 +512,31 @@ const PolicyChild: Block.FromAssemblyWithViewAndOutMessage<
 > = Block.assemble(preparePolicyChild)
 
 const PolicyParentMessage = Schema.Never
+type PolicyParentMessage = typeof PolicyParentMessage.Type
 const PolicyParentBaseDefinition = makeNamespace(
   'OperationGraphPolicyParent',
 ).makeDefinition({
   Model: ParentModel,
   Message: PolicyParentMessage,
 })
-const SiblingChildBinding = PolicyParentBaseDefinition.makeBinding(ChildBlock, {
-  placement: 'sibling-child',
-  read: (model: ParentModel) => Option.some(model.sibling),
-  write: (model, nextChild) =>
-    modifyFields(model, { sibling: () => nextChild }),
-})
-const PolicyChildBinding = PolicyParentBaseDefinition.makeBinding(PolicyChild, {
-  placement: 'policy-child',
-  read: (model: ParentModel) => Option.some(model.primary),
-  write: (model, nextChild) =>
-    modifyFields(model, { primary: () => nextChild }),
-}).withOutMessagePolicy({
+const SiblingChildBinding = PolicyParentBaseDefinition.makeCustomBinding(
+  ChildBlock,
+  {
+    placement: 'sibling-child',
+    read: (model: ParentModel) => Option.some(model.sibling),
+    write: (model, nextChild) =>
+      modifyFields(model, { sibling: () => nextChild }),
+  },
+)
+const PolicyChildBinding = PolicyParentBaseDefinition.makeCustomBinding(
+  PolicyChild,
+  {
+    placement: 'policy-child',
+    read: (model: ParentModel) => Option.some(model.primary),
+    write: (model, nextChild) =>
+      modifyFields(model, { primary: () => nextChild }),
+  },
+).withOutMessagePolicy({
   fold: (_outMessage: PolicyOutMessage) => SiblingChildBinding.reset(),
 })
 

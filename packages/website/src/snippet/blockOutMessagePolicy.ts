@@ -1,13 +1,17 @@
-import { ApplicationDefinition, makeFieldsStep } from './blockProfileContract'
+import {
+  makeFieldsStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+} from './blockProfileContract'
 import * as Settings from './blockSettings'
 
-export const SettingsBinding = ApplicationDefinition.makeBinding(
+export const SettingsBinding = makeRequiredFieldBinding(
   Settings.SettingsBlock,
   {
     field: 'settings',
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(Settings.SettingsBlock, {
+  fold: makeOutMessageFold(Settings.SettingsBlock, {
     ChangedTheme: ({ theme }) =>
       makeFieldsStep(() => ({
         previewTheme: () => theme,

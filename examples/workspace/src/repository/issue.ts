@@ -1,17 +1,8 @@
 import { Array, Option, Result } from 'effect'
 
+import { Issue, Workspace } from '../domain'
 import {
-  Comment,
-  Issue,
-  type IssueDraft,
-  MovedIssue,
-  SavedIssue,
-  Workspace,
-  placeIssue,
-  revisionFromIssue,
-} from '../domain'
-import {
-  type AddCommentInput,
+  type AddIssueCommentInput,
   type MoveIssueInput,
   RepositoryError,
   type SaveIssueInput,
@@ -21,16 +12,13 @@ import {
   type RepositoryTransition,
   findAvailableCommentNumber,
   findAvailableIssueNumber,
-  findIssue,
-  hasProject,
-  replaceIssue,
 } from './state'
 
 export const saveIssueInState = (
-  state: typeof RepositoryState.Type,
-  input: typeof SaveIssueInput.Type,
-): RepositoryTransition<typeof SavedIssue.Type> => {
-  const maybeIssue = findIssue(state, input.issueId)
+  state: RepositoryState,
+  input: SaveIssueInput,
+): RepositoryTransition<Issue.SaveResult> => {
+  const maybeIssue = Workspace.findIssue(state.workspace, input.issueId)
 
   if (Option.isNone(maybeIssue)) {
     return [
@@ -62,7 +50,9 @@ export const saveIssueInState = (
     ]
   }
 
-  if (!hasProject(state, input.draft.projectId)) {
+  if (
+    Option.isNone(Workspace.findProject(state.workspace, input.draft.projectId))
+  ) {
     return [
       Result.fail(
         RepositoryError.InvalidProject({
@@ -74,29 +64,23 @@ export const saveIssueInState = (
     ]
   }
 
-  const nextIssue = Issue.make({
+  const nextIssue = Issue.Issue.make({
     ...issue,
     ...input.draft,
     version: issue.version + 1,
   })
 
   return [
-    Result.succeed(
-      SavedIssue.make({
-        issueId: nextIssue.id,
-        identifier: nextIssue.identifier,
-        revision: revisionFromIssue(nextIssue),
-      }),
-    ),
-    { ...state, workspace: replaceIssue(state.workspace, nextIssue) },
+    Result.succeed(Issue.toSaveResult(nextIssue)),
+    { ...state, workspace: Workspace.replaceIssue(state.workspace, nextIssue) },
   ]
 }
 
 export const createIssueInState = (
-  state: typeof RepositoryState.Type,
-  draft: typeof IssueDraft.Type,
-): RepositoryTransition<typeof Issue.Type> => {
-  if (!hasProject(state, draft.projectId)) {
+  state: RepositoryState,
+  draft: Issue.Draft,
+): RepositoryTransition<Issue.Issue> => {
+  if (Option.isNone(Workspace.findProject(state.workspace, draft.projectId))) {
     return [
       Result.fail(
         RepositoryError.InvalidProject({
@@ -109,14 +93,14 @@ export const createIssueInState = (
   }
 
   const issueNumber = findAvailableIssueNumber(state)
-  const issue = Issue.make({
+  const issue = Issue.Issue.make({
     ...draft,
     id: `issue-${issueNumber}`,
     identifier: `WSP-${issueNumber}`,
     version: 1,
     comments: [],
   })
-  const nextWorkspace = Workspace.make({
+  const nextWorkspace = Workspace.Workspace.make({
     ...state.workspace,
     issues: Array.append(state.workspace.issues, issue),
   })
@@ -127,12 +111,12 @@ export const createIssueInState = (
   ]
 }
 
-export const addCommentInState = (
-  state: typeof RepositoryState.Type,
-  input: typeof AddCommentInput.Type,
+export const addIssueCommentInState = (
+  state: RepositoryState,
+  input: AddIssueCommentInput,
   createdAt: string,
-): RepositoryTransition<typeof Comment.Type> => {
-  const maybeIssue = findIssue(state, input.issueId)
+): RepositoryTransition<Issue.Comment> => {
+  const maybeIssue = Workspace.findIssue(state.workspace, input.issueId)
 
   if (Option.isNone(maybeIssue)) {
     return [
@@ -148,13 +132,13 @@ export const addCommentInState = (
 
   const commentNumber = findAvailableCommentNumber(state)
   const issue = maybeIssue.value
-  const comment = Comment.make({
+  const comment = Issue.Comment.make({
     id: `comment-${commentNumber}`,
     authorId: input.authorId,
     body: input.body,
     createdAt,
   })
-  const nextIssue = Issue.make({
+  const nextIssue = Issue.Issue.make({
     ...issue,
     comments: Array.append(issue.comments, comment),
   })
@@ -163,17 +147,17 @@ export const addCommentInState = (
     Result.succeed(comment),
     {
       ...state,
-      workspace: replaceIssue(state.workspace, nextIssue),
+      workspace: Workspace.replaceIssue(state.workspace, nextIssue),
       nextCommentNumber: commentNumber + 1,
     },
   ]
 }
 
 export const moveIssueInState = (
-  state: typeof RepositoryState.Type,
-  input: typeof MoveIssueInput.Type,
-): RepositoryTransition<typeof MovedIssue.Type> => {
-  const maybeIssue = findIssue(state, input.issueId)
+  state: RepositoryState,
+  input: MoveIssueInput,
+): RepositoryTransition<Issue.MoveResult> => {
+  const maybeIssue = Workspace.findIssue(state.workspace, input.issueId)
 
   if (Option.isNone(maybeIssue)) {
     return [
@@ -205,35 +189,27 @@ export const moveIssueInState = (
     ]
   }
 
-  const nextIssue = Issue.make({
+  const nextIssue = Issue.Issue.make({
     ...issue,
     status: input.status,
     version: issue.version + 1,
   })
-  const nextWorkspace = Workspace.make({
+  const issuePlacement = Issue.place(
+    state.workspace.issues,
+    nextIssue,
+    input.insertionIndex,
+  )
+  const nextWorkspace = Workspace.Workspace.make({
     ...state.workspace,
-    issues: placeIssue(state.workspace.issues, nextIssue, input.insertionIndex),
+    issues: issuePlacement.issues,
   })
-
-  const targetIssues = Array.filter(
-    nextWorkspace.issues,
-    candidateIssue =>
-      candidateIssue.projectId === nextIssue.projectId &&
-      candidateIssue.status === nextIssue.status,
-  )
-  const insertionIndex = Option.getOrThrow(
-    Array.findFirstIndex(
-      targetIssues,
-      candidateIssue => candidateIssue.id === nextIssue.id,
-    ),
-  )
 
   return [
     Result.succeed(
-      MovedIssue.make({
+      Issue.MoveResult.make({
         issueId: nextIssue.id,
         status: nextIssue.status,
-        insertionIndex,
+        insertionIndex: issuePlacement.insertionIndex,
         version: nextIssue.version,
       }),
     ),

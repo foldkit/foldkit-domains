@@ -4,8 +4,6 @@ import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-// MODEL
-
 export const CheckoutState = defineTaggedUnion({
   Cart: { isShippingRequired: Schema.Boolean },
   Shipping: {},
@@ -13,8 +11,7 @@ export const CheckoutState = defineTaggedUnion({
   Review: { isShippingRequired: Schema.Boolean },
   Cancelled: {},
 })
-
-// MESSAGE
+export type CheckoutState = typeof CheckoutState.Type
 
 export const Message = defineMessageUnion({
   SelectedEdition: { isShippingRequired: Schema.Boolean },
@@ -23,8 +20,7 @@ export const Message = defineMessageUnion({
   ClickedCancel: {},
   ToggledHelp: { isOpen: Schema.Boolean },
 })
-
-// MACHINE
+export type Message = typeof Message.Type
 
 export const CheckoutDefinition = Machine.makeDefinition({
   State: CheckoutState,

@@ -144,6 +144,145 @@ export type Subscription<
   Services = never,
 > = Entry<Model, Message, Dependencies, Services> & SubscriptionBrand
 
+/** @internal Identifies a passive keyed Binding inspection template. */
+export const KeyedTemplateTypeId = Symbol('foldkit/Subscription/KeyedTemplate')
+
+/** @internal Identifies an exact keyed occurrence selected for Scene. */
+export const KeyedSelectionTypeId = Symbol(
+  'foldkit/Subscription/KeyedSelection',
+)
+
+type SelectedKeyedEntry = Readonly<{
+  entry: Subscription<any, any, any, any>
+  isPresent: (model: any) => boolean
+}>
+
+type RuntimeKeyedTemplate = Readonly<{
+  binding: object
+  source: Subscription<any, any, any, any>
+  select: (key: string | number) => SelectedKeyedEntry
+}>
+
+/** A passive static registry entry contributed by a keyed child Binding. */
+export type KeyedTemplate<
+  Model,
+  Message,
+  Key extends string | number,
+  Placement extends string,
+  Source,
+  Dependencies,
+  Services,
+> = Subscription<Model, Message, Dependencies, Services> &
+  Readonly<{
+    '#Subscription.KeyedTemplate': Readonly<{
+      key: Key
+      placement: Placement
+      source: Source
+    }>
+  }>
+
+/** An exact keyed child Subscription occurrence selected for Scene. */
+export type KeyedSelection<
+  Key extends string | number,
+  Placement extends string,
+  Source,
+  Binding = unknown,
+> = Source &
+  Readonly<{
+    '#Subscription.KeyedSelection': Readonly<{
+      binding: Binding
+      key: Key
+      placement: Placement
+      source: Source
+    }>
+  }>
+
+/** @internal Constructs one passive keyed inspection template. */
+export const __makeKeyedTemplate = (
+  source: Subscription<any, any, any, any>,
+  binding: object,
+  select: RuntimeKeyedTemplate['select'],
+): Subscription<any, any, any, any> => {
+  const unavailable = () => {
+    throw new Error(
+      '[foldkit] A keyed child Subscription registry entry is a passive template. Select an occurrence with Scene.Subscription.at(Binding, key, entry).',
+    )
+  }
+  const template = {
+    ...source,
+    modelToDependencies: unavailable,
+    dependenciesToStream: unavailable,
+    [KeyedTemplateTypeId]: { binding, source, select },
+  }
+  copyIdentity(source, template)
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return template as Subscription<any, any, any, any>
+}
+
+/** @internal Reads a keyed inspection template. */
+export const __keyedTemplate = (
+  entry: unknown,
+): RuntimeKeyedTemplate | undefined => {
+  if (!Predicate.isObject(entry)) {
+    return undefined
+  }
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return Reflect.get(entry, KeyedTemplateTypeId) as
+    | RuntimeKeyedTemplate
+    | undefined
+}
+
+/** @internal Constructs an exact passive keyed Scene selector. */
+export const __selectKeyed = (
+  binding: object,
+  key: string | number,
+  source: object,
+): object => ({
+  ...source,
+  [KeyedSelectionTypeId]: { binding, key, source },
+})
+
+/** @internal Reads an exact passive keyed Scene selector. */
+export const __keyedSelection = (
+  value: unknown,
+):
+  | Readonly<{ binding: object; key: string | number; source: object }>
+  | undefined => {
+  if (!Predicate.isObject(value)) {
+    return undefined
+  }
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return Reflect.get(value, KeyedSelectionTypeId) as
+    | Readonly<{ binding: object; key: string | number; source: object }>
+    | undefined
+}
+
+/** @internal Materializes a key-specific entry from a registered template. */
+export const __selectFromTemplate = (
+  template: object,
+  key: string | number,
+): SelectedKeyedEntry | undefined => {
+  const selected = __keyedTemplate(template)?.select(key)
+  if (selected !== undefined) {
+    Reflect.set(selected.entry, KeyedSelectionTypeId, {
+      isPresent: selected.isPresent,
+    })
+  }
+  return selected
+}
+
+/** @internal Whether a selected keyed occurrence exists in the current Model. */
+export const __selectedKeyIsPresent = (
+  entry: object,
+  model: unknown,
+): boolean | undefined => {
+  const selected = Reflect.get(entry, KeyedSelectionTypeId)
+  return Predicate.isObject(selected) &&
+    Predicate.isFunction(selected['isPresent'])
+    ? selected['isPresent'](model)
+    : undefined
+}
+
 /** A record of named Subscriptions keyed by dependency field name. */
 export type Subscriptions<Model, Message, Services = never> = Readonly<
   Record<string, Subscription<Model, Message, any, Services>>
@@ -179,6 +318,7 @@ type LayeredEntryCallbacksWithoutKeepAlive<
   readonly messages: Messages
   readonly modelToDependencies: (model: Model) => Dependencies
   readonly keepAliveEquivalence?: never
+  readonly when?: (model: Model) => boolean
   readonly dependenciesToStream?: never
   readonly handler?: never
 }
@@ -191,6 +331,7 @@ type LayeredEntryCallbacksWithKeepAlive<
   readonly messages: Messages
   readonly modelToDependencies: (model: Model) => Dependencies
   readonly keepAliveEquivalence: Equivalence.Equivalence<Dependencies>
+  readonly when?: (model: Model) => boolean
   readonly dependenciesToStream?: never
   readonly handler?: never
 }
@@ -222,9 +363,16 @@ type EmittedMessage<Messages extends ReadonlyArray<Schema.Top>> =
  * - The `handler` field is an Effect generator. Its build error plus the
  *   constructor and Stream requirements flow into `layer`; `Scope.Scope` is
  *   supplied by Foldkit.
+ * - The optional `when` predicate gates the entry on the Model. While it
+ *   returns `false`, the Runtime runs no Stream and skips
+ *   `modelToDependencies`. Scene's `Subscription.expectActive` and
+ *   `expectInactive` read the same gate, which a condition inside the
+ *   Stream, such as a branch returning `Stream.empty`, cannot provide.
+ *   Handler Layers still build at Runtime startup, including their
+ *   constructor errors and Service requirements, while the gate is closed.
  * - With a handler name and Message declarations but no field map, the entry
  *   has no local Model dependencies. Its Stream stays active across Model
- *   updates unless a parent gates it.
+ *   updates unless its `when` gate or a parent closes it.
  */
 export interface EntryBuilder<Model> {
   <
@@ -246,6 +394,7 @@ export interface EntryBuilder<Model> {
       keepAliveEquivalence: Equivalence.Equivalence<
         Schema.Struct.Type<NoInfer<Fields>>
       >
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -293,6 +442,7 @@ export interface EntryBuilder<Model> {
       messages: Messages
       modelToDependencies: (model: Model) => Schema.Struct.Type<NoInfer<Fields>>
       keepAliveEquivalence?: never
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -335,6 +485,7 @@ export interface EntryBuilder<Model> {
     name: Name,
     config: Readonly<{
       messages: Messages
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -368,6 +519,7 @@ export interface EntryBuilder<Model> {
     name: Name,
     config: Readonly<{
       messages: Messages
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,
@@ -420,6 +572,51 @@ export interface EntryBuilder<Model> {
   >
 }
 
+const ActivationTypeId = Symbol('foldkit/Subscription/Activation')
+
+type Activation = (model: any) => Option.Option<any>
+
+const toActivation = (
+  when: ((model: any) => boolean) | undefined,
+  modelToDependencies: (model: any) => unknown,
+): Readonly<{ [ActivationTypeId]?: Activation }> => {
+  if (when === undefined) {
+    return {}
+  } else {
+    return {
+      [ActivationTypeId]: model =>
+        pipe(
+          model,
+          Option.liftPredicate(when),
+          Option.map(modelToDependencies),
+        ),
+    }
+  }
+}
+
+/**
+ * @internal Derives the dependencies the Runtime starts an entry's Stream
+ * with for this Model. `None` means the entry is inactive: the Runtime runs
+ * no Stream for it and skips its dependency projection. An entry with no
+ * `when` gate and no lift is always active. A lifted entry is also inactive
+ * while its child is absent.
+ */
+export const __maybeActiveDependencies = <Model, Dependencies>(
+  entry: Subscription<Model, any, Dependencies, any>,
+  model: Model,
+): Option.Option<Dependencies> => {
+  const activation: Activation | undefined = Reflect.get(
+    entry,
+    ActivationTypeId,
+  )
+
+  if (activation === undefined) {
+    return Option.some(entry.modelToDependencies(model))
+  } else {
+    return activation(model)
+  }
+}
+
 type RuntimeHandlerGenerator = () => Generator<
   Effect.Effect<any, any, any>,
   (...args: ReadonlyArray<any>) => Stream.Stream<any, never, any>,
@@ -430,11 +627,11 @@ type RuntimeHandlerGenerator = () => Generator<
  * Low-level builder for a Subscription registry. The Model and Message
  * generics are provided up front; the callback builds a record with `entry`.
  *
- * Application features use their Block definition's `subscriptions`
- * helper, which also qualifies the handler identities. Pass the resulting
- * registry as `subscriptions` and its local handler recipes through
- * `EffectsLayer` when calling `Composition.prepareBlock`. Registered child bindings
- * collect their own registries automatically.
+ * Application features use `FooBlock.makeSubscriptions`, which also
+ * qualifies the handler identities. Pass the registry as `subscriptions` and
+ * compose its local handler recipes in the
+ * `EffectsLayer` returned by the `FooBlock.makeLayer` constructor. Child
+ * Bindings collect their own registries automatically.
  *
  * @example
  * ```ts
@@ -480,15 +677,18 @@ export const make =
         /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
         const config = fieldsOrCallbacks as Readonly<{
           messages: ReadonlyArray<Schema.Top>
+          when?: (model: unknown) => boolean
           handler?: RuntimeHandlerGenerator
         }>
+        const modelToDependencies = () => ({})
         const entry = {
           name,
           messages: config.messages,
           dependenciesSchema: Schema.Struct({}),
-          modelToDependencies: () => ({}),
+          modelToDependencies,
           dependenciesToStream: handler.toStream,
           toLayer: handler.toLayer,
+          ...toActivation(config.when, modelToDependencies),
         }
         registerIdentity(entry, handler.identity)
 
@@ -506,9 +706,11 @@ export const make =
 
       /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
       const callbacks = maybeCallbacks as Record<string, unknown> & {
+        readonly modelToDependencies: (model: unknown) => unknown
+        readonly when?: (model: unknown) => boolean
         readonly handler?: RuntimeHandlerGenerator
       }
-      const { handler: configuredHandler, ...entryCallbacks } = callbacks
+      const { handler: configuredHandler, when, ...entryCallbacks } = callbacks
       const entry = {
         name,
         dependenciesSchema: Schema.Struct(
@@ -518,6 +720,7 @@ export const make =
         ...entryCallbacks,
         dependenciesToStream: handler.toStream,
         toLayer: handler.toLayer,
+        ...toActivation(when, entryCallbacks.modelToDependencies),
       }
       registerIdentity(entry, handler.identity)
 
@@ -736,9 +939,9 @@ type ChildMessageOf<ChildSubscriptions> =
 
 /**
  * The dependencies of a lifted Subscription. `maybeDependencies` holds the
- * child's dependencies while `read` returns `Some` and its `when` gate is
- * open. Otherwise it holds `None`, which tears down the entry's Stream and
- * skips the child's `modelToDependencies`.
+ * child's dependencies while `read` returns `Some` and both the lift's and
+ * the child entry's `when` gates are open. Otherwise it holds `None`, which
+ * tears down the entry's Stream and skips the child's `modelToDependencies`.
  */
 export type GatedDependencies<Dependencies> = Readonly<{
   maybeDependencies: Option.Option<Dependencies>
@@ -859,9 +1062,17 @@ const makeLiftedEntry = (
       parentModel,
       Option.liftPredicate(when),
       Option.flatMap(config.read),
-      Option.map(subscription.modelToDependencies),
+      Option.flatMap(childModel =>
+        __maybeActiveDependencies(subscription, childModel),
+      ),
     ),
   })
+
+  const activation: Activation = parentModel => {
+    const gatedDependencies = modelToDependencies(parentModel)
+
+    return Option.as(gatedDependencies.maybeDependencies, gatedDependencies)
+  }
 
   if (subscription.keepAliveEquivalence !== undefined) {
     const maybeKeepAliveEquivalence = Option.makeEquivalence(
@@ -876,6 +1087,7 @@ const makeLiftedEntry = (
       ],
       dependenciesSchema,
       modelToDependencies,
+      [ActivationTypeId]: activation,
       keepAliveEquivalence: (
         left: GatedDependencies<any>,
         right: GatedDependencies<any>,
@@ -912,6 +1124,7 @@ const makeLiftedEntry = (
     ],
     dependenciesSchema,
     modelToDependencies,
+    [ActivationTypeId]: activation,
     dependenciesToStream: (gatedDependencies: GatedDependencies<any>) =>
       Option.match(gatedDependencies.maybeDependencies, {
         onNone: () => Stream.empty,
@@ -931,6 +1144,25 @@ const toLiftedEntry = (
 ) => {
   const lifted = makeLiftedEntry(subscription, config, when)
   copyIdentity(subscription, lifted)
+  const keyedTemplate = __keyedTemplate(subscription)
+  if (keyedTemplate !== undefined) {
+    Reflect.set(lifted, KeyedTemplateTypeId, {
+      ...keyedTemplate,
+      select: (key: string | number) => {
+        const selected = keyedTemplate.select(key)
+        const entry = toLiftedEntry(selected.entry, config, when)
+        Reflect.set(entry, KeyedSelectionTypeId, {
+          isPresent: (model: unknown) =>
+            Option.exists(config.read(model), selected.isPresent),
+        })
+        return {
+          entry,
+          isPresent: (model: unknown) =>
+            Option.exists(config.read(model), selected.isPresent),
+        }
+      },
+    })
+  }
   return lifted
 }
 
@@ -949,7 +1181,7 @@ const toLiftedEntry = (
  * entries. An entry runs only while its gate is open and `read` returns
  * `Some`. A closed gate skips `read` as well as the child's dependency
  * projection. Entries omitted from a gate map still stop when the child
- * is absent.
+ * is absent. A child entry's own `when` gate also applies after the lift.
  *
  * Every lifted entry wraps its dependencies in {@link GatedDependencies}.
  * The child's dependency Schema, declared Messages, handler Layer helper,

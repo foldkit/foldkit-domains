@@ -17,10 +17,12 @@ import type { ChildProcessSpawner } from 'effect/process'
 import {
   RELAY_REGISTRY_DIRECTORY_NAME,
   RELAY_REGISTRY_DIRECTORY_VARIABLE,
+  type RelayNamespaces,
   RelayRecord,
 } from 'foldkit/devtools-protocol'
 import { homedir, tmpdir } from 'node:os'
 
+import { checkRelay, readProcessNamespaces } from './relayLiveness.js'
 import {
   type RelayRegistryTrust,
   relayRegistryTrust,
@@ -29,6 +31,10 @@ import {
 const RUNTIME_DIRECTORY_VARIABLE = 'XDG_RUNTIME_DIR'
 const RECORD_FILE_EXTENSION = '.json'
 const RETIRING_RECORD_SUFFIX = '.retiring'
+const AUTOMATIC_RELAY_HOST = '127.0.0.1'
+const AUTOMATIC_RELAY_PATH = '/__foldkit/devtools-mcp'
+const RELAY_TOKEN_PARAMETER = 'token'
+const RELAY_TOKEN_PATTERN = /^[0-9a-f]{64}$/
 
 export type RelayRegistryServices = FileSystem.FileSystem | Path.Path
 
@@ -38,6 +44,45 @@ export type RelayRegistryReader = Readonly<{
 }>
 
 type RootPathApi = Pick<Path.Path, 'isAbsolute' | 'relative' | 'sep'>
+
+const parseUrl = Option.liftThrowable((url: string) => new URL(url))
+
+const hasValidPort = (url: URL): boolean => {
+  const port = globalThis.Number(url.port)
+
+  return (
+    url.port !== '' &&
+    globalThis.Number.isInteger(port) &&
+    port > 0 &&
+    port <= 65_535
+  )
+}
+
+const isPublishedRelayUrl = (value: string): boolean =>
+  Option.exists(parseUrl(value), url => {
+    if (
+      url.protocol !== 'ws:' ||
+      url.username !== '' ||
+      url.password !== '' ||
+      url.hash !== '' ||
+      !hasValidPort(url)
+    ) {
+      return false
+    }
+
+    const parameters = Array.fromIterable(url.searchParams)
+
+    return (
+      url.hostname === AUTOMATIC_RELAY_HOST &&
+      url.pathname === AUTOMATIC_RELAY_PATH &&
+      Array.length(parameters) === 1 &&
+      Option.exists(
+        Array.head(parameters),
+        ([name, token]) =>
+          name === RELAY_TOKEN_PARAMETER && RELAY_TOKEN_PATTERN.test(token),
+      )
+    )
+  })
 
 const decodeRelayRecord = Schema.decodeUnknownOption(
   Schema.fromJsonString(RelayRecord),
@@ -61,15 +106,6 @@ const relayRegistryDirectory: Effect.Effect<string, never, Path.Path> =
       )
     })
   }).pipe(Effect.orDie)
-
-const isProcessAlive = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'EPERM'
-  }
-}
 
 const readRecordFile = (
   filePath: string,
@@ -113,17 +149,32 @@ const retireStaleRecord = (
 
 const readLiveRecordFile = (
   filePath: string,
+  maybeOwnNamespaces: Option.Option<RelayNamespaces>,
 ): Effect.Effect<Option.Option<RelayRecord>, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const maybeRecord = yield* readRecordFile(filePath)
 
-    if (Option.isSome(maybeRecord) && !isProcessAlive(maybeRecord.value.pid)) {
-      yield* retireStaleRecord(filePath, maybeRecord.value)
+    if (Option.isNone(maybeRecord)) {
+      return maybeRecord
+    }
 
+    const record = maybeRecord.value
+
+    if (!isPublishedRelayUrl(record.url)) {
       return Option.none<RelayRecord>()
     }
 
-    return maybeRecord
+    const status = yield* checkRelay(record, maybeOwnNamespaces)
+
+    if (status === 'Gone') {
+      yield* retireStaleRecord(filePath, record)
+
+      return Option.none<RelayRecord>()
+    } else if (status === 'Unreachable') {
+      return Option.none<RelayRecord>()
+    } else {
+      return maybeRecord
+    }
   })
 
 const newestFirst: Order.Order<RelayRecord> = Order.mapInput(
@@ -252,9 +303,13 @@ export const discoverRelays = (
       fileNames,
       String.endsWith(RECORD_FILE_EXTENSION),
     )
+    const maybeOwnNamespaces = yield* readProcessNamespaces
     const records = Array.getSomes(
       yield* Effect.forEach(recordFileNames, recordFileName =>
-        readLiveRecordFile(path.join(directory, recordFileName)),
+        readLiveRecordFile(
+          path.join(directory, recordFileName),
+          maybeOwnNamespaces,
+        ),
       ),
     )
 

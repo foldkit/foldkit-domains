@@ -1,15 +1,18 @@
+import { Effect } from 'effect'
 import { Block } from 'foldkit'
 
 import type { Model } from './layers'
 import {
-  ApplicationDefinition,
+  ApplicationBlock,
   EffectsLayer,
   LoadUser,
   Message,
   UserState,
+  makeComposition,
+  makeFieldsStep,
 } from './layers'
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = makeComposition()
 
 export const init = ApplicationComposition.makeInit(() => ({
   model: { user: UserState.Loading() },
@@ -17,12 +20,12 @@ export const init = ApplicationComposition.makeInit(() => ({
 }))
 
 export const update = ApplicationComposition.makeUpdate({
-  SucceededLoadUser: ApplicationDefinition.makeFieldsStep.fromMessage(
-    ({ user }) => ({ user: () => UserState.Loaded({ user }) }),
-  ),
-  FailedLoadUser: ApplicationDefinition.makeFieldsStep.fromMessage(
-    ({ error }) => ({ user: () => UserState.Failed({ error }) }),
-  ),
+  SucceededLoadUser: makeFieldsStep.fromMessage(({ user }) => ({
+    user: () => UserState.Loaded({ user }),
+  })),
+  FailedLoadUser: makeFieldsStep.fromMessage(({ error }) => ({
+    user: () => UserState.Failed({ error }),
+  })),
 })
 
 export const view = ApplicationComposition.makeView((model, h) => ({
@@ -34,14 +37,16 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   }),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      EffectsLayer,
+    }
+  }),
+)
+
+export { ApplicationBlock } from './layers'

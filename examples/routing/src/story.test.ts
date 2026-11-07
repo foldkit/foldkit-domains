@@ -1,16 +1,18 @@
 import { Array, Option, String } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
-import { toParentMessage } from 'foldkit/test'
+import { Story } from 'foldkit'
 import { fromString } from 'foldkit/url'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
 
+import { it } from '@effect/vitest'
+
+import { PeopleBlock } from './blocks'
+import { FetchPeople } from './blocks/people/command'
+import { SearchResults, searchPeople } from './blocks/people/model'
 import { NavigateInternal } from './command'
 import { PeoplePageBinding } from './composition'
+import { ApplicationBlock, layer } from './index'
 import { Message } from './message'
 import { Model } from './model'
-import { PeopleBlock } from './page'
-import { FetchPeople } from './page/people/command'
-import { SearchResults, searchPeople } from './page/people/model'
 import {
   ApplicationRoute,
   filesIndexRouter,
@@ -18,7 +20,6 @@ import {
   nestedRouter,
   peopleRouter,
 } from './route'
-import { update } from './update'
 
 const peoplePageWith = (searchInput: string) =>
   PeopleBlock.Model.make({
@@ -31,9 +32,6 @@ const peoplePageWith = (searchInput: string) =>
   })
 
 const initialPeoplePage = peoplePageWith('')
-
-const peopleMessage = (message: typeof PeopleBlock.Message.Type) =>
-  toParentMessage(PeoplePageBinding, message)
 
 const home = Model.make({
   route: ApplicationRoute.Home(),
@@ -55,7 +53,7 @@ const urlOrThrow = (raw: string) =>
   )
 
 const resolveFetch = (searchText: string) =>
-  Command.resolve(
+  Story.Command.resolve(
     FetchPeople,
     PeopleBlock.Message.CompletedFetchPeople({
       query: searchText,
@@ -65,60 +63,72 @@ const resolveFetch = (searchText: string) =>
 
 describe('update', () => {
   describe('EnteredNavigationShortcut', () => {
-    test('GH produces the Home navigation Command', () => {
-      story(
-        update,
-        given(home),
-        message(Message.EnteredNavigationShortcut({ shortcut: 'GH' })),
-        Command.expectHas(NavigateInternal({ url: homeRouter() })),
-        Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
-      )
-    })
+    it.effect('GH produces the Home navigation Command', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(Message.EnteredNavigationShortcut({ shortcut: 'GH' })),
+        Story.Command.expectHas(NavigateInternal({ url: homeRouter() })),
+        Story.Command.resolve(
+          NavigateInternal,
+          Message.CompletedNavigateInternal(),
+        ),
+      ),
+    )
 
-    test('GP produces the People navigation Command', () => {
-      story(
-        update,
-        given(home),
-        message(Message.EnteredNavigationShortcut({ shortcut: 'GP' })),
-        Command.expectHas(
+    it.effect('GP produces the People navigation Command', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(Message.EnteredNavigationShortcut({ shortcut: 'GP' })),
+        Story.Command.expectHas(
           NavigateInternal({
             url: peopleRouter({ searchText: Option.none() }),
           }),
         ),
-        Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
-      )
-    })
+        Story.Command.resolve(
+          NavigateInternal,
+          Message.CompletedNavigateInternal(),
+        ),
+      ),
+    )
 
-    test('GF produces the Files navigation Command', () => {
-      story(
-        update,
-        given(home),
-        message(Message.EnteredNavigationShortcut({ shortcut: 'GF' })),
-        Command.expectHas(NavigateInternal({ url: filesIndexRouter() })),
-        Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
-      )
-    })
+    it.effect('GF produces the Files navigation Command', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(Message.EnteredNavigationShortcut({ shortcut: 'GF' })),
+        Story.Command.expectHas(NavigateInternal({ url: filesIndexRouter() })),
+        Story.Command.resolve(
+          NavigateInternal,
+          Message.CompletedNavigateInternal(),
+        ),
+      ),
+    )
 
-    test('GN produces the Nested navigation Command', () => {
-      story(
-        update,
-        given(home),
-        message(Message.EnteredNavigationShortcut({ shortcut: 'GN' })),
-        Command.expectHas(NavigateInternal({ url: nestedRouter() })),
-        Command.resolve(NavigateInternal, Message.CompletedNavigateInternal()),
-      )
-    })
+    it.effect('GN produces the Nested navigation Command', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(Message.EnteredNavigationShortcut({ shortcut: 'GN' })),
+        Story.Command.expectHas(NavigateInternal({ url: nestedRouter() })),
+        Story.Command.resolve(
+          NavigateInternal,
+          Message.CompletedNavigateInternal(),
+        ),
+      ),
+    )
   })
 
   describe('ChangedUrl', () => {
-    test('navigating to /people parses to a People route', () => {
-      story(
-        update,
-        given(home),
-        message(
+    it.effect('navigating to /people parses to a People route', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(
           Message.ChangedUrl({ url: urlOrThrow('http://localhost/people') }),
         ),
-        model(model => {
+        Story.model(model => {
           if (model.route._tag === 'People') {
             expect(model.route.searchText).toStrictEqual(Option.none())
           } else {
@@ -126,172 +136,183 @@ describe('update', () => {
           }
         }),
         resolveFetch(''),
-      )
-    })
+      ),
+    )
 
-    test('navigating to /people?searchText=foo captures the query parameter', () => {
-      story(
-        update,
-        given(home),
-        message(
-          Message.ChangedUrl({
-            url: urlOrThrow('http://localhost/people?searchText=foo'),
+    it.effect(
+      'navigating to /people?searchText=foo captures the query parameter',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(home),
+          Story.message(
+            Message.ChangedUrl({
+              url: urlOrThrow('http://localhost/people?searchText=foo'),
+            }),
+          ),
+          Story.model(model => {
+            if (model.route._tag === 'People') {
+              expect(model.route.searchText).toStrictEqual(Option.some('foo'))
+            } else {
+              throw new Error('Expected People route')
+            }
+          }),
+          resolveFetch('foo'),
+        ),
+    )
+
+    it.effect(
+      'navigating to /people/3 parses to a Person route with numeric id',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(home),
+          Story.message(
+            Message.ChangedUrl({
+              url: urlOrThrow('http://localhost/people/3'),
+            }),
+          ),
+          Story.model(model => {
+            if (model.route._tag === 'Person') {
+              expect(model.route.personId).toBe(3)
+            } else {
+              throw new Error('Expected Person route')
+            }
           }),
         ),
-        model(model => {
-          if (model.route._tag === 'People') {
-            expect(model.route.searchText).toStrictEqual(Option.some('foo'))
-          } else {
-            throw new Error('Expected People route')
-          }
-        }),
-        resolveFetch('foo'),
-      )
-    })
+    )
 
-    test('navigating to /people/3 parses to a Person route with numeric id', () => {
-      story(
-        update,
-        given(home),
-        message(
-          Message.ChangedUrl({ url: urlOrThrow('http://localhost/people/3') }),
+    it.effect(
+      'an unknown path falls through to NotFound with the path captured',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(home),
+          Story.message(
+            Message.ChangedUrl({ url: urlOrThrow('http://localhost/missing') }),
+          ),
+          Story.model(model => {
+            if (model.route._tag === 'NotFound') {
+              expect(model.route.path).toBe('/missing')
+            } else {
+              throw new Error('Expected NotFound route')
+            }
+          }),
         ),
-        model(model => {
-          if (model.route._tag === 'Person') {
-            expect(model.route.personId).toBe(3)
-          } else {
-            throw new Error('Expected Person route')
-          }
-        }),
-      )
-    })
+    )
 
-    test('an unknown path falls through to NotFound with the path captured', () => {
-      story(
-        update,
-        given(home),
-        message(
-          Message.ChangedUrl({ url: urlOrThrow('http://localhost/missing') }),
-        ),
-        model(model => {
-          if (model.route._tag === 'NotFound') {
-            expect(model.route.path).toBe('/missing')
-          } else {
-            throw new Error('Expected NotFound route')
-          }
-        }),
-      )
-    })
-
-    test('the deep nested path resolves to Nested', () => {
-      story(
-        update,
-        given(home),
-        message(
+    it.effect('the deep nested path resolves to Nested', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(
           Message.ChangedUrl({
             url: urlOrThrow('http://localhost/nested/route/is/very/nested'),
           }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.route._tag).toBe('Nested')
         }),
-      )
-    })
+      ),
+    )
 
-    test('navigating to /files parses to the FilesIndex route', () => {
-      story(
-        update,
-        given(home),
-        message(
+    it.effect('navigating to /files parses to the FilesIndex route', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(
           Message.ChangedUrl({ url: urlOrThrow('http://localhost/files') }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.route._tag).toBe('FilesIndex')
         }),
-      )
-    })
+      ),
+    )
 
-    test('navigating under /files captures the remaining segments', () => {
-      story(
-        update,
-        given(home),
-        message(
+    it.effect('navigating under /files captures the remaining segments', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(home),
+        Story.message(
           Message.ChangedUrl({
             url: urlOrThrow('http://localhost/files/documents/taxes'),
           }),
         ),
-        model(model => {
+        Story.model(model => {
           if (model.route._tag === 'Files') {
             expect(model.route.path).toStrictEqual(['documents', 'taxes'])
           } else {
             throw new Error('Expected Files route')
           }
         }),
-      )
-    })
+      ),
+    )
 
-    test('a same-page URL change syncs the input, records history, and refetches', () => {
-      story(
-        update,
-        given(onPeople('')),
-        message(
-          Message.ChangedUrl({
-            url: urlOrThrow('http://localhost/people?searchText=designer'),
+    it.effect(
+      'a same-page URL change syncs the input, records history, and refetches',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(onPeople('')),
+          Story.message(
+            Message.ChangedUrl({
+              url: urlOrThrow('http://localhost/people?searchText=designer'),
+            }),
+          ),
+          Story.model(model => {
+            expect(model.peoplePage.searchInput).toBe('designer')
+            expect(model.peoplePage.searchHistory).toStrictEqual(['designer'])
+            expect(model.peoplePage.results._tag).toBe('Loading')
+          }),
+          Story.Command.expectHas(FetchPeople),
+          resolveFetch('designer'),
+          Story.model(model => {
+            if (model.peoplePage.results._tag === 'Loaded') {
+              expect(
+                model.peoplePage.results.people.map(person => person.name),
+              ).toStrictEqual(['Alice Johnson', 'Eva Brown'])
+            } else {
+              throw new Error('Expected SearchLoaded')
+            }
           }),
         ),
-        model(model => {
-          expect(model.peoplePage.searchInput).toBe('designer')
-          expect(model.peoplePage.searchHistory).toStrictEqual(['designer'])
-          expect(model.peoplePage.results._tag).toBe('Loading')
-        }),
-        Command.expectHas(FetchPeople),
-        resolveFetch('designer'),
-        model(model => {
-          if (model.peoplePage.results._tag === 'Loaded') {
-            expect(
-              model.peoplePage.results.people.map(person => person.name),
-            ).toStrictEqual(['Alice Johnson', 'Eva Brown'])
-          } else {
-            throw new Error('Expected SearchLoaded')
-          }
-        }),
-      )
-    })
+    )
 
-    test('a hash-only URL change keeps the People page in sync', () => {
-      story(
-        update,
-        given(onPeople('designer')),
-        message(
+    it.effect('a hash-only URL change keeps the People page in sync', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(onPeople('designer')),
+        Story.message(
           Message.ChangedUrl({
             url: urlOrThrow(
               'http://localhost/people?searchText=designer#results',
             ),
           }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.peoplePage.searchInput).toBe('designer')
           expect(model.peoplePage.searchHistory).toStrictEqual(['designer'])
           expect(model.peoplePage.results._tag).toBe('Loading')
         }),
-        Command.expectHas(FetchPeople),
+        Story.Command.expectHas(FetchPeople),
         resolveFetch('designer'),
-      )
-    })
+      ),
+    )
   })
 
   describe('generated People Message', () => {
-    test('writes through to peoplePage', () => {
-      story(
-        update,
-        given(onPeople('')),
-        message(
-          peopleMessage(PeopleBlock.Message.ChangedSearchInput({ value: 'd' })),
+    it.effect('writes through to peoplePage', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(onPeople('')),
+        Story.messageIn(
+          PeoplePageBinding,
+          PeopleBlock.Message.ChangedSearchInput({ value: 'd' }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.peoplePage.searchInput).toBe('d')
         }),
-      )
-    })
+      ),
+    )
   })
 })

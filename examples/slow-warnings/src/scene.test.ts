@@ -1,12 +1,13 @@
-import { click, expect, given, role, scene, text } from 'foldkit/scene'
+import { Scene } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
-import { describe, test } from 'vitest'
+import { describe } from 'vitest'
 
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, layer } from './index'
 import type { Model } from './model'
-import { update } from './update'
-import { view } from './view'
 
-const initialModel: typeof Model.Type = {
+const initialModel: Model = {
   activeWorkload: 'Idle',
   nextWarningId: 1,
   warnings: [],
@@ -15,31 +16,33 @@ const initialModel: typeof Model.Type = {
 }
 
 describe('view', () => {
-  test('renders all workload controls', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(text('Slow Warnings Lab')).toExist(),
-      expect(role('button', { name: 'Run update work' })).toExist(),
-      expect(role('button', { name: 'Run view work' })).toExist(),
-      expect(role('button', { name: 'Run patch work' })).toExist(),
-      expect(role('button', { name: 'Run dependency extraction' })).toExist(),
-    )
-  })
+  it.effect('renders all workload controls', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.expect(Scene.text('Slow Warnings Lab')).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Run update work' })).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Run view work' })).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Run patch work' })).toExist(),
+      Scene.expect(
+        Scene.role('button', { name: 'Run dependency extraction' }),
+      ).toExist(),
+    ),
+  )
 
-  test('clicking patch work renders patch rows', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      click(role('button', { name: 'Run patch work' })),
-      expect(text('Patch row 1')).toExist(),
-    )
-  })
+  it.effect('clicking patch work renders patch rows', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.click(Scene.role('button', { name: 'Run patch work' })),
+      Scene.expect(Scene.text('Patch row 1')).toExist(),
+    ),
+  )
 
-  test('clear removes recorded warnings', () => {
-    scene(
-      { update, view },
-      given(
+  it.effect('clear removes recorded warnings', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(
         modifyFields(initialModel, {
           warnings: () => [
             {
@@ -53,9 +56,9 @@ describe('view', () => {
           ],
         }),
       ),
-      expect(text('Update exceeded 4ms')).toExist(),
-      click(role('button', { name: 'Clear' })),
-      expect(text('Run a workload to record a warning.')).toExist(),
-    )
-  })
+      Scene.expect(Scene.text('Update exceeded 4ms')).toExist(),
+      Scene.click(Scene.role('button', { name: 'Clear' })),
+      Scene.expect(Scene.text('Run a workload to record a warning.')).toExist(),
+    ),
+  )
 })

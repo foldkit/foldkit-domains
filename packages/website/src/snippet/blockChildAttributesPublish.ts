@@ -1,8 +1,8 @@
-// page/commandMenu.ts
+// blocks/commandMenu.ts
 import { Array, Option } from 'effect'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
 
-import { CommandMenuComposition } from './definition'
+import { CommandMenuComposition } from './composition'
 import { Message } from './message'
 import { buttonId, itemId, menuId } from './model'
 

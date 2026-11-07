@@ -1,7 +1,7 @@
-import { Array, Duration, Effect, Layer, Random, Schema } from 'effect'
+import { Array, Duration, Effect, Random, Schema } from 'effect'
 import { Invalid, Valid } from 'foldkit/fieldValidation'
 
-import { ApplicationDefinition } from './definition'
+import { makeCommand } from './block'
 import { Message } from './message'
 
 const FAKE_API_DELAY_MS = 500
@@ -18,32 +18,29 @@ const isEmailOnWaitlist = (email: string): Effect.Effect<boolean> =>
     return Array.contains(EMAILS_ON_WAITLIST, email.toLowerCase())
   })
 
-export const ValidateEmail = ApplicationDefinition.makeCommand(
-  'ValidateEmail',
-  {
-    args: { email: Schema.String },
-    messages: [Message.CompletedValidateEmail],
-    handler: function* () {
-      return ({ email }) =>
-        Effect.gen(function* () {
-          if (yield* isEmailOnWaitlist(email)) {
-            return Message.CompletedValidateEmail({
-              field: Invalid({
-                value: email,
-                errors: ['This email is already on our waitlist'],
-              }),
-            })
-          } else {
-            return Message.CompletedValidateEmail({
-              field: Valid({ value: email }),
-            })
-          }
-        })
-    },
+export const ValidateEmail = makeCommand('ValidateEmail', {
+  args: { email: Schema.String },
+  messages: [Message.CompletedValidateEmail],
+  handler: function* () {
+    return ({ email }) =>
+      Effect.gen(function* () {
+        if (yield* isEmailOnWaitlist(email)) {
+          return Message.CompletedValidateEmail({
+            field: Invalid({
+              value: email,
+              errors: ['This email is already on our waitlist'],
+            }),
+          })
+        } else {
+          return Message.CompletedValidateEmail({
+            field: Valid({ value: email }),
+          })
+        }
+      })
   },
-)
+})
 
-export const SubmitForm = ApplicationDefinition.makeCommand('SubmitForm', {
+export const SubmitForm = makeCommand('SubmitForm', {
   args: {
     name: Schema.String,
     email: Schema.String,
@@ -64,8 +61,3 @@ export const SubmitForm = ApplicationDefinition.makeCommand('SubmitForm', {
       })
   },
 })
-
-export const EffectsLayer = Layer.mergeAll(
-  ValidateEmail.layer,
-  SubmitForm.layer,
-)

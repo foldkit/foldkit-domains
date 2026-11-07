@@ -5,17 +5,24 @@ import { defineMessageUnion } from 'foldkit/message'
 const Message = defineMessageUnion({
   PressedKey: { key: Schema.String },
 })
+type Message = typeof Message.Type
 
 const Model = Schema.Struct({
   isListening: Schema.Boolean,
 })
+type Model = typeof Model.Type
 
-const ShortcutsDefinition = Block.makeDefinition('Shortcuts', {
+export const ShortcutsKey = Symbol('Shortcuts')
+const ShortcutsBlock = Block.make('Shortcuts', {
+  key: ShortcutsKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const subscriptions = ShortcutsDefinition.makeSubscriptions(entry => ({
+const { makeSubscriptions } = ShortcutsBlock
+
+const subscriptions = makeSubscriptions(entry => ({
   shortcutKeyPresses: entry(
     'ShortcutKeyPresses',
     { isListening: Schema.Boolean },

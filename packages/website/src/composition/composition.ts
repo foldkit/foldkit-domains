@@ -2,45 +2,49 @@ import { Option, pipe } from 'effect'
 import { type Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock } from '@foldkit/ui'
+import { Dialog } from '@foldkit/ui'
 
-import { ApplicationDefinition, makeNoopStep, makeStep } from '../definition'
+import {
+  makeComposition,
+  makeNoopStep,
+  makeOptionalFieldBinding,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from '../block'
 import {
   ApiReferenceBlock,
   BlockPageBlock,
   ComingFromReactBlock,
   ExampleDetailBlock,
   PlaygroundBlock,
+  SearchBlock,
+  SnippetCopyBlock,
+  SnippetDisclosureBlock,
   UiBlock,
-} from '../page'
+} from '../blocks'
 import { ApplicationRoute, maybeExampleSlugForRoute } from '../route'
-import { SearchBlock } from '../search'
-import { SnippetCopyBlock } from '../snippetCopy'
-import { SnippetDisclosureBlock } from '../snippetDisclosure'
 import { ApplyTheme, SaveThemePreference, resolveTheme } from '../theme'
 import { type ThemePreference } from '../themePreference'
 import * as ThemeMenu from '../view/themeMenu'
-import { HomeBinding } from './home'
+import { MaybeHomeBinding } from './home'
 
-export const SearchBinding = ApplicationDefinition.makeBinding(SearchBlock, {
+export const SearchBinding = makeRequiredFieldBinding(SearchBlock, {
   field: 'search',
 })
 
-export const SnippetCopyBinding = ApplicationDefinition.makeBinding(
-  SnippetCopyBlock,
-  {
-    field: 'snippetCopy',
-  },
-)
+export const SnippetCopyBinding = makeRequiredFieldBinding(SnippetCopyBlock, {
+  field: 'snippetCopy',
+})
 
-export const SnippetDisclosureBinding = ApplicationDefinition.makeBinding(
+export const SnippetDisclosureBinding = makeRequiredFieldBinding(
   SnippetDisclosureBlock,
   {
     field: 'snippetDisclosure',
   },
 )
 
-export const ExampleDetailBinding = ApplicationDefinition.makeBinding(
+export const ExampleDetailBinding = makeRequiredFieldBinding(
   ExampleDetailBlock,
   {
     field: 'exampleDetail',
@@ -53,63 +57,54 @@ export const ExampleDetailBinding = ApplicationDefinition.makeBinding(
   },
 )
 
-export const PlaygroundBinding = ApplicationDefinition.makeBinding(
-  PlaygroundBlock,
-  {
-    field: 'playground',
-    init: {
-      contextToArgs: ({ route }) =>
-        pipe(
-          route,
-          Option.liftPredicate(ApplicationRoute.guards.Playground),
-          Option.map(route => [route.exampleSlug]),
-        ),
-    },
+export const PlaygroundBinding = makeOptionalFieldBinding(PlaygroundBlock, {
+  field: 'playground',
+  init: {
+    contextToArgs: ({ route }) =>
+      pipe(
+        route,
+        Option.liftPredicate(ApplicationRoute.guards.Playground),
+        Option.map(route => [route.exampleSlug]),
+      ),
   },
-)
+})
 
-export const UiPagesBinding = ApplicationDefinition.makeBinding(UiBlock, {
+export const UiPagesBinding = makeRequiredFieldBinding(UiBlock, {
   field: 'uiPages',
   init: { contextToArgs: ({ today }) => [today] },
 })
 
-export const ApiReferenceBinding = ApplicationDefinition.makeBinding(
-  ApiReferenceBlock,
-  {
-    field: 'apiReference',
-    init: { contextToArgs: ({ maybeApiData }) => [maybeApiData] },
-  },
-)
+export const ApiReferenceBinding = makeRequiredFieldBinding(ApiReferenceBlock, {
+  field: 'apiReference',
+  init: { contextToArgs: ({ maybeApiData }) => [maybeApiData] },
+})
 
-export const ComingFromReactBinding = ApplicationDefinition.makeBinding(
+export const ComingFromReactBinding = makeRequiredFieldBinding(
   ComingFromReactBlock,
   {
     field: 'comingFromReact',
   },
 )
 
-export const CoreBlockPageBinding = ApplicationDefinition.makeBinding(
-  BlockPageBlock,
-  {
-    field: 'coreBlockPage',
-  },
-)
+export const CoreBlockPageBinding = makeRequiredFieldBinding(BlockPageBlock, {
+  field: 'coreBlockPage',
+})
 
-export const MobileMenuDialogBinding = ApplicationDefinition.makeBinding(
-  DialogBlock,
+export const MobileMenuDialogBinding = makeRequiredFieldBinding(
+  Dialog.DialogBlock,
   {
     field: 'mobileMenuDialog',
     init: { contextToArgs: () => [{ id: 'mobile-menu' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(DialogBlock, {
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
   }),
 })
 
-const applyThemePreferenceStep = (preference: typeof ThemePreference.Type) =>
+const applyThemePreference = (preference: ThemePreference) =>
   makeStep(model => {
     const resolvedTheme = resolveTheme(preference, model.systemTheme)
 
@@ -125,26 +120,26 @@ const applyThemePreferenceStep = (preference: typeof ThemePreference.Type) =>
     }
   })
 
-export const ThemeMenuBinding = ApplicationDefinition.makeBinding(
+export const ThemeMenuBinding = makeRequiredFieldBinding(
   ThemeMenu.ThemeMenuBlock,
   {
     field: 'themeMenu',
     init: { contextToArgs: () => [{ id: 'theme-menu' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ThemeMenu.ThemeMenuBlock, {
-    Selected: ({ value }) => applyThemePreferenceStep(value),
+  fold: makeOutMessageFold(ThemeMenu.ThemeMenuBlock, {
+    Selected: ({ value }) => applyThemePreference(value),
     Closed: makeNoopStep,
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [
     ApiReferenceBinding,
     ComingFromReactBinding,
     CoreBlockPageBinding,
     ExampleDetailBinding,
-    HomeBinding,
+    MaybeHomeBinding,
     MobileMenuDialogBinding,
     PlaygroundBinding,
     SearchBinding,

@@ -1,6 +1,6 @@
-import { PanelDefinition } from './definition'
+import { makeComposition } from './block'
 import { MeasurePanel } from './mount'
 
-export const PanelComposition = PanelDefinition.makeComposition({
+export const PanelComposition = makeComposition({
   mounts: [MeasurePanel],
 })

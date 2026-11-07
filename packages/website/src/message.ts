@@ -8,8 +8,6 @@ import { ResolvedTheme } from './colorScheme'
 import { GroupKey, SidebarState } from './sidebarStorage'
 import { ThemePreference } from './themePreference'
 
-// THEME
-
 export { ResolvedTheme } from './colorScheme'
 export { ThemePreference } from './themePreference'
 
@@ -50,3 +48,4 @@ export const Message = defineMessageUnion({
   ChangedViewportWidth: { isNarrow: Schema.Boolean },
   ToggledSidebarGroup: { key: GroupKey, isOpen: Schema.Boolean },
 })
+export type Message = typeof Message.Type

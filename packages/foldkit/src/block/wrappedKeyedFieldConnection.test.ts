@@ -22,12 +22,15 @@ import { makeDefinition } from './define.js'
 import * as Block from './public.js'
 
 const CounterModel = Schema.Struct({ count: Schema.Number })
+type CounterModel = typeof CounterModel.Type
 const StoredCounterModel = Schema.Struct({ count: Schema.Number })
+type StoredCounterModel = typeof StoredCounterModel.Type
 const CounterMessage = defineMessageUnion({
   RequestedSetCount: { count: Schema.Number },
   UpdatedCount: { count: Schema.Number },
   CompletedFinishInitialization: { count: Schema.Number },
 })
+type CounterMessage = typeof CounterMessage.Type
 const Counter = makeDefinition('WrappedKeyedFieldCounter', {
   Model: CounterModel,
   Message: CounterMessage,
@@ -40,7 +43,7 @@ const FinishInitialization = Counter.makeCommand('FinishInitialization', {
       Effect.succeed(CounterMessage.CompletedFinishInitialization({ count }))
   },
 })
-const setCountStep = Counter.makeStep((model, count: number) => ({
+const setCount = Counter.makeStep((model, count: number) => ({
   model: modifyFields(model, { count: () => count }),
 }))
 const CounterComposition = Counter.makeComposition()
@@ -51,10 +54,10 @@ const prepareCounterBlock = () =>
       commands: [FinishInitialization({ count })],
     })),
     update: CounterComposition.makeUpdate({
-      RequestedSetCount: (model, { count }) => setCountStep(model, count),
-      UpdatedCount: (model, { count }) => setCountStep(model, count),
+      RequestedSetCount: (model, { count }) => setCount(model, count),
+      UpdatedCount: (model, { count }) => setCount(model, count),
       CompletedFinishInitialization: (model, { count }) =>
-        setCountStep(model, count),
+        setCount(model, count),
     }),
     operations: {
       setCount: (count: number) =>
@@ -73,9 +76,11 @@ const CounterEntry = Schema.Struct({
   label: Schema.String,
   rank: Schema.Number,
 })
+type CounterEntry = typeof CounterEntry.Type
 const TextMessage = defineMessageUnion({
   ReplacedText: { value: Schema.String },
 })
+type TextMessage = typeof TextMessage.Type
 
 const TextComposition = makeDefinition('WrappedKeyedFieldText', {
   Model: Schema.String,
@@ -99,6 +104,7 @@ const TextEntry = Schema.Struct({
   text: Schema.String,
   label: Schema.String,
 })
+type TextEntry = typeof TextEntry.Type
 const ParentModel = Schema.Struct({
   counters: Schema.Array(CounterEntry),
   textEntries: Schema.Array(TextEntry),
@@ -107,22 +113,23 @@ type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({
   RequestedSetCount: { id: Schema.String, count: Schema.Number },
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('WrappedKeyedFieldParent', {
   Model: ParentModel,
   Message: ParentMessage,
 })
-const CountersBinding = Parent.makeBinding(counterBlock, {
+const CountersBinding = Parent.makeKeyedArrayBinding(counterBlock, {
   field: 'counters',
   key: 'id',
   childField: 'counter',
 })
-const AlternateCountersBinding = Parent.makeBinding(counterBlock, {
+const AlternateCountersBinding = Parent.makeKeyedArrayBinding(counterBlock, {
   field: 'counters',
   key: 'id',
   childField: 'counter',
   placement: 'alternateCounters',
 })
-const TextEntriesBinding = Parent.makeBinding(textBlock, {
+const TextEntriesBinding = Parent.makeKeyedArrayBinding(textBlock, {
   field: 'textEntries',
   key: 'id',
   childField: 'text',
@@ -310,37 +317,46 @@ it('accepts equivalent child Schemas and scalar child Models', () => {
 })
 
 const OpaqueCounterEntry = Schema.declare(
-  (_input): _input is typeof CounterEntry.Type => true,
+  (_input): _input is CounterEntry => true,
   { expected: 'opaque counter entry' },
 )
+type OpaqueCounterEntry = typeof OpaqueCounterEntry.Type
 const PrimaryCounterEntry = Schema.Struct({
   _tag: Schema.Literal('Primary'),
   id: Schema.String,
   counter: CounterModel,
 })
+type PrimaryCounterEntry = typeof PrimaryCounterEntry.Type
 const SecondaryCounterEntry = Schema.Struct({
   _tag: Schema.Literal('Secondary'),
   id: Schema.String,
   counter: CounterModel,
 })
+type SecondaryCounterEntry = typeof SecondaryCounterEntry.Type
 const OptionalKeyEntry = Schema.Struct({
   id: Schema.optionalKey(Schema.String),
   counter: CounterModel,
 })
+type OptionalKeyEntry = typeof OptionalKeyEntry.Type
 const MissingKeyEntry = Schema.Struct({ counter: CounterModel })
+type MissingKeyEntry = typeof MissingKeyEntry.Type
 const BooleanKeyEntry = Schema.Struct({
   id: Schema.Boolean,
   counter: CounterModel,
 })
+type BooleanKeyEntry = typeof BooleanKeyEntry.Type
 const OptionalChildEntry = Schema.Struct({
   id: Schema.String,
   counter: Schema.optionalKey(CounterModel),
 })
+type OptionalChildEntry = typeof OptionalChildEntry.Type
 const MissingChildEntry = Schema.Struct({ id: Schema.String })
+type MissingChildEntry = typeof MissingChildEntry.Type
 const WrongChildEntry = Schema.Struct({
   id: Schema.String,
   counter: Schema.String,
 })
+type WrongChildEntry = typeof WrongChildEntry.Type
 const InvalidParentModel = Schema.Struct({
   opaqueEntries: Schema.Array(OpaqueCounterEntry),
   unionEntries: Schema.Array(
@@ -356,6 +372,7 @@ const InvalidParentModel = Schema.Struct({
   missingChildEntries: Schema.Array(MissingChildEntry),
   wrongChildEntries: Schema.Array(WrongChildEntry),
 })
+type InvalidParentModel = typeof InvalidParentModel.Type
 const InvalidParent = makeDefinition('WrappedKeyedFieldInvalidParent', {
   Model: InvalidParentModel,
   Message: ParentMessage,
@@ -370,14 +387,14 @@ const invalidConfig = (
   childField,
 })
 const bindInvalid = (field: string, key?: string, childField?: string) =>
-  Reflect.apply(InvalidParent.makeBinding, undefined, [
+  Reflect.apply(InvalidParent.makeKeyedArrayBinding, undefined, [
     counterBlock,
     invalidConfig(field, key, childField),
   ])
 
 it('rejects unsupported wrapper storage Schemas at runtime', () => {
   expect(() => bindInvalid('missingEntries')).toThrow(
-    'requires a string or finite-number key Schema',
+    'makeKeyedArrayBinding does not match its declared storage relationship',
   )
   for (const field of [
     'opaqueEntries',
@@ -394,13 +411,13 @@ it('rejects unsupported wrapper storage Schemas at runtime', () => {
 
 it('rejects invalid wrapper key and child fields at runtime', () => {
   expect(() => bindInvalid('missingKeyEntries')).toThrow(
-    'requires a string or finite-number key Schema',
+    'makeKeyedArrayBinding must select a declared required key field',
   )
   expect(() => bindInvalid('optionalKeyEntries')).toThrow(
-    'key field must be required',
+    'makeKeyedArrayBinding requires a required key field',
   )
   expect(() => bindInvalid('booleanKeyEntries')).toThrow(
-    'requires a string or finite-number key Schema',
+    'makeKeyedArrayBinding requires a key Schema that decodes to a string or number',
   )
   expect(() => bindInvalid('missingChildEntries')).toThrow(
     'declared childField',
@@ -413,16 +430,18 @@ it('rejects invalid wrapper key and child fields at runtime', () => {
   )
 
   const SameFieldEntry = Schema.Struct({ value: Schema.String })
+  type SameFieldEntry = typeof SameFieldEntry.Type
   const SameFieldParentModel = Schema.Struct({
     values: Schema.Array(SameFieldEntry),
   })
+  type SameFieldParentModel = typeof SameFieldParentModel.Type
   const SameFieldParent = makeDefinition('WrappedKeyedFieldSameFieldParent', {
     Model: SameFieldParentModel,
     Message: ParentMessage,
   })
 
   expect(() =>
-    Reflect.apply(SameFieldParent.makeBinding, undefined, [
+    Reflect.apply(SameFieldParent.makeKeyedArrayBinding, undefined, [
       textBlock,
       {
         field: 'values',
@@ -430,13 +449,13 @@ it('rejects invalid wrapper key and child fields at runtime', () => {
         childField: 'value',
       },
     ]),
-  ).toThrow('key and childField must be distinct')
+  ).toThrow('makeKeyedArrayBinding requires distinct key and childField fields')
 })
 
 it('rejects Schema and custom adapter conflicts at runtime', () => {
   for (const schemaField of ['Model', 'ChildModel']) {
     expect(() =>
-      Reflect.apply(Parent.makeBinding, undefined, [
+      Reflect.apply(Parent.makeKeyedArrayBinding, undefined, [
         counterBlock,
         { ...invalidConfig('counters'), [schemaField]: CounterModel },
       ]),
@@ -448,15 +467,15 @@ it('rejects Schema and custom adapter conflicts at runtime', () => {
     'read',
     'write',
     'writeAt',
-    'presentWhen',
+    'activeWhen',
   ]) {
     expect(() =>
-      Reflect.apply(Parent.makeBinding, undefined, [
+      Reflect.apply(Parent.makeKeyedArrayBinding, undefined, [
         counterBlock,
         { ...invalidConfig('counters'), [conflict]: () => undefined },
       ]),
     ).toThrow(
-      /cannot supply (field|childField)|cannot also supply custom accessors/,
+      `makeKeyedArrayBinding does not support the ${conflict} configuration field`,
     )
   }
 })
@@ -466,7 +485,7 @@ const constructRuntime = (model: ParentModel): void => {
     Effect.scoped(
       Effect.gen(function* () {
         const runtimeScope = yield* Scope.Scope
-        yield* makeCompositionRuntime<ParentModel, typeof ParentMessage.Type>({
+        yield* makeCompositionRuntime<ParentModel, ParentMessage>({
           block: ParentBlock,
           initModel: model,
           context: Context.empty(),

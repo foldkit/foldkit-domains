@@ -1,5 +1,6 @@
 import {
   Array,
+  Context,
   Effect,
   HashSet,
   Layer,
@@ -21,11 +22,13 @@ import {
   type TagName,
   childAttributes,
 } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
+import * as BlockFamily from 'foldkit/internal/block'
+import { defineInMessageUnion, defineMessageUnion } from 'foldkit/message'
 import * as Render from 'foldkit/render'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeFixedFamilyLayer } from '../internal/fixedFamily.js'
 import {
   ScrollContainer,
   contentHeight,
@@ -57,6 +60,7 @@ const Measurement = defineTaggedUnion({
     containerHeight: Schema.Number,
   },
 })
+type Measurement = typeof Measurement.Type
 
 /** Alignment of a row within the viewport after a programmatic scroll. */
 export const ScrollAlignment = Schema.Literals([
@@ -65,7 +69,6 @@ export const ScrollAlignment = Schema.Literals([
   'End',
   'Nearest',
 ])
-
 export type ScrollAlignment = typeof ScrollAlignment.Type
 
 /** Logical destination for initial and programmatic scrolling. */
@@ -75,8 +78,10 @@ export const ScrollTarget = defineTaggedUnion({
   Offset: { offset: Schema.Number },
   End: {},
 })
-
 export type ScrollTarget = typeof ScrollTarget.Type
+type RowScrollTarget =
+  | typeof ScrollTarget.Index.Type
+  | typeof ScrollTarget.Key.Type
 
 const ViewportAnchor = defineTaggedUnion({
   Offset: { scrollTop: Schema.Number },
@@ -87,6 +92,8 @@ const ViewportAnchor = defineTaggedUnion({
   },
   End: {},
 })
+type ViewportAnchor = typeof ViewportAnchor.Type
+type RowViewportAnchor = typeof ViewportAnchor.Row.Type
 
 /** Stable row observation captured from the live scroll container. */
 export const ObservedAnchor = defineTaggedUnion({
@@ -97,7 +104,6 @@ export const ObservedAnchor = defineTaggedUnion({
     viewportOffset: Schema.Number,
   },
 })
-
 export type ObservedAnchor = typeof ObservedAnchor.Type
 
 /** Public snapshot of a user or browser driven container scroll. */
@@ -107,7 +113,6 @@ export const ContainerScrollObservation = Schema.Struct({
   containerHeight: Schema.Number,
   anchor: ObservedAnchor,
 })
-
 export type ContainerScrollObservation = typeof ContainerScrollObservation.Type
 
 /** Outcome of applying a logical scroll request after the view commits. */
@@ -120,6 +125,7 @@ export const ApplyScrollOutcome = defineTaggedUnion({
   },
   Skipped: {},
 })
+export type ApplyScrollOutcome = typeof ApplyScrollOutcome.Type
 
 const ScrollRequest = defineTaggedUnion({
   Target: {
@@ -128,12 +134,14 @@ const ScrollRequest = defineTaggedUnion({
   },
   Anchor: { anchor: ViewportAnchor, baselineScrollTop: Schema.Number },
 })
+type ScrollRequest = typeof ScrollRequest.Type
 
 const ScrollObservationOrigin = defineTaggedUnion({
   Native: {},
   Applied: { version: Schema.Number },
   Layout: {},
 })
+type ScrollObservationOrigin = typeof ScrollObservationOrigin.Type
 
 const appliedScrolls = new WeakMap<
   HTMLElement,
@@ -144,23 +152,25 @@ const PendingScroll = defineTaggedUnion({
   Idle: {},
   Pending: { request: ScrollRequest, version: Schema.Number },
 })
+type PendingScroll = typeof PendingScroll.Type
 
 const InitialScroll = defineTaggedUnion({
   Applied: {},
   Pending: { target: ScrollTarget, alignment: ScrollAlignment },
 })
+type InitialScroll = typeof InitialScroll.Type
 
 const EndBehavior = defineTaggedUnion({
   PreserveAnchor: {},
   Follow: { thresholdPx: Schema.Number },
 })
+type EndBehavior = typeof EndBehavior.Type
 
 /** Whether the loaded history has another page before its first row. */
 export const HistoryPage = defineTaggedUnion({
   More: {},
   Complete: {},
 })
-
 export type HistoryPage = typeof HistoryPage.Type
 
 const HistoryState = defineTaggedUnion({
@@ -171,6 +181,7 @@ const HistoryState = defineTaggedUnion({
     page: HistoryPage,
   },
 })
+type HistoryState = typeof HistoryState.Type
 
 /** Schema for the virtual list's state. Tracks scroll position, container
  *  measurement, and any in-flight programmatic scroll. */
@@ -192,7 +203,6 @@ export const Model = Schema.Struct({
   pendingScroll: PendingScroll,
   pendingScrollVersion: Schema.Number,
 })
-
 export type Model = typeof Model.Type
 
 // MESSAGE
@@ -212,7 +222,6 @@ export const Message = defineMessageUnion({
     maybeAlignment: Schema.Option(ScrollAlignment),
   },
   RequestedScrollToOffset: { offset: Schema.Number },
-  RequestedScrollToEnd: {},
   InformedOfItemsChange: { itemKeys: Schema.Array(Schema.String) },
   InformedOfHistoryPrepend: {
     itemKeys: Schema.Array(Schema.String),
@@ -250,8 +259,13 @@ export const Message = defineMessageUnion({
     outcome: ApplyScrollOutcome,
   },
 })
-
 export type Message = typeof Message.Type
+
+/** Parent requests handled independently of local UI facts. */
+export const InMessage = defineInMessageUnion({
+  RequestedScrollToEnd: {},
+})
+export type InMessage = typeof InMessage.Type
 
 // OUT MESSAGE
 
@@ -264,42 +278,96 @@ export const OutMessage = defineMessageUnion({
   },
   EndedContainerScroll: {},
 })
-
-const VirtualListDefinition = Block.makeDefinition('VirtualList', {
-  Model,
-  Message,
-  OutMessage,
-})
+export type OutMessage = typeof OutMessage.Type
 
 // INIT
 
 /** Configuration for creating a virtual list model with `init`. */
-export type InitConfig = Readonly<{
-  id: string
-  rowHeightPx: number
-  initialScrollTop?: number
-  initialScroll?: Readonly<{
-    target: ScrollTarget
-    alignment?: ScrollAlignment
-  }>
-  followEnd?: Readonly<{
-    thresholdPx?: number
-  }>
-}> &
-  (
-    | Readonly<{
-        history?: undefined
-        scrollContainer?: ScrollContainer
-      }>
-    | Readonly<{
-        history: Readonly<{ reservePx: number; prefetchViewports: number }>
-        scrollContainer?: typeof ScrollContainer.Self.Type
-      }>
-  )
+const InitFields = {
+  id: Schema.String,
+  rowHeightPx: Schema.Number,
+  initialScrollTop: Schema.optionalKey(Schema.Number),
+  initialScroll: Schema.optionalKey(
+    Schema.Struct({
+      target: ScrollTarget,
+      alignment: Schema.optionalKey(ScrollAlignment),
+    }),
+  ),
+  followEnd: Schema.optionalKey(
+    Schema.Struct({ thresholdPx: Schema.optionalKey(Schema.Number) }),
+  ),
+}
+/** Startup configuration, including mutually exclusive history and external scrolling. */
+export const InitConfig = Schema.Union([
+  Schema.Struct({
+    ...InitFields,
+    history: Schema.optionalKey(Schema.Undefined),
+    scrollContainer: Schema.optionalKey(ScrollContainer),
+  }),
+  Schema.Struct({
+    ...InitFields,
+    history: Schema.Struct({
+      reservePx: Schema.Number,
+      prefetchViewports: Schema.Number,
+    }),
+    scrollContainer: Schema.optionalKey(ScrollContainer.Self),
+  }),
+])
+export type InitConfig = typeof InitConfig.Type
 
-const initialScrollFromConfig = (
-  config: InitConfig,
-): typeof InitialScroll.Type => {
+const makeOperations = <Item>() => ({
+  informOfHistoryPrepended: (input: HistoryPrependInput<Item>) =>
+    Tuple.make(
+      Message.InformedOfHistoryPrepend({
+        itemKeys: Array.map(input.items, input.itemToKey),
+        prependedItemCount: input.prependedItems.length,
+        page: input.page,
+      }),
+    ),
+  informOfItemsChanged: (itemKeys: ReadonlyArray<string>) =>
+    Tuple.make(Message.InformedOfItemsChange({ itemKeys })),
+  requestScrollTo: (target: ScrollTarget, options: ScrollToOptions = {}) =>
+    Tuple.make(
+      Message.RequestedScrollTo({
+        target,
+        maybeAlignment: Option.fromNullishOr(options.alignment),
+      }),
+    ),
+  requestScrollToIndex: (index: number, options: ScrollToOptions = {}) =>
+    Tuple.make(
+      Message.RequestedScrollToIndex({
+        index,
+        maybeAlignment: Option.fromNullishOr(options.alignment),
+      }),
+    ),
+  requestScrollToKey: (key: string, options: ScrollToOptions = {}) =>
+    Tuple.make(
+      Message.RequestedScrollToKey({
+        key,
+        maybeAlignment: Option.fromNullishOr(options.alignment),
+      }),
+    ),
+  requestScrollToOffset: (offset: number) =>
+    Tuple.make(Message.RequestedScrollToOffset({ offset })),
+})
+
+/** @internal Nominal identity of this component contract. */
+export const VirtualListKey = Symbol('VirtualList')
+const VirtualListBlock = Block.make('VirtualList', {
+  key: VirtualListKey,
+  Model,
+  Message,
+  InMessage,
+  OutMessage,
+  InitArgs: Schema.Tuple([InitConfig]),
+  view: {
+    kind: 'Element',
+    Inputs: Block.makeInputContract<InternalVirtualListViewInputs>(),
+  },
+  operations: makeOperations<unknown>(),
+})
+
+const initialScrollFromConfig = (config: InitConfig): InitialScroll => {
   if (config.initialScroll !== undefined) {
     return InitialScroll.Pending({
       target: config.initialScroll.target,
@@ -428,7 +496,7 @@ const readScrollTop = (element: HTMLElement): number =>
 const scrollObservationOrigin = (
   element: HTMLElement,
   event: Event | undefined,
-): typeof ScrollObservationOrigin.Type => {
+): ScrollObservationOrigin => {
   const applied = appliedScrolls.get(element)
   if (event !== undefined) {
     appliedScrolls.delete(element)
@@ -464,7 +532,7 @@ const rowIndex = (element: HTMLElement): Option.Option<number> =>
     Option.flatMap(Number.parse),
   )
 
-const observedAnchor = (element: HTMLElement): typeof ObservedAnchor.Type => {
+const observedAnchor = (element: HTMLElement): ObservedAnchor => {
   const top = viewportTop(element)
   const viewportBottom = top + viewportHeight(element)
   const isAbsolute = listSurface(element).hasAttribute(
@@ -573,7 +641,7 @@ const rowOffsets = (container: HTMLElement, row: HTMLElement): RowOffsets => {
 
 const rowForTarget = (
   element: HTMLElement,
-  target: typeof ScrollTarget.Index.Type | typeof ScrollTarget.Key.Type,
+  target: RowScrollTarget,
 ): Option.Option<HTMLElement> =>
   ScrollTarget.matchOrElse(
     target,
@@ -586,7 +654,7 @@ const rowForTarget = (
 
 const scrollTopForRowTarget = (
   element: HTMLElement,
-  target: typeof ScrollTarget.Index.Type | typeof ScrollTarget.Key.Type,
+  target: RowScrollTarget,
   alignment: ScrollAlignment,
 ): Option.Option<number> =>
   Option.map(rowForTarget(element, target), row => {
@@ -625,7 +693,7 @@ const scrollTopForTarget = (
 
 const rowForAnchor = (
   element: HTMLElement,
-  anchor: typeof ViewportAnchor.Row.Type,
+  anchor: RowViewportAnchor,
 ): Option.Option<HTMLElement> =>
   Option.orElse(rowForKey(element, anchor.key), () =>
     rowForIndex(element, anchor.index),
@@ -633,7 +701,7 @@ const rowForAnchor = (
 
 const scrollTopForAnchor = (
   element: HTMLElement,
-  anchor: typeof ViewportAnchor.Type,
+  anchor: ViewportAnchor,
 ): Option.Option<number> =>
   ViewportAnchor.match<Option.Option<number>>(anchor, {
     Offset: ({ scrollTop }) => Option.some(scrollTop),
@@ -654,7 +722,7 @@ const scrollTopForAnchor = (
 
 const scrollTopForRequest = (
   element: HTMLElement,
-  request: typeof ScrollRequest.Type,
+  request: ScrollRequest,
 ): Option.Option<number> =>
   ScrollRequest.match<Option.Option<number>>(request, {
     Target: ({ target, alignment }) =>
@@ -664,7 +732,7 @@ const scrollTopForRequest = (
 
 const mountedContainers = new Map<string, Set<HTMLElement>>()
 
-export const ApplyScroll = VirtualListDefinition.makeCommand('ApplyScroll', {
+export const ApplyScroll = VirtualListBlock.makeCommand('ApplyScroll', {
   args: {
     id: Schema.String,
     request: ScrollRequest,
@@ -770,8 +838,8 @@ export type ScrollToOptions = Readonly<{
   alignment?: ScrollAlignment
 }>
 
-const buildScrollRequestStep = (request: typeof ScrollRequest.Type) =>
-  VirtualListDefinition.makeStep(model => {
+const applyScrollRequest = (request: ScrollRequest) =>
+  VirtualListBlock.makeStep(model => {
     const nextVersion = Number.increment(model.pendingScrollVersion)
     return {
       model: modifyFields(model, {
@@ -791,10 +859,10 @@ const buildScrollRequestStep = (request: typeof ScrollRequest.Type) =>
     }
   })
 
-const currentScrollRequest = (model: Model): typeof ScrollRequest.Type =>
-  PendingScroll.match<typeof ScrollRequest.Type>(model.pendingScroll, {
+const currentScrollRequest = (model: Model): ScrollRequest =>
+  PendingScroll.match<ScrollRequest>(model.pendingScroll, {
     Idle: () =>
-      InitialScroll.match<typeof ScrollRequest.Type>(model.initialScroll, {
+      InitialScroll.match<ScrollRequest>(model.initialScroll, {
         Applied: () =>
           Option.getOrElse(model.maybeMeasurementTarget, () =>
             ScrollRequest.Anchor({
@@ -808,8 +876,8 @@ const currentScrollRequest = (model: Model): typeof ScrollRequest.Type =>
     Pending: ({ request }) => request,
   })
 
-const reconcileLayoutStep = VirtualListDefinition.makeStep(model =>
-  buildScrollRequestStep(currentScrollRequest(model)),
+const reconcileLayout = VirtualListBlock.makeStep(model =>
+  applyScrollRequest(currentScrollRequest(model)),
 )
 
 const anchorFromSnapshot = (
@@ -817,8 +885,15 @@ const anchorFromSnapshot = (
   scrollTop: number,
   scrollHeight: number,
   containerHeight: number,
-  anchor: typeof ObservedAnchor.Type,
-): typeof ViewportAnchor.Type => {
+  anchor: ObservedAnchor,
+): ViewportAnchor => {
+  const isBeforeListStart =
+    model.scrollContainer._tag !== 'Self' && scrollTop < 0
+
+  if (isBeforeListStart) {
+    return ViewportAnchor.Offset({ scrollTop })
+  }
+
   const distanceFromEnd =
     model.history._tag === 'Enabled'
       ? Math.max(0, -scrollTop)
@@ -832,12 +907,14 @@ const anchorFromSnapshot = (
     return ViewportAnchor.End()
   }
 
-  return ObservedAnchor.match<typeof ViewportAnchor.Type>(anchor, {
+  return ObservedAnchor.match<ViewportAnchor>(anchor, {
     None: () => ViewportAnchor.Offset({ scrollTop }),
     Row: ({ key, index, viewportOffset }) =>
       ViewportAnchor.Row({ key, index, viewportOffset }),
   })
 }
+
+const NATIVE_SCROLL_CHANGE_THRESHOLD_PX = 1
 
 const applyScrollSnapshot = (
   model: Model,
@@ -845,8 +922,9 @@ const applyScrollSnapshot = (
     scrollTop: number
     scrollHeight: number
     containerHeight: number
-    anchor: typeof ObservedAnchor.Type
+    anchor: ObservedAnchor
     layoutVersion?: number | undefined
+    origin?: ScrollObservationOrigin | undefined
   }>,
 ): Model =>
   modifyFields(model, {
@@ -864,6 +942,14 @@ const applyScrollSnapshot = (
         snapshot.layoutVersion !== model.layoutVersion &&
         nextAnchor._tag !== 'End'
       ) {
+        if (
+          snapshot.origin?._tag === 'Native' &&
+          Math.abs(snapshot.scrollTop - model.scrollTop) >
+            NATIVE_SCROLL_CHANGE_THRESHOLD_PX
+        ) {
+          return nextAnchor
+        }
+
         return model.viewportAnchor
       }
 
@@ -881,22 +967,20 @@ const measureContainer = (
     Unmeasured: () => false,
     Measured: measurement => measurement.containerWidth !== containerWidth,
   })
-  const recordContainerMeasurementStep = VirtualListDefinition.makeFieldsStep(
-    () => ({
-      measurement: () =>
-        Measurement.Measured({ containerWidth, containerHeight }),
-      measuredRowHeights: measuredRowHeights =>
-        didWidthChange ? Record.empty() : measuredRowHeights,
-      layoutVersion: layoutVersion =>
-        didWidthChange ? Number.increment(layoutVersion) : layoutVersion,
-    }),
-  )
+  const recordContainerMeasurement = VirtualListBlock.makeFieldsStep(() => ({
+    measurement: () =>
+      Measurement.Measured({ containerWidth, containerHeight }),
+    measuredRowHeights: measuredRowHeights =>
+      didWidthChange ? Record.empty() : measuredRowHeights,
+    layoutVersion: layoutVersion =>
+      didWidthChange ? Number.increment(layoutVersion) : layoutVersion,
+  }))
 
   const { initialScroll } = model
   if (initialScroll._tag === 'Pending') {
     return Update.combineSteps(model, [
-      recordContainerMeasurementStep,
-      buildScrollRequestStep(
+      recordContainerMeasurement,
+      applyScrollRequest(
         ScrollRequest.Target({
           target: initialScroll.target,
           alignment: initialScroll.alignment,
@@ -906,12 +990,12 @@ const measureContainer = (
   }
 
   if (wasUnmeasured) {
-    return recordContainerMeasurementStep(model)
+    return recordContainerMeasurement(model)
   }
 
   return Update.combineSteps(model, [
-    recordContainerMeasurementStep,
-    reconcileLayoutStep,
+    recordContainerMeasurement,
+    reconcileLayout,
   ])
 }
 
@@ -986,7 +1070,7 @@ const applyRowMeasurements = (
     }
   }
 
-  return reconcileLayoutStep(nextModel)
+  return reconcileLayout(nextModel)
 }
 
 type RowOffsets = Readonly<{
@@ -1000,10 +1084,10 @@ const requestScroll = (
   maybeAlignment: Option.Option<ScrollAlignment>,
 ) =>
   Update.combineSteps(model, [
-    VirtualListDefinition.makeFieldsStep(() => ({
+    VirtualListBlock.makeFieldsStep(() => ({
       initialScroll: () => InitialScroll.Applied(),
     })),
-    buildScrollRequestStep(
+    applyScrollRequest(
       ScrollRequest.Target({
         target,
         alignment: Option.getOrElse(maybeAlignment, () => 'Start'),
@@ -1014,7 +1098,7 @@ const requestScroll = (
 const applyItemsChange = (model: Model, itemKeys: ReadonlyArray<string>) => {
   const currentKeys = HashSet.fromIterable(itemKeys)
   return Update.combineSteps(model, [
-    VirtualListDefinition.makeFieldsStep(() => ({
+    VirtualListBlock.makeFieldsStep(() => ({
       measuredRowHeights: Record.filter((_, key) =>
         HashSet.has(currentKeys, key),
       ),
@@ -1025,7 +1109,7 @@ const applyItemsChange = (model: Model, itemKeys: ReadonlyArray<string>) => {
           ? current
           : Option.none(),
     })),
-    reconcileLayoutStep,
+    reconcileLayout,
   ])
 }
 
@@ -1128,7 +1212,6 @@ const lastOrZero = (values: ReadonlyArray<number>): number =>
 
 /** Alignment of content when its total height is shorter than the viewport. */
 export const ContentAlignment = Schema.Literals(['Start', 'End'])
-
 export type ContentAlignment = typeof ContentAlignment.Type
 
 /** Set size and row positions exposed to assistive technology for paged data. */
@@ -1137,7 +1220,6 @@ export const AccessibleSet = defineTaggedUnion({
   Unknown: {},
   Known: { size: Schema.Number, firstPosition: Schema.Number },
 })
-
 export type AccessibleSet = typeof AccessibleSet.Type
 
 type ListLayout = Readonly<{
@@ -1354,7 +1436,7 @@ const scrollTopForLayoutAnchor = <Item>(
   layout: ListLayout,
   items: ReadonlyArray<Item>,
   itemToKey: (item: Item, index: number) => string,
-  anchor: typeof ViewportAnchor.Type,
+  anchor: ViewportAnchor,
 ): number =>
   ViewportAnchor.match<number>(anchor, {
     Offset: ({ scrollTop }) => layoutScrollTop(model, layout, scrollTop),
@@ -1535,6 +1617,7 @@ const observeVirtualList = (
             : registerExternalViewport(viewport)
         const scrollOwner = viewport?.owner ?? element
         let previousScrollTop = element.scrollTop
+        let lastMeasuredContainerWidth = element.clientWidth
         let previousDistanceFromEnd = Math.max(
           0,
           element.scrollHeight - element.clientHeight - element.scrollTop,
@@ -1619,8 +1702,10 @@ const observeVirtualList = (
           }, SCROLL_SETTLE_FALLBACK_MS)
         }
 
-        const emitContainerMeasurement = () =>
-          Queue.offerUnsafe(
+        const emitContainerMeasurement = () => {
+          lastMeasuredContainerWidth = element.clientWidth
+
+          return Queue.offerUnsafe(
             queue,
             Message.ResizedContainer({
               containerWidth: element.clientWidth,
@@ -1637,10 +1722,15 @@ const observeVirtualList = (
                   }),
             }),
           )
+        }
 
         emitContainerMeasurement()
 
         const scrollListener = (event?: Event) => {
+          if (element.clientWidth !== lastMeasuredContainerWidth) {
+            emitContainerMeasurement()
+          }
+
           const origin = scrollObservationOrigin(element, event)
           const distanceFromEnd = Math.max(
             0,
@@ -1933,7 +2023,7 @@ const observeVirtualList = (
 
 /** Container-owned Mount that tracks scrolling, container resizing, and
  *  rendered row measurements for dynamic-height lists. */
-export const ObserveVirtualList = VirtualListDefinition.makeMountStream(
+export const ObserveVirtualList = VirtualListBlock.makeMountStream(
   'ObserveVirtualList',
   {
     args: {
@@ -1975,15 +2065,21 @@ export const ObserveVirtualList = VirtualListDefinition.makeMountStream(
 /** Mount Definitions rendered by VirtualList views. */
 export const mounts = [ObserveVirtualList]
 
-const VirtualListComposition = VirtualListDefinition.makeComposition({
+const VirtualListComposition = VirtualListBlock.makeComposition({
   mounts,
 })
 
 /** Creates an initial VirtualList Model and Commands from a config. The container starts
  *  in `Unmeasured` state until its Mount reports the first measurement. */
-export const init = VirtualListComposition.makeInit((config: InitConfig) => ({
+export const init = VirtualListComposition.makeInit(config => ({
   model: makeInitialModel(config),
 }))
+
+/** Applies a parent end request through the logical scroll transition. */
+export const inMessageUpdate = VirtualListComposition.makeInMessageUpdate({
+  RequestedScrollToEnd: model =>
+    requestScroll(model, ScrollTarget.End(), Option.none()),
+})
 
 /** Processes a VirtualList Message and returns the next Model and optional Commands. */
 export const update = VirtualListComposition.makeUpdate({
@@ -1995,8 +2091,6 @@ export const update = VirtualListComposition.makeUpdate({
     requestScroll(model, ScrollTarget.Key({ key }), maybeAlignment),
   RequestedScrollToOffset: (model, { offset }) =>
     requestScroll(model, ScrollTarget.Offset({ offset }), Option.none()),
-  RequestedScrollToEnd: model =>
-    requestScroll(model, ScrollTarget.End(), Option.none()),
   InformedOfItemsChange: (model, { itemKeys }) =>
     applyItemsChange(model, itemKeys),
   InformedOfHistoryPrepend: (model, message) =>
@@ -2026,7 +2120,7 @@ export const update = VirtualListComposition.makeUpdate({
         ) > 1
       ) {
         return Update.withOutMessage(
-          buildScrollRequestStep(
+          applyScrollRequest(
             ScrollRequest.Anchor({
               anchor: nextModel.pendingScroll.request.anchor,
               baselineScrollTop: snapshot.scrollTop,
@@ -2047,7 +2141,7 @@ export const update = VirtualListComposition.makeUpdate({
       Update.ReturnWithOutMessage<
         Model,
         Message,
-        typeof OutMessage.Type,
+        OutMessage,
         Effect.Services<ReturnType<typeof ApplyScroll>['effect']>
       >
     >(model.pendingScroll, {
@@ -2063,7 +2157,7 @@ export const update = VirtualListComposition.makeUpdate({
           }),
           Anchor: () =>
             Update.withOutMessage(
-              buildScrollRequestStep(
+              applyScrollRequest(
                 ScrollRequest.Anchor({
                   anchor: nextModel.viewportAnchor,
                   baselineScrollTop: nextModel.scrollTop,
@@ -2208,433 +2302,438 @@ export type ViewInputs<Item> = BaseViewInputs<Item> &
       }>
   )
 
-/** Refines the shared view to the completed Block's item contract. */
-type ViewForItem<Item> = Block.RefineViewInputs<
-  typeof viewImpl,
-  ViewInputs<Item>
->
-
-export const view = <Item>() =>
-  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-  viewImpl as unknown as ViewForItem<Item>
-
 const isHtmlArray = (
   value: Html | ReadonlyArray<Html>,
 ): value is ReadonlyArray<Html> => Array.isArray(value)
 
 type InternalVirtualListViewInputs = ViewInputs<unknown>
 
-const viewImpl =
-  VirtualListComposition.makeView.withInputs<InternalVirtualListViewInputs>(
-    (model, viewInputs, h) => {
-      const {
-        items,
-        itemToView,
-        accessibleSet = AccessibleSet.Loaded(),
-        overscan = DEFAULT_OVERSCAN,
-        rowElement = 'li',
-        containerElement = 'ul',
-        rowLayout = 'Spacers',
-        itemToAttributes,
-        containerClassName,
-        containerAttributes = [],
-        contentAlignment = 'Start',
-      } = viewInputs
-      const {
-        itemToKey,
-        itemToRowHeightPx,
-        dynamicRowHeights,
-        itemToEstimatedRowHeightPx,
-      } = viewInputs
-      const historyAttributes = HistoryState.match(model.history, {
-        Disabled: () => [],
-        Enabled: ({ prefetchViewports, page }) => [
-          h.DataAttribute(
-            'virtual-list-history-prefetch-viewports',
-            String(prefetchViewports),
-          ),
-          h.DataAttribute('virtual-list-history-page', page._tag),
-          h.DataAttribute(
-            'virtual-list-history-page-version',
-            String(model.historyPageVersion),
-          ),
-        ],
-      })
-      const observeHistory = model.history._tag === 'Enabled'
-      const isExternal = model.scrollContainer._tag !== 'Self'
-      const isTable = containerElement === 'tbody'
-      const isAbsolute = rowLayout === 'Absolute'
-      const tableColumns =
-        viewInputs.containerElement === 'tbody' ? viewInputs.tableColumns : 0
-      if (observeHistory && (isExternal || isTable || isAbsolute)) {
-        throw new Error(
-          'VirtualList history requires a Self scroll container and spacer list rows.',
-        )
-      }
-      if (
-        isTable &&
-        (!isExternal ||
-          isAbsolute ||
-          !globalThis.Number.isInteger(tableColumns) ||
-          tableColumns < 1)
-      ) {
-        throw new Error(
-          'VirtualList table rows require an external scroll container, spacer layout and a positive tableColumns count.',
-        )
-      }
-
-      const layout = listLayout(
-        model,
-        items,
-        itemToKey,
-        itemToRowHeightPx,
-        dynamicRowHeights,
-        itemToEstimatedRowHeightPx,
-        contentAlignment,
+const viewImpl = VirtualListComposition.makeView.withInputs(
+  (model, viewInputs, h) => {
+    const {
+      items,
+      itemToView,
+      accessibleSet = AccessibleSet.Loaded(),
+      overscan = DEFAULT_OVERSCAN,
+      rowElement = 'li',
+      containerElement = 'ul',
+      rowLayout = 'Spacers',
+      itemToAttributes,
+      containerClassName,
+      containerAttributes = [],
+      contentAlignment = 'Start',
+    } = viewInputs
+    const {
+      itemToKey,
+      itemToRowHeightPx,
+      dynamicRowHeights,
+      itemToEstimatedRowHeightPx,
+    } = viewInputs
+    const historyAttributes = HistoryState.match(model.history, {
+      Disabled: () => [],
+      Enabled: ({ prefetchViewports, page }) => [
+        h.DataAttribute(
+          'virtual-list-history-prefetch-viewports',
+          String(prefetchViewports),
+        ),
+        h.DataAttribute('virtual-list-history-page', page._tag),
+        h.DataAttribute(
+          'virtual-list-history-page-version',
+          String(model.historyPageVersion),
+        ),
+      ],
+    })
+    const observeHistory = model.history._tag === 'Enabled'
+    const isExternal = model.scrollContainer._tag !== 'Self'
+    const isTable = containerElement === 'tbody'
+    const isAbsolute = rowLayout === 'Absolute'
+    const tableColumns =
+      viewInputs.containerElement === 'tbody' ? viewInputs.tableColumns : 0
+    if (observeHistory && (isExternal || isTable || isAbsolute)) {
+      throw new Error(
+        'VirtualList history requires a Self scroll container and spacer list rows.',
       )
-      const baseContainerAttributes = [
-        h.Id(model.id),
-        ...(!isTable ? [h.Role('list')] : []),
-        ...historyAttributes,
+    }
+    if (
+      isTable &&
+      (!isExternal ||
+        isAbsolute ||
+        !globalThis.Number.isInteger(tableColumns) ||
+        tableColumns < 1)
+    ) {
+      throw new Error(
+        'VirtualList table rows require an external scroll container, spacer layout and a positive tableColumns count.',
+      )
+    }
+
+    const layout = listLayout(
+      model,
+      items,
+      itemToKey,
+      itemToRowHeightPx,
+      dynamicRowHeights,
+      itemToEstimatedRowHeightPx,
+      contentAlignment,
+    )
+    const baseContainerAttributes = [
+      h.Id(model.id),
+      ...(!isTable ? [h.Role('list')] : []),
+      ...historyAttributes,
+      ...(observeHistory
+        ? [h.DataAttribute('virtual-list-bottom-origin', 'true')]
+        : []),
+      h.DataAttribute(
+        'virtual-list-scroll-version',
+        String(model.pendingScrollVersion),
+      ),
+      h.DataAttribute(
+        'virtual-list-start-padding',
+        String(model.startPaddingPx),
+      ),
+      h.DataAttribute(
+        'virtual-list-layout-version',
+        String(model.layoutVersion),
+      ),
+      h.OnMount(
+        ObserveVirtualList({
+          id: model.id,
+          ...(observeHistory ? { observeHistory } : {}),
+          ...(isExternal ? { scrollContainer: model.scrollContainer } : {}),
+        }),
+      ),
+      h.Style({
+        ...(!isExternal
+          ? {
+              overflow: 'auto',
+              'overflow-anchor': 'none',
+            }
+          : {}),
         ...(observeHistory
-          ? [h.DataAttribute('virtual-list-bottom-origin', 'true')]
-          : []),
-        h.DataAttribute(
-          'virtual-list-scroll-version',
-          String(model.pendingScrollVersion),
-        ),
-        h.DataAttribute(
-          'virtual-list-start-padding',
-          String(model.startPaddingPx),
-        ),
-        h.DataAttribute(
-          'virtual-list-layout-version',
-          String(model.layoutVersion),
-        ),
-        h.OnMount(
-          ObserveVirtualList({
-            id: model.id,
-            ...(observeHistory ? { observeHistory } : {}),
-            ...(isExternal ? { scrollContainer: model.scrollContainer } : {}),
-          }),
-        ),
-        h.Style({
-          ...(!isExternal
-            ? {
-                overflow: 'auto',
-                'overflow-anchor': 'none',
-              }
-            : {}),
-          ...(observeHistory
-            ? { display: 'flex', 'flex-direction': 'column-reverse' }
-            : {}),
-          'list-style': 'none',
-          margin: '0',
-          padding: '0',
-          ...(isAbsolute && isExternal
-            ? {
-                position: 'relative',
-                height: `${layout.leadingInset + layout.totalHeight}px`,
-                'overflow-anchor': 'none',
-              }
-            : {}),
-        }),
-        ...(containerClassName !== undefined
-          ? [h.Class(containerClassName)]
-          : []),
-      ]
+          ? { display: 'flex', 'flex-direction': 'column-reverse' }
+          : {}),
+        'list-style': 'none',
+        margin: '0',
+        padding: '0',
+        ...(isAbsolute && isExternal
+          ? {
+              position: 'relative',
+              height: `${layout.leadingInset + layout.totalHeight}px`,
+              'overflow-anchor': 'none',
+            }
+          : {}),
+      }),
+      ...(containerClassName !== undefined
+        ? [h.Class(containerClassName)]
+        : []),
+    ]
 
-      const allContainerAttributes = [
-        ...childAttributes(baseContainerAttributes),
-        ...containerAttributes,
-      ]
+    const allContainerAttributes = [
+      ...childAttributes(baseContainerAttributes),
+      ...containerAttributes,
+    ]
 
-      const renderSurface = (
-        children: ReadonlyArray<Html>,
-        attributes: ReadonlyArray<(typeof allContainerAttributes)[number]>,
-      ) => h.keyed(containerElement)(model.id, attributes, children)
-      const surfaceAttributes = childAttributes([
-        h.DataAttribute('virtual-list-surface', 'true'),
-        h.DataAttribute('virtual-list-absolute', 'true'),
-        h.Style({
-          position: 'relative',
-          height: `${layout.leadingInset + layout.totalHeight}px`,
-          'overflow-anchor': 'none',
-          'list-style': 'none',
-          margin: '0',
-          padding: '0',
-        }),
-      ])
-      const renderContainer = (children: ReadonlyArray<Html>): Html => {
-        if (isAbsolute && !isExternal) {
-          return h.div(allContainerAttributes, [
-            renderSurface(children, [
-              ...surfaceAttributes,
-              ...childAttributes([h.Role('presentation')]),
-            ]),
-          ])
-        }
-
-        return renderSurface(children, [
-          ...allContainerAttributes,
-          ...(isAbsolute
-            ? childAttributes([
-                h.DataAttribute('virtual-list-surface', 'true'),
-                h.DataAttribute('virtual-list-absolute', 'true'),
-              ])
-            : []),
+    const renderSurface = (
+      children: ReadonlyArray<Html>,
+      attributes: ReadonlyArray<(typeof allContainerAttributes)[number]>,
+    ) => h.keyed(containerElement)(model.id, attributes, children)
+    const surfaceAttributes = childAttributes([
+      h.DataAttribute('virtual-list-surface', 'true'),
+      h.DataAttribute('virtual-list-absolute', 'true'),
+      h.Style({
+        position: 'relative',
+        height: `${layout.leadingInset + layout.totalHeight}px`,
+        'overflow-anchor': 'none',
+        'list-style': 'none',
+        margin: '0',
+        padding: '0',
+      }),
+    ])
+    const renderContainer = (children: ReadonlyArray<Html>): Html => {
+      if (isAbsolute && !isExternal) {
+        return h.div(allContainerAttributes, [
+          renderSurface(children, [
+            ...surfaceAttributes,
+            ...childAttributes([h.Role('presentation')]),
+          ]),
         ])
       }
-      const announcedSet = AccessibleSet.match<
-        Readonly<{ size: number; positionOffset: number }>
-      >(accessibleSet, {
-        Loaded: () => ({ size: items.length, positionOffset: 0 }),
-        Unknown: () => ({ size: -1, positionOffset: 0 }),
-        Known: ({ size, firstPosition }) => ({
-          size,
-          positionOffset: firstPosition - 1,
-        }),
-      })
-      const maybeWindow = Measurement.match<Option.Option<VisibleWindow>>(
-        model.measurement,
-        {
-          Unmeasured: () => Option.none(),
-          Measured: () =>
-            Option.some(
-              visibleWindowForLayout(
-                layout,
-                scrollTopForView(model, layout, items, itemToKey),
-                items.length,
-                overscan,
-              ),
-            ),
-        },
-      )
 
-      return Option.match(maybeWindow, {
-        onNone: () => renderContainer([]),
-
-        onSome: ({
-          startIndex,
-          endIndex,
-          topSpacerHeight,
-          bottomSpacerHeight,
-        }) => {
-          const visibleItems = items.slice(startIndex, endIndex)
-
-          const spacer = (name: string, height: number, order: number) => {
-            const styles = {
-              height: `${height}px`,
-              'overflow-anchor': 'none',
-              ...(observeHistory
-                ? { order: String(order), 'flex-shrink': '0' }
-                : {}),
-            }
-            if (isTable) {
-              return h.keyed('tr')(
-                `${model.id}-${name}-spacer`,
-                [h.AriaHidden(true)],
-                [
-                  h.td([
-                    h.Colspan(tableColumns),
-                    h.Style({
-                      ...styles,
-                      padding: '0',
-                      border: '0',
-                      'line-height': '0',
-                    }),
-                  ]),
-                ],
-              )
-            }
-
-            return h.keyed(rowElement)(`${model.id}-${name}-spacer`, [
-              h.Role('presentation'),
-              h.AriaHidden(true),
-              h.Style(styles),
+      return renderSurface(children, [
+        ...allContainerAttributes,
+        ...(isAbsolute
+          ? childAttributes([
+              h.DataAttribute('virtual-list-surface', 'true'),
+              h.DataAttribute('virtual-list-absolute', 'true'),
             ])
+          : []),
+      ])
+    }
+    const announcedSet = AccessibleSet.match<
+      Readonly<{ size: number; positionOffset: number }>
+    >(accessibleSet, {
+      Loaded: () => ({ size: items.length, positionOffset: 0 }),
+      Unknown: () => ({ size: -1, positionOffset: 0 }),
+      Known: ({ size, firstPosition }) => ({
+        size,
+        positionOffset: firstPosition - 1,
+      }),
+    })
+    const maybeWindow = Measurement.match<Option.Option<VisibleWindow>>(
+      model.measurement,
+      {
+        Unmeasured: () => Option.none(),
+        Measured: () =>
+          Option.some(
+            visibleWindowForLayout(
+              layout,
+              scrollTopForView(model, layout, items, itemToKey),
+              items.length,
+              overscan,
+            ),
+          ),
+      },
+    )
+
+    return Option.match(maybeWindow, {
+      onNone: () => renderContainer([]),
+
+      onSome: ({
+        startIndex,
+        endIndex,
+        topSpacerHeight,
+        bottomSpacerHeight,
+      }) => {
+        const visibleItems = items.slice(startIndex, endIndex)
+
+        const spacer = (name: string, height: number, order: number) => {
+          const styles = {
+            height: `${height}px`,
+            'overflow-anchor': 'none',
+            ...(observeHistory
+              ? { order: String(order), 'flex-shrink': '0' }
+              : {}),
           }
-          const topSpacer = spacer('top', topSpacerHeight, items.length + 1)
-          const bottomSpacer = spacer('bottom', bottomSpacerHeight, 0)
-
-          const renderedRows = Array.map(visibleItems, (item, sliceIndex) => {
-            const dataIndex = startIndex + sliceIndex
-            const key = itemToKey(item, dataIndex)
-            const rowHeight =
-              offsetAt(layout, dataIndex + 1) - offsetAt(layout, dataIndex)
-            const children = itemToView(item, dataIndex)
-
-            return h.keyed(rowElement)(
-              key,
+          if (isTable) {
+            return h.keyed('tr')(
+              `${model.id}-${name}-spacer`,
+              [h.AriaHidden(true)],
               [
-                ...(!isTable
-                  ? [
-                      h.Role('listitem'),
-                      h.AriaSetsize(announcedSet.size),
-                      h.AriaPosinset(
-                        announcedSet.positionOffset + dataIndex + 1,
-                      ),
-                    ]
-                  : []),
-                h.DataAttribute('virtual-list-item-key', key),
-                h.DataAttribute('virtual-list-item-index', String(dataIndex)),
-                ...(dynamicRowHeights === undefined
-                  ? []
-                  : [
-                      h.DataAttribute('virtual-list-measure', 'true'),
-                      h.DataAttribute(
-                        'virtual-list-layout-version',
-                        String(model.layoutVersion),
-                      ),
-                      h.DataAttribute(
-                        'virtual-list-layout-height',
-                        String(rowHeight),
-                      ),
-                    ]),
-                h.Style({
-                  ...(dynamicRowHeights === undefined
-                    ? { height: `${rowHeight}px` }
-                    : {}),
-                  ...(!isTable ? { display: 'grid' } : {}),
-                  ...(observeHistory
-                    ? {
-                        order: String(items.length - dataIndex),
-                        'flex-shrink': '0',
-                      }
-                    : {}),
-                  ...(isAbsolute
-                    ? {
-                        position: 'absolute',
-                        top: '0',
-                        left: '0',
-                        width: '100%',
-                        transform: `translateY(${layout.leadingInset + offsetAt(layout, dataIndex)}px)`,
-                      }
-                    : {}),
-                }),
-                ...(itemToAttributes?.(item, dataIndex) ?? []),
+                h.td([
+                  h.Colspan(tableColumns),
+                  h.Style({
+                    ...styles,
+                    padding: '0',
+                    border: '0',
+                    'line-height': '0',
+                  }),
+                ]),
               ],
-              isHtmlArray(children) ? children : [children],
             )
-          })
+          }
 
-          return renderContainer(
-            isAbsolute
-              ? renderedRows
-              : [topSpacer, ...renderedRows, bottomSpacer],
+          return h.keyed(rowElement)(`${model.id}-${name}-spacer`, [
+            h.Role('presentation'),
+            h.AriaHidden(true),
+            h.Style(styles),
+          ])
+        }
+        const topSpacer = spacer('top', topSpacerHeight, items.length + 1)
+        const bottomSpacer = spacer('bottom', bottomSpacerHeight, 0)
+
+        const renderedRows = Array.map(visibleItems, (item, sliceIndex) => {
+          const dataIndex = startIndex + sliceIndex
+          const key = itemToKey(item, dataIndex)
+          const rowHeight =
+            offsetAt(layout, dataIndex + 1) - offsetAt(layout, dataIndex)
+          const children = itemToView(item, dataIndex)
+
+          return h.keyed(rowElement)(
+            key,
+            [
+              ...(!isTable
+                ? [
+                    h.Role('listitem'),
+                    h.AriaSetsize(announcedSet.size),
+                    h.AriaPosinset(announcedSet.positionOffset + dataIndex + 1),
+                  ]
+                : []),
+              h.DataAttribute('virtual-list-item-key', key),
+              h.DataAttribute('virtual-list-item-index', String(dataIndex)),
+              ...(dynamicRowHeights === undefined
+                ? []
+                : [
+                    h.DataAttribute('virtual-list-measure', 'true'),
+                    h.DataAttribute(
+                      'virtual-list-layout-version',
+                      String(model.layoutVersion),
+                    ),
+                    h.DataAttribute(
+                      'virtual-list-layout-height',
+                      String(rowHeight),
+                    ),
+                  ]),
+              h.Style({
+                ...(dynamicRowHeights === undefined
+                  ? { height: `${rowHeight}px` }
+                  : {}),
+                ...(!isTable ? { display: 'grid' } : {}),
+                ...(observeHistory
+                  ? {
+                      order: String(items.length - dataIndex),
+                      'flex-shrink': '0',
+                    }
+                  : {}),
+                ...(isAbsolute
+                  ? {
+                      position: 'absolute',
+                      top: '0',
+                      left: '0',
+                      width: '100%',
+                      transform: `translateY(${layout.leadingInset + offsetAt(layout, dataIndex)}px)`,
+                    }
+                  : {}),
+              }),
+              ...(itemToAttributes?.(item, dataIndex) ?? []),
+            ],
+            isHtmlArray(children) ? children : [children],
           )
-        },
-      })
-    },
-  )
+        })
 
-const makeOperations = <Item>() => ({
-  informHistoryPrepended: (input: HistoryPrependInput<Item>) =>
-    Tuple.make(
-      Message.InformedOfHistoryPrepend({
-        itemKeys: Array.map(input.items, input.itemToKey),
-        prependedItemCount: input.prependedItems.length,
-        page: input.page,
-      }),
-    ),
-  informItemsChanged: (itemKeys: ReadonlyArray<string>) =>
-    Tuple.make(Message.InformedOfItemsChange({ itemKeys })),
-  requestScrollTo: (target: ScrollTarget, options: ScrollToOptions = {}) =>
-    Tuple.make(
-      Message.RequestedScrollTo({
-        target,
-        maybeAlignment: Option.fromNullishOr(options.alignment),
-      }),
-    ),
-  requestScrollToIndex: (index: number, options: ScrollToOptions = {}) =>
-    Tuple.make(
-      Message.RequestedScrollToIndex({
-        index,
-        maybeAlignment: Option.fromNullishOr(options.alignment),
-      }),
-    ),
-  requestScrollToKey: (key: string, options: ScrollToOptions = {}) =>
-    Tuple.make(
-      Message.RequestedScrollToKey({
-        key,
-        maybeAlignment: Option.fromNullishOr(options.alignment),
-      }),
-    ),
-  requestScrollToOffset: (offset: number) =>
-    Tuple.make(Message.RequestedScrollToOffset({ offset })),
-  requestScrollToEnd: Message.RequestedScrollToEnd,
-})
+        return renderContainer(
+          isAbsolute
+            ? renderedRows
+            : [topSpacer, ...renderedRows, bottomSpacer],
+        )
+      },
+    })
+  },
+)
 
-const operations = makeOperations<unknown>()
-
-const prepareVirtualListBlock = () =>
-  VirtualListComposition.prepareBlock({
-    init,
-    update,
-    view: viewImpl,
-    operations,
-    EffectsLayer,
-  })
-/** Complete VirtualList Block definition using an unknown item type. */
-export const block: Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepareVirtualListBlock
-> = Block.assemble(prepareVirtualListBlock)
-
-/** Programmatically scrolls to a logical target. */
-export const scrollTo = block.operations.requestScrollTo
-
-/** Programmatically scrolls the container so the row at `index` is visible.
- *  The next view resolves the logical index with its current sizing mode, and
- *  the Command aligns the live rendered row. */
-export const scrollToIndex = block.operations.requestScrollToIndex
-
-/** Programmatically scrolls to the row whose `itemToKey` result matches
- *  `key`. The next view resolves the key against its current items. */
-export const scrollToKey = block.operations.requestScrollToKey
-
-/** Programmatically scrolls to an exact pixel offset from the start of the
- *  list. Negative offsets clamp to zero. */
-export const scrollToOffset = block.operations.requestScrollToOffset
-
-/** Programmatically scrolls to the end of the list. */
-export const scrollToEnd = block.operations.requestScrollToEnd
-
-const makeBlockParts = <Item>() => {
-  const refinedView = view<Item>()
-
-  return {
-    composition: VirtualListComposition,
-    implementation: {
+/** @internal Checked canonical implementation for scoped library tests. */
+const canonicalLayer = VirtualListBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
       init,
       update,
-      view: refinedView,
-      operations: makeOperations<Item>(),
+      inMessageUpdate,
+      view: viewImpl,
       EffectsLayer,
-    },
-  }
-}
+    }
+  }),
+)
 
-/** A completed VirtualList Block refined to one item type. */
-export interface Completed<Item> extends Block.CompletedWithViewAndOutMessage<
-  ReturnType<typeof makeBlockParts<Item>>['composition'],
-  ReturnType<typeof makeBlockParts<Item>>['implementation']
+/** Constructs the shared implementation without starting browser observation. */
+type CanonicalIdentity = Block.SelectedPublicIdentity<typeof VirtualListBlock>
+const VirtualListRefinementRule = Symbol('VirtualList.Refinement')
+/** @internal Closed type-only refinement identity. */
+export interface VirtualListRefinementKey {
+  readonly [VirtualListRefinementRule]: true
+}
+type CanonicalImplementation = Extract<
+  Layer.Success<typeof canonicalLayer>,
+  Block.SelectedImplementationFacts<
+    CanonicalIdentity,
+    unknown,
+    unknown,
+    unknown
+  >
+>
+/** @internal Captured implementation capability for this fixed family. */
+export interface SharedVirtualListProof extends Block.ClosedFamilyCapability<VirtualListRefinementKey> {}
+/** @internal The shared provider's original canonical implementation facts. */
+export interface SharedVirtualListFacts extends Block.FixedRefinementProvider<
+  VirtualListRefinementKey,
+  CanonicalIdentity,
+  CanonicalImplementation
+> {}
+const SharedVirtualListProof = Context.Service<
+  SharedVirtualListProof,
+  Readonly<{ executable: object }>
+>('foldkit/ui/private/VirtualList.SharedImplementation')
+const SharedVirtualListFacts = Context.Service<
+  SharedVirtualListFacts,
+  Readonly<Record<never, never>>
+>('foldkit/ui/private/VirtualList.SharedFacts')
+/** Constructs the original shared implementation for type-only specializations. */
+export const layer = makeFixedFamilyLayer(
+  VirtualListBlock,
+  canonicalLayer,
+  BlockFamily.readDeclaredExecutable(VirtualListBlock),
+  SharedVirtualListProof,
+  SharedVirtualListFacts,
+)
+
+Reflect.deleteProperty(VirtualListBlock, 'makeLayer')
+Reflect.deleteProperty(VirtualListBlock, 'provideHandlers')
+Object.freeze(VirtualListBlock)
+
+/** @internal Selected implementation used by component tests. */
+export const block = { block: VirtualListBlock, layer }
+
+type CanonicalContract = typeof VirtualListBlock
+type CanonicalFacts = Block.FactsOf<CanonicalContract>
+type RefinedFacts<Item> = Omit<CanonicalFacts, 'view' | 'operations'> &
+  Readonly<{
+    view: Block.ViewContract<ViewInputs<Item>, 'Element'>
+    operations: Omit<CanonicalFacts['operations'], 'informOfHistoryPrepended'> &
+      Readonly<{
+        informOfHistoryPrepended: Block.OperationContract<
+          readonly [input: HistoryPrependInput<Item>],
+          never,
+          CanonicalFacts['operations']['informOfHistoryPrepended']['requirements']
+        >
+      }>
+  }>
+type RefinedContract<Item> = Block.Contract<
+  CanonicalContract['owner'],
+  CanonicalContract['Model'],
+  CanonicalContract['Message'],
+  CanonicalContract['OutMessage'],
+  RefinedFacts<Item>
+>
+
+type RefinedConfiguration<Item> = Readonly<{
+  key: typeof VirtualListKey
+  InMessage: typeof InMessage
+  InitArgs: Schema.Tuple<readonly [typeof InitConfig]>
+  view: Readonly<{
+    kind: 'Element'
+    Inputs: Block.InputContract<ViewInputs<Item>>
+  }>
+  operations: ReturnType<typeof makeOperations<Item>>
+}>
+/** @internal Names the exact private reader of this fixed-family specialization. */
+export interface VirtualListReader<Item> extends Block.ReadableProvider<
+  VirtualListRefinementKey,
+  Block.SelectedPublicIdentity<RefinedContract<Item>>
 > {}
 
-/** Creates a completed VirtualList Block refined to one item type.
- *
- * Bind the result to a parent Composition. Init selects Self, Ancestor or
- * Window scrolling; view inputs supply rows, stable keys and a spacer or
- * absolute layout. Construction installs no browser observers until mounted.
- */
-export const create = <Item>(): Completed<Item> => {
-  const { composition, implementation } = makeBlockParts<Item>()
+type RefinedBlock<Item> = Omit<
+  Block.UnifiedBlock<
+    'VirtualList',
+    CanonicalContract['Model'],
+    CanonicalContract['Message'],
+    CanonicalContract['OutMessage'],
+    undefined,
+    RefinedConfiguration<Item>,
+    CanonicalIdentity,
+    VirtualListReader<Item>
+  >,
+  'makeLayer' | 'provideHandlers' | keyof RefinedContract<Item>
+> &
+  Omit<RefinedContract<Item>, 'get'>
+/** Passive VirtualList contract retaining exact controlled inputs and result channels. */
+export interface Completed<Item>
+  extends
+    RefinedBlock<Item>,
+    Block.FixedRefinement<
+      VirtualListRefinementKey,
+      CanonicalIdentity,
+      Block.SelectedPublicIdentity<RefinedContract<Item>>
+    > {}
 
-  const prepare = () => composition.prepareBlock(implementation)
-  const completedBlock: Block.FromAssemblyWithViewAndOutMessage<
-    typeof Model,
-    typeof prepare
-  > = Block.assemble(prepare)
-
-  return completedBlock
-}
+/** Creates a typed VirtualList contract; provide this module's layer during graph construction. */
+export const makeBlock = <Item>(): Completed<Item> =>
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  VirtualListBlock as unknown as Completed<Item>

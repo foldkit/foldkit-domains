@@ -1,59 +1,50 @@
-import {
-  Command,
-  changeFiles,
-  click,
-  dropFiles,
-  expect,
-  given,
-  label,
-  role,
-  scene,
-  text,
-} from 'foldkit/scene'
-import { describe, test } from 'vitest'
+import { Scene } from 'foldkit'
+import { describe } from 'vitest'
+
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, layer } from './block'
 
 describe('resume upload flow', () => {
   const resume = new File(['%PDF-'], 'resume.pdf', {
     type: 'application/pdf',
   })
 
-  test('inline file input: changeFiles simulates selection', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      changeFiles(label('resume'), [resume]),
-      expect(text('resume.pdf')).toExist(),
-    )
-  })
+  it.effect('inline file input: changeFiles simulates selection', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.changeFiles(Scene.label('resume'), [resume]),
+      Scene.expect(Scene.text('resume.pdf')).toExist(),
+    ),
+  )
 
-  test('button-triggered picker: resolve the SelectResume Command', () => {
+  it.effect('button-triggered picker: resolve the SelectResume Command', () => {
     const previewDataUrl = 'data:application/pdf;base64,JVBERi0='
-
-    scene(
-      { update, view },
-      given(initialModel),
-      click(role('button', { name: 'Choose resume' })),
-      Command.resolveAll(
+    return Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.click(Scene.role('button', { name: 'Choose resume' })),
+      Scene.Command.resolveAll(
         [SelectResume, CompletedSelectResume({ file: resume })],
         [ReadResumePreview, SucceededReadPreview({ dataUrl: previewDataUrl })],
       ),
-      expect(role('img', { name: 'Resume preview' })).toExist(),
+      Scene.expect(Scene.role('img', { name: 'Resume preview' })).toExist(),
     )
   })
 
-  test('drop zone: dropFiles simulates a drag-and-drop', () => {
+  it.effect('drop zone: dropFiles simulates a drag-and-drop', () => {
     const coverLetter = new File(['cover'], 'cover.txt', {
       type: 'text/plain',
     })
     const portfolio = new File(['<svg/>'], 'portfolio.svg', {
       type: 'image/svg+xml',
     })
-
-    scene(
-      { update, view },
-      given(initialModel),
-      dropFiles(label('attachments'), [coverLetter, portfolio]),
-      expect(text('2 attachments selected')).toExist(),
+    return Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.dropFiles(Scene.label('attachments'), [coverLetter, portfolio]),
+      Scene.expect(Scene.text('2 attachments selected')).toExist(),
     )
   })
 })

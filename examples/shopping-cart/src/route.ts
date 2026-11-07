@@ -2,16 +2,13 @@ import { Schema, pipe } from 'effect'
 import { Route } from 'foldkit'
 import { defineRouteUnion, literal } from 'foldkit/route'
 
-// ROUTE
-
 export const ApplicationRoute = defineRouteUnion({
   Products: { searchText: Schema.Option(Schema.String) },
   Cart: {},
   Checkout: {},
   NotFound: { path: Schema.String },
 })
-
-// ROUTERS
+export type ApplicationRoute = typeof ApplicationRoute.Type
 
 export const productsRouter = pipe(
   Route.root,
@@ -28,8 +25,6 @@ export const checkoutRouter = pipe(
   literal('checkout'),
   Route.mapTo(ApplicationRoute.Checkout),
 )
-
-// PARSER
 
 const routeParser = Route.oneOf(checkoutRouter, cartRouter, productsRouter)
 export const urlToApplicationRoute = Route.parseUrlWithFallback(

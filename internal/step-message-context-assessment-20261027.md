@@ -1,5 +1,9 @@
 # Inline general Step Message inference assessment
 
+The user subsequently approved reassessment against the October 28 implementation.
+The [current follow-up](step-inference-unhover-20261029.md) owns that result.
+The measurements and decision below retain their original October 27 scope.
+
 ## Decision
 
 Keep the current public typing for this preview. Plain inline `makeUpdate`

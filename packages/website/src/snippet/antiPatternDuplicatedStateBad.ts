@@ -5,20 +5,31 @@ import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const Item = Schema.Struct({ id: Schema.String, name: Schema.String })
+type Item = typeof Item.Type
 
 const Model = Schema.Struct({
   items: Schema.Array(Item),
   query: Schema.String,
   visibleItems: Schema.Array(Item),
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   UpdatedQuery: { query: Schema.String },
 })
-const ApplicationComposition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = ApplicationBlock
+
+const ApplicationComposition = makeComposition()
 
 const update = ApplicationComposition.makeUpdate({
   UpdatedQuery: (model, { query }) => ({

@@ -3,29 +3,29 @@ import { Update } from 'foldkit'
 import { Transition } from 'foldkit/route'
 import { modifyFields } from 'foldkit/struct'
 
-import { LoadCatalog, LoadPainting, SaveDraft } from './command'
 import {
   makeCommandsStep,
   makeFieldsStep,
   makeNoopStep,
   makeStep,
-} from './definition'
+} from './block'
+import { LoadCatalog, LoadPainting, SaveDraft } from './command'
 import { type LoggedTransition, PaintingStatus } from './model'
 import { type ApplicationRoute } from './route'
 
 const MAX_LOGGED_TRANSITIONS = 20
 
-export type AppTransition = Transition.Transition<typeof ApplicationRoute.Type>
+export type AppTransition = Transition.Transition<ApplicationRoute>
 
 const nextSequenceNumber = (
-  transitionLog: ReadonlyArray<typeof LoggedTransition.Type>,
+  transitionLog: ReadonlyArray<LoggedTransition>,
 ): number =>
   Option.match(Array.head(transitionLog), {
     onNone: () => 1,
     onSome: newestEntry => newestEntry.sequenceNumber + 1,
   })
 
-const logTransitionStep = (transition: AppTransition) =>
+const logTransition = (transition: AppTransition) =>
   makeFieldsStep(() => ({
     transitionLog: transitionLog =>
       pipe(
@@ -39,7 +39,7 @@ const logTransitionStep = (transition: AppTransition) =>
       ),
   }))
 
-const loadCatalogOnGalleryEntryStep = (transition: AppTransition) =>
+const loadCatalogOnGalleryEntry = (transition: AppTransition) =>
   makeStep(model =>
     Transition.isEntering(transition, 'Gallery') &&
     model.catalogStatus !== 'Loading'
@@ -50,9 +50,9 @@ const loadCatalogOnGalleryEntryStep = (transition: AppTransition) =>
       : { model },
   )
 
-const keepModelStep = makeNoopStep()
+const keepModel = makeNoopStep()
 
-const loadPaintingStep = (paintingId: number) =>
+const loadPainting = (paintingId: number) =>
   makeStep(model => ({
     model: modifyFields(model, {
       paintingStatus: () => PaintingStatus.Loading({ paintingId }),
@@ -60,25 +60,23 @@ const loadPaintingStep = (paintingId: number) =>
     commands: [LoadPainting({ paintingId })],
   }))
 
-type PaintingRouteStep =
-  | typeof keepModelStep
-  | ReturnType<typeof loadPaintingStep>
+type PaintingRouteStep = typeof keepModel | ReturnType<typeof loadPainting>
 
-const reconcilePaintingRouteStep = (transition: AppTransition) =>
+const reconcilePaintingRoute = (transition: AppTransition) =>
   Transition.matchOrElse<PaintingRouteStep>()(
     transition,
     'Painting',
     {
-      Entered: ({ paintingId }) => loadPaintingStep(paintingId),
+      Entered: ({ paintingId }) => loadPainting(paintingId),
       Stayed: ({ previousRoute, nextRoute }) =>
         previousRoute.paintingId === nextRoute.paintingId
-          ? keepModelStep
-          : loadPaintingStep(nextRoute.paintingId),
+          ? keepModel
+          : loadPainting(nextRoute.paintingId),
     },
-    () => keepModelStep,
+    () => keepModel,
   )
 
-const saveDraftOnStudioExitStep = (transition: AppTransition) =>
+const saveDraftOnStudioExit = (transition: AppTransition) =>
   makeCommandsStep(model =>
     Array.filter(
       [SaveDraft({ draft: model.studioDraft })],
@@ -87,10 +85,10 @@ const saveDraftOnStudioExitStep = (transition: AppTransition) =>
     ),
   )
 
-export const handleTransitionStep = (transition: AppTransition) =>
+export const handleTransition = (transition: AppTransition) =>
   Update.combineSteps([
-    logTransitionStep(transition),
-    loadCatalogOnGalleryEntryStep(transition),
-    reconcilePaintingRouteStep(transition),
-    saveDraftOnStudioExitStep(transition),
+    logTransition(transition),
+    loadCatalogOnGalleryEntry(transition),
+    reconcilePaintingRoute(transition),
+    saveDraftOnStudioExit(transition),
   ])

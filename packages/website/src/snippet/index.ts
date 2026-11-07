@@ -104,6 +104,8 @@ export { default as applicationRegistrationsRaw } from './applicationRegistratio
 export { default as applicationRegistrationsHighlighted } from './applicationRegistrations.ts?highlighted'
 export { default as counterUpdateRaw } from './counterUpdate.ts?raw'
 export { default as counterUpdateHighlighted } from './counterUpdate.ts?highlighted'
+export { default as updateCompositionRaw } from './updateComposition.ts?raw'
+export { default as updateCompositionHighlighted } from './updateComposition.ts?highlighted'
 export { default as updateCurriedStepRaw } from './updateCurriedStep.ts?raw'
 export { default as updateCurriedStepHighlighted } from './updateCurriedStep.ts?highlighted'
 export { default as updateCurriedContextRaw } from './updateCurriedContext.ts?raw'
@@ -492,6 +494,8 @@ export { default as fieldValidationSchemaRaw } from './fieldValidationSchema.ts?
 export { default as fieldValidationSchemaHighlighted } from './fieldValidationSchema.ts?highlighted'
 export { default as testingApiRaw } from './testingApi.ts?raw'
 export { default as testingApiHighlighted } from './testingApi.ts?highlighted'
+export { default as testingModelComparisonRaw } from './testingModelComparison.ts?raw'
+export { default as testingModelComparisonHighlighted } from './testingModelComparison.ts?highlighted'
 export { default as testingCommandArgsRaw } from './testingCommandArgs.ts?raw'
 export { default as testingCommandArgsHighlighted } from './testingCommandArgs.ts?highlighted'
 export { default as testingReusableStepsRaw } from './testingReusableSteps.ts?raw'
@@ -695,3 +699,20 @@ export { default as counterApplicationWithFlagsHighlighted } from './counterAppl
 
 export { default as serverRenderingBlockServerEntryRaw } from './serverRenderingBlockServerEntry.ts?raw'
 export { default as serverRenderingBlockServerEntryHighlighted } from './serverRenderingBlockServerEntry.ts?highlighted'
+export { default as serverRenderingHotDisposeRaw } from './serverRenderingHotDispose.ts?raw'
+export { default as serverRenderingHotDisposeHighlighted } from './serverRenderingHotDispose.ts?highlighted'
+
+export { default as blockGenericConsumerRaw } from './blockGenericConsumer.ts?raw'
+export { default as blockGenericConsumerHighlighted } from './blockGenericConsumer.ts?highlighted'
+
+export { default as attributeKindsRaw } from './attributeKinds.ts?raw'
+export { default as attributeKindsHighlighted } from './attributeKinds.ts?highlighted'
+
+export { default as updateExtractedMessageRaw } from './updateExtractedMessage.ts?raw'
+export { default as updateExtractedMessageHighlighted } from './updateExtractedMessage.ts?highlighted'
+
+export { default as blockCodecChildRaw } from './blockCodecChild.ts?raw'
+export { default as blockCodecChildHighlighted } from './blockCodecChild.ts?highlighted'
+
+export { default as blockCodecParentRaw } from './blockCodecParent.ts?raw'
+export { default as blockCodecParentHighlighted } from './blockCodecParent.ts?highlighted'

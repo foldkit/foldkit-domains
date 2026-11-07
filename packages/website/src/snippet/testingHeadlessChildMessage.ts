@@ -1,44 +1,40 @@
-import {
-  Command,
-  expectOutMessage,
-  given,
-  message,
-  model,
-  story,
-} from 'foldkit/story'
-import { toParentMessage } from 'foldkit/test'
-import { expect, test } from 'vitest'
+import { Story } from 'foldkit'
+import { expect } from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import { SaveTheme } from './blockDefinition'
 import {
+  ApplicationBlock,
   Model,
   OutMessage,
   SettingsBinding,
-  update,
+  layer,
 } from './blockExtractedConnectedStep'
 import { SettingsBlock } from './blockSettings'
 
-test('folds a child fact without rendering its view', () => {
-  story(
-    update,
-    given(
+it.effect('folds a child fact without rendering its view', () =>
+  Story.story(
+    { block: ApplicationBlock, layer },
+    Story.given(
       Model.make({
         settings: SettingsBlock.Model.make({ theme: 'System' }),
         themeChangeCount: 3,
       }),
     ),
-    message(
-      toParentMessage(
-        SettingsBinding,
-        SettingsBlock.Message.ChangedTheme({ theme: 'Dark' }),
-      ),
+    Story.messageIn(
+      SettingsBinding,
+      SettingsBlock.Message.ChangedTheme({ theme: 'Dark' }),
     ),
-    model(model => {
+    Story.model(model => {
       expect(model.settings.theme).toBe('Dark')
     }),
-    expectOutMessage(
+    Story.expectOutMessage(
       OutMessage.ChangedTheme({ theme: 'Dark', changeCount: 3 }),
     ),
-    Command.resolve(SaveTheme, SettingsBlock.Message.CompletedSaveTheme()),
-  )
-})
+    Story.Command.resolve(
+      SaveTheme,
+      SettingsBlock.Message.CompletedSaveTheme(),
+    ),
+  ),
+)

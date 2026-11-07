@@ -66,7 +66,7 @@ The Foldkit entry point supplies the Runtime with the application definitions:
 
 ::Snippet{name="comparisonFoldkitProgram" label="Foldkit program"}
 
-`init` constructs the first Model and startup Commands. `ApplicationDefinition` establishes the Model and Message Schemas. `ApplicationComposition` collects child Bindings and assembles `ApplicationBlock` from init, update, view, local lifecycle declarations, and handler recipes. `Program.make` receives that Block, the Flags Schema, and the container. The Runtime dispatches Messages and executes lifecycle primitives.
+`init` constructs the first Model and startup Commands. `ApplicationBlock` establishes the Model and Message Schemas. `ApplicationComposition` registers child Bindings and authors init, update and view. `ApplicationBlock.makeLayer` constructs the executable graph from those plans, local lifecycle declarations and handler recipes. `Program.make` receives the Block and its implementation Layer, the Flags Schema, and the container. The Runtime dispatches Messages and executes lifecycle primitives.
 
 The Foldkit view still passes Model data to smaller view functions as parameters. Those functions do not own Hook state or lifecycle, so the Runtime assembly stays separate from the view tree.
 
@@ -181,7 +181,7 @@ It renders `App` in jsdom, simulates a stroke, spies on localStorage, and waits 
 | State transition      | Model after Messages                 | State after Actions                                |
 | Event-driven effect   | Inspect or resolve returned Commands | Exercise the handler or Hook at component boundary |
 | Persistence assertion | Resolve `SaveCanvas`                 | Spy on localStorage and wait for the Effect        |
-| Infrastructure        | `foldkit/story`, no DOM              | Vitest, React Testing Library, and jsdom           |
+| Infrastructure        | Foldkit `Story`, no DOM              | Vitest, React Testing Library, and jsdom           |
 | Timing in examples    | Synchronous Command resolution       | `waitFor` for the Effect-based persistence test    |
 
 ## Interaction Testing Without a DOM {#interaction-testing}

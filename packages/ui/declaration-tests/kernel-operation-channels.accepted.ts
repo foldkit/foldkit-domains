@@ -1,5 +1,7 @@
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
+import type * as Block from 'foldkit/block'
 import { type HtmlBuilder, childAttributes } from 'foldkit/html'
+import * as Story from 'foldkit/story'
 
 import * as Combobox from '@foldkit/ui/combobox'
 import * as Listbox from '@foldkit/ui/listbox'
@@ -7,11 +9,23 @@ import * as VirtualList from '@foldkit/ui/virtualList'
 
 const Fruit = Schema.Literals(['Apple', 'Pear'])
 
-export const FruitCombobox = Combobox.create(Fruit)
-export const FruitMultiCombobox = Combobox.Multi.create(Fruit)
-export const FruitListbox = Listbox.create<typeof Fruit.Type>()
-export const FruitMultiListbox = Listbox.Multi.create<typeof Fruit.Type>()
-export const FruitVirtualList = VirtualList.create<typeof Fruit.Type>()
+export const FruitCombobox = Combobox.makeBlock(Fruit)
+export const FruitMultiCombobox = Combobox.Multi.makeBlock(Fruit)
+export const FruitListbox = Listbox.makeBlock(Fruit)
+export const FruitMultiListbox = Listbox.Multi.makeBlock(Fruit)
+export const FruitVirtualList = VirtualList.makeBlock<typeof Fruit.Type>()
+
+export type FruitComboboxExecutable = Block.ExecutableOf<typeof FruitCombobox>
+export type FruitMultiComboboxExecutable = Block.ExecutableOf<
+  typeof FruitMultiCombobox
+>
+export type FruitListboxExecutable = Block.ExecutableOf<typeof FruitListbox>
+export type FruitMultiListboxExecutable = Block.ExecutableOf<
+  typeof FruitMultiListbox
+>
+export type FruitVirtualListExecutable = Block.ExecutableOf<
+  typeof FruitVirtualList
+>
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -28,67 +42,93 @@ type OutMessageOf<Producer extends (...args: ReadonlyArray<never>) => unknown> =
 export type OperationAssertions = [
   Expect<
     Equal<
-      Parameters<typeof FruitVirtualList.operations.informHistoryPrepended>[1],
+      Parameters<
+        FruitVirtualListExecutable['operations']['informOfHistoryPrepended']
+      >[1],
       VirtualList.HistoryPrependInput<typeof Fruit.Type>
     >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitVirtualList.operations.informHistoryPrepended>,
+      OutMessageOf<
+        FruitVirtualListExecutable['operations']['informOfHistoryPrepended']
+      >,
       never
     >
   >,
   Expect<
-    Equal<OutMessageOf<typeof FruitCombobox.operations.requestOpen>, never>
-  >,
-  Expect<
-    Equal<OutMessageOf<typeof FruitMultiCombobox.operations.requestOpen>, never>
+    Equal<
+      OutMessageOf<FruitComboboxExecutable['operations']['requestOpen']>,
+      never
+    >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitCombobox.operations.requestClose>,
+      OutMessageOf<FruitMultiComboboxExecutable['operations']['requestOpen']>,
+      never
+    >
+  >,
+  Expect<
+    Equal<
+      OutMessageOf<FruitComboboxExecutable['operations']['requestClose']>,
       typeof FruitCombobox.OutMessage.ClearedSelection.Type
     >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitMultiCombobox.operations.requestClose>,
+      OutMessageOf<FruitMultiComboboxExecutable['operations']['requestClose']>,
       typeof FruitMultiCombobox.OutMessage.ClearedSelection.Type
     >
   >,
   Expect<
-    Equal<OutMessageOf<typeof FruitListbox.operations.requestOpen>, never>
-  >,
-  Expect<
-    Equal<OutMessageOf<typeof FruitListbox.operations.requestClose>, never>
-  >,
-  Expect<
-    Equal<OutMessageOf<typeof FruitMultiListbox.operations.requestOpen>, never>
-  >,
-  Expect<
-    Equal<OutMessageOf<typeof FruitMultiListbox.operations.requestClose>, never>
+    Equal<
+      OutMessageOf<FruitListboxExecutable['operations']['requestOpen']>,
+      never
+    >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitCombobox.operations.requestSelectItem>,
+      OutMessageOf<FruitListboxExecutable['operations']['requestClose']>,
+      never
+    >
+  >,
+  Expect<
+    Equal<
+      OutMessageOf<FruitMultiListboxExecutable['operations']['requestOpen']>,
+      never
+    >
+  >,
+  Expect<
+    Equal<
+      OutMessageOf<FruitMultiListboxExecutable['operations']['requestClose']>,
+      never
+    >
+  >,
+  Expect<
+    Equal<
+      OutMessageOf<FruitComboboxExecutable['operations']['requestSelectItem']>,
       typeof FruitCombobox.OutMessage.Selected.Type
     >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitMultiCombobox.operations.requestSelectItem>,
+      OutMessageOf<
+        FruitMultiComboboxExecutable['operations']['requestSelectItem']
+      >,
       typeof FruitMultiCombobox.OutMessage.Selected.Type
     >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitListbox.operations.requestSelectItem>,
+      OutMessageOf<FruitListboxExecutable['operations']['requestSelectItem']>,
       typeof FruitListbox.OutMessage.Type
     >
   >,
   Expect<
     Equal<
-      OutMessageOf<typeof FruitMultiListbox.operations.requestSelectItem>,
+      OutMessageOf<
+        FruitMultiListboxExecutable['operations']['requestSelectItem']
+      >,
       typeof FruitMultiListbox.OutMessage.Type
     >
   >,
@@ -134,23 +174,29 @@ export const fruitAbsoluteViewInputs = (
   itemToAttributes: item => childAttributes([h.DataAttribute('fruit', item)]),
 })
 
-export const selfFruitList = FruitVirtualList.init({
-  id: 'self-fruit-list',
-  rowHeightPx: 30,
-  scrollContainer: VirtualList.ScrollContainer.Self(),
-})
-export const ancestorFruitList = FruitVirtualList.init({
-  id: 'ancestor-fruit-list',
-  rowHeightPx: 30,
-  scrollContainer: VirtualList.ScrollContainer.Ancestor({
-    selector: '#fruit-scroll',
+export const selfFruitList = Story.withBlock(FruitVirtualList, list =>
+  list.init({
+    id: 'self-fruit-list',
+    rowHeightPx: 30,
+    scrollContainer: VirtualList.ScrollContainer.Self(),
   }),
-})
-export const windowFruitList = FruitVirtualList.init({
-  id: 'window-fruit-list',
-  rowHeightPx: 30,
-  scrollContainer: VirtualList.ScrollContainer.Window(),
-})
+).pipe(Effect.provide(VirtualList.layer))
+export const ancestorFruitList = Story.withBlock(FruitVirtualList, list =>
+  list.init({
+    id: 'ancestor-fruit-list',
+    rowHeightPx: 30,
+    scrollContainer: VirtualList.ScrollContainer.Ancestor({
+      selector: '#fruit-scroll',
+    }),
+  }),
+).pipe(Effect.provide(VirtualList.layer))
+export const windowFruitList = Story.withBlock(FruitVirtualList, list =>
+  list.init({
+    id: 'window-fruit-list',
+    rowHeightPx: 30,
+    scrollContainer: VirtualList.ScrollContainer.Window(),
+  }),
+).pipe(Effect.provide(VirtualList.layer))
 
 export type VirtualListLayoutAssertions = [
   Expect<

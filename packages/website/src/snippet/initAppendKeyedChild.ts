@@ -1,11 +1,11 @@
 import { Array } from 'effect'
-import { initAndAppend } from 'foldkit/bindingInit'
+import { initAndAppend } from 'foldkit/binding'
 
+import { makeStep } from './block'
 import { ProjectSettingsBinding } from './composition'
-import { makeStep } from './definition'
 import { Project } from './domain'
 
-const initProjectSettingsIfMissingStep = (project: typeof Project.Type) =>
+const initProjectSettingsIfMissing = (project: Project) =>
   makeStep(model => {
     if (
       Array.some(

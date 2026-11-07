@@ -3,6 +3,7 @@ import { Predicate, type Schema } from 'effect'
 import {
   type AssemblyDraft,
   type AssemblyDraftTypeId,
+  type CompletionContractProof,
   type CompletionProof,
   completeAssemblyDraft,
 } from './assemblyState.js'
@@ -48,9 +49,29 @@ type PlainProducerConstraint<Producer extends AnyProducer> = {
 
 type FixedKeys = Exclude<
   keyof AnyBlock,
-  'OutMessage' | typeof DefaultViewTypeId
+  | 'Message'
+  | 'Model'
+  | 'OutMessage'
+  | typeof DefaultViewTypeId
+  | keyof CompletionProof
 >
-type FixedContract = Required<Pick<AnyBlock, FixedKeys>>
+type FixedContract<
+  ModelSchema extends AnySchema,
+  MessageSchema extends AnySchema,
+> = Required<Pick<AnyBlock, FixedKeys>> &
+  CompletionProof &
+  CompletionContractProof<ModelSchema, MessageSchema> &
+  Readonly<{
+    Model: ModelSchema
+    Message: MessageSchema
+  }>
+
+type CompletedMessage<Completed> =
+  Completed extends Readonly<{
+    Message: infer MessageSchema extends AnySchema
+  }>
+    ? MessageSchema
+    : never
 
 type CheckedCompleted<ModelSchema extends AnySchema, Completed> =
   IsAny<ModelSchema> extends true
@@ -61,8 +82,16 @@ type CheckedCompleted<ModelSchema extends AnySchema, Completed> =
         ? never
         : true extends IsUnion<Completed>
           ? never
-          : [Completed] extends [FixedContract]
-            ? Equal<keyof Completed, keyof AnyBlock> extends true
+          : [Completed] extends [
+                FixedContract<ModelSchema, CompletedMessage<Completed>>,
+              ]
+            ? Equal<
+                Exclude<
+                  keyof Completed,
+                  keyof CompletionContractProof<unknown, unknown>
+                >,
+                keyof AnyBlock
+              > extends true
               ? Equal<Completed, Readonly<Completed>> extends true
                 ? Equal<ModelSchema, Completed['Model']> extends true
                   ? Completed
@@ -108,6 +137,12 @@ type MissingAssemblyAnnotation = Readonly<{
   'Block.assemble requires a FromAssembly annotation with typeof Model and typeof prepare': never
 }>
 
+type AnnotatedAssemblyProducer<
+  ModelSchema extends AnySchema,
+  Producer extends AnyProducer,
+> = ([ModelSchema] extends [never] ? MissingAssemblyAnnotation : unknown) &
+  Producer
+
 type CompleteAssemblyArguments<
   ModelSchema extends AnySchema,
   Producer extends AnyProducer,
@@ -115,12 +150,12 @@ type CompleteAssemblyArguments<
 > =
   IsAny<ModelSchema> extends true
     ? readonly [error: never]
-    : [ModelSchema] extends [never]
-      ? readonly [missingFromAssemblyAnnotation: MissingAssemblyAnnotation]
-      : IsAny<Producer> extends true
+    : IsAny<Producer> extends true
+      ? readonly [error: never]
+      : [Producer] extends [never]
         ? readonly [error: never]
-        : [Producer] extends [never]
-          ? readonly [error: never]
+        : [ModelSchema] extends [never]
+          ? readonly []
           : [ProducedBlock<Producer>] extends [never]
             ? readonly [error: never]
             : [ProducedBlock<Producer>] extends [Capabilities]
@@ -146,10 +181,10 @@ type ProducedMember<Producer, Key extends PropertyKey> =
               : InvalidBlockProducer
         : InvalidBlockProducer
 
-interface AssemblyFields<
-  ModelSchema extends AnySchema,
-  Producer,
-> extends CompletionProof {
+interface AssemblyFields<ModelSchema extends AnySchema, Producer>
+  extends
+    CompletionProof,
+    CompletionContractProof<ModelSchema, ProducedMember<Producer, 'Message'>> {
   readonly Model: ModelSchema
   readonly owner: ProducedMember<Producer, 'owner'>
   readonly Message: ProducedMember<Producer, 'Message'>
@@ -301,7 +336,7 @@ export function assemble<
   const ModelSchema extends AnySchema = never,
   Producer extends AssemblyProducer<ModelSchema, Producer> = never,
 >(
-  producer: Producer,
+  producer: AnnotatedAssemblyProducer<ModelSchema, Producer>,
   ...validation: CompleteAssemblyArguments<
     ModelSchema,
     Producer,
@@ -312,7 +347,7 @@ export function assemble<
   const ModelSchema extends AnySchema = never,
   Producer extends AssemblyProducer<ModelSchema, Producer> = never,
 >(
-  producer: Producer,
+  producer: AnnotatedAssemblyProducer<ModelSchema, Producer>,
   ...validation: CompleteAssemblyArguments<
     ModelSchema,
     Producer,
@@ -323,7 +358,7 @@ export function assemble<
   const ModelSchema extends AnySchema = never,
   Producer extends AssemblyProducer<ModelSchema, Producer> = never,
 >(
-  producer: Producer,
+  producer: AnnotatedAssemblyProducer<ModelSchema, Producer>,
   ...validation: CompleteAssemblyArguments<
     ModelSchema,
     Producer,
@@ -334,7 +369,7 @@ export function assemble<
   const ModelSchema extends AnySchema = never,
   Producer extends AssemblyProducer<ModelSchema, Producer> = never,
 >(
-  producer: Producer,
+  producer: AnnotatedAssemblyProducer<ModelSchema, Producer>,
   ...validation: CompleteAssemblyArguments<
     ModelSchema,
     Producer,

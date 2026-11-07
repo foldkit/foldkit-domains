@@ -3,15 +3,25 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 const Model = Schema.Struct({ panelHeight: Schema.Option(Schema.Number) })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({
   CompletedMeasurePanel: { height: Schema.Number },
 })
+type Message = typeof Message.Type
 
-const PanelDefinition = Block.makeDefinition('Panel', { Model, Message })
+export const PanelKey = Symbol('Panel')
+export const PanelBlock = Block.make('Panel', {
+  key: PanelKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Document' },
+  Model,
+  Message,
+})
 
-const { makeFieldsStep } = PanelDefinition
+const { makeFieldsStep, makeMount, makeComposition } = PanelBlock
 
-const MeasurePanel = PanelDefinition.makeMount('MeasurePanel', {
+const MeasurePanel = makeMount('MeasurePanel', {
   messages: [Message.CompletedMeasurePanel],
   handler: function* () {
     return ({ element }) =>
@@ -23,7 +33,7 @@ const MeasurePanel = PanelDefinition.makeMount('MeasurePanel', {
   },
 })
 
-const PanelComposition = PanelDefinition.makeComposition({
+const PanelComposition = makeComposition({
   mounts: [MeasurePanel],
 })
 
@@ -50,14 +60,14 @@ const init = PanelComposition.makeInit(() => ({
   model: Model.make({ panelHeight: Option.none() }),
 }))
 
-const prepare = () =>
-  PanelComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer: MeasurePanel.layer,
-  })
-export const PanelBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = PanelBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      EffectsLayer: MeasurePanel.layer,
+    }
+  }),
+)

@@ -9,6 +9,7 @@ const ApplicationRoute = defineRouteUnion({
   },
   NotFound: { path: Schema.String },
 })
+type ApplicationRoute = typeof ApplicationRoute.Type
 
 const projectRouter = pipe(
   literal('projects'),

@@ -1,21 +1,50 @@
-import { Effect, Schema } from 'effect'
+import { Context, Effect, Schema, SchemaTransformation } from 'effect'
 import * as Block from 'foldkit/block'
 import * as Message from 'foldkit/message'
 import * as Navigation from 'foldkit/navigation'
 import * as Program from 'foldkit/program'
 import * as Url from 'foldkit/url'
 
-import {
-  Flags,
-  Model,
-  PurePageBlock,
-  ServiceDecodedBlock,
-  ServiceDecodedProvidedElementBlock,
-} from './program.accepted.js'
+import { Flags, Model, PurePageBlock } from './program.accepted.js'
 
 const RootMessage = Message.defineMessageUnion({
   RequestedNavigation: { request: Navigation.UrlRequest },
   ChangedUrl: { url: Url.Url },
+})
+
+class SerializationService extends Context.Service<
+  SerializationService,
+  Readonly<{ prefix: string }>
+>()('DeclarationProgramSerializationService') {}
+
+const ServiceText = Schema.String.pipe(
+  Schema.decodeTo(
+    Schema.String,
+    SchemaTransformation.transformEffect({
+      decode: value =>
+        Effect.map(
+          SerializationService,
+          service => `${service.prefix}${value}`,
+        ),
+      encode: Effect.succeed,
+    }),
+  ),
+)
+const ServiceModel = Schema.Struct({ status: ServiceText })
+const ServiceMessage = Message.defineMessageUnion({
+  SubmittedValue: { value: ServiceText },
+})
+
+Block.makeDefinition('RejectedServiceModelProgram', {
+  // @ts-expect-error Program Block Models must be self-contained Codecs.
+  Model: ServiceModel,
+  Message: RootMessage,
+})
+
+Block.makeDefinition('RejectedServiceMessageProgram', {
+  Model,
+  // @ts-expect-error Program Block Messages must be self-contained Codecs.
+  Message: ServiceMessage,
 })
 
 const RejectedDeclarationPageDefinition = Block.makeDefinition(
@@ -309,30 +338,6 @@ const configWithPossiblePrivateDispatchSchema =
 // @ts-expect-error Private runtime dispatch fields cannot enter a Program config union.
 Program.make(configWithPossiblePrivateDispatchSchema)
 
-type DynamicServiceDecodedBlock =
-  | typeof ServiceDecodedBlock
-  | typeof ServiceDecodedProvidedElementBlock
-type DynamicServiceDecodedConfig = Readonly<{
-  block: DynamicServiceDecodedBlock
-  container: null
-  devTools: Readonly<{ dispatch: true }>
-}>
-const dynamicServiceDecodedBlock: DynamicServiceDecodedBlock =
-  globalThis.Math.random() > 0.5
-    ? ServiceDecodedBlock
-    : ServiceDecodedProvidedElementBlock
-const explicitDynamicServiceDecodedProgram = Program.makeElement<
-  DynamicServiceDecodedConfig,
-  DynamicServiceDecodedBlock
->({
-  block: dynamicServiceDecodedBlock,
-  container: null,
-  devTools: { dispatch: true },
-})
-
-// @ts-expect-error A dynamic Block union retains dispatch Services missing from any member's EffectsLayer.
-explicitDynamicServiceDecodedProgram.start()
-
 declare const UnresolvedHostBlock: Omit<
   typeof PurePageBlock,
   'hostHandlers' | '__blockHandlerRequirements'
@@ -415,6 +420,9 @@ Program.makeElement({
   Flags,
   flags: Effect.succeed(Flags.make({ status: 'ready' })),
 })
+
+// @ts-expect-error Program.make rejects both Html and required view inputs in a root view union.
+Program.make({ block: MaybeInputViewBlock, container: null, Flags })
 
 // @ts-expect-error The Flags Schema output must exactly match the root init input.
 Program.makeElement({
@@ -520,6 +528,9 @@ const MaybeHeadlessBlock =
 
 // @ts-expect-error Every member of a root Block union must have a default view.
 Program.makeElement({ block: MaybeHeadlessBlock, container: null })
+
+// @ts-expect-error Program.make rejects both Html and missing default views in a root Block union.
+Program.make({ block: MaybeHeadlessBlock, container: null })
 
 const OutMessage = Message.defineMessageUnion({ CompletedRootWork: {} })
 const DeclarationOutMessageRootDefinition = Block.makeDefinition(

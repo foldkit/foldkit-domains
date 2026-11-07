@@ -4,21 +4,19 @@ import { HttpClient } from 'effect/http'
 import type { PackageSpec } from './domain'
 import { encodePackageName, fetchJson } from './http'
 
-// CONSTANT
-
 const NPM_DOWNLOADS_API = 'https://api.npmjs.org/downloads/range/last-year'
 const NPM_REGISTRY_API = 'https://registry.npmjs.org'
-
-// SCHEMA
 
 export const NpmDownloadDay = Schema.Struct({
   day: Schema.String,
   downloads: Schema.Number,
 })
+export type NpmDownloadDay = typeof NpmDownloadDay.Type
 
 export const NpmDownloadsResponse = Schema.Struct({
   downloads: Schema.Array(NpmDownloadDay),
 })
+export type NpmDownloadsResponse = typeof NpmDownloadsResponse.Type
 
 export const NpmVersionMetadata = Schema.Struct({
   dependencies: Schema.OptionFromOptional(
@@ -28,6 +26,7 @@ export const NpmVersionMetadata = Schema.Struct({
     Schema.Record(Schema.String, Schema.String),
   ),
 })
+export type NpmVersionMetadata = typeof NpmVersionMetadata.Type
 
 export const NpmPackument = Schema.Struct({
   name: Schema.String,
@@ -37,14 +36,13 @@ export const NpmPackument = Schema.Struct({
     latest: Schema.String,
   }),
 })
-
-// SERVICE
+export type NpmPackument = typeof NpmPackument.Type
 
 type NpmApiShape = Readonly<{
-  fetchPackage: (spec: typeof PackageSpec.Type) => Effect.Effect<
+  fetchPackage: (spec: PackageSpec) => Effect.Effect<
     Readonly<{
-      downloads: typeof NpmDownloadsResponse.Type
-      packument: typeof NpmPackument.Type
+      downloads: NpmDownloadsResponse
+      packument: NpmPackument
     }>,
     Error
   >
@@ -61,7 +59,7 @@ export const NpmApiLayer: Layer.Layer<NpmApi, never, HttpClient.HttpClient> =
       const client = yield* HttpClient.HttpClient
       const fetch_ = fetchJson(client)
       return {
-        fetchPackage: (spec: typeof PackageSpec.Type) =>
+        fetchPackage: (spec: PackageSpec) =>
           Effect.all(
             {
               downloads: fetch_(NpmDownloadsResponse)(

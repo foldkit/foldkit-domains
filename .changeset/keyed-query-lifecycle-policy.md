@@ -7,7 +7,7 @@ Add freshness-aware loading, targeted cancellation, and optional accepted-comple
 
 Configure `staleTime` and pass an Effect Clock timestamp to `requestLoadIfStale`. Expiry affects reuse without removing retained data. Existing loading operations retain their policies. `maxSettledEntries` limits settled KeyedQuery entries by request and completion recency; pending requests are protected and can temporarily exceed that bound. Cache hits update recency without extending freshness.
 
-`requestCancel` invalidates the selected pending generation immediately and returns an interruption Command. A canceled refresh preserves its last successful value. Interruption reclaims already-running work; a cancellation executed before the fetch starts may find no running holder, but its late result is rejected. Cancellation uses generation-specific keys, so it cannot interrupt a subsequent request at the same key.
+`requestCancel` invalidates the selected pending generation immediately and returns an interruption Command. A canceled refresh restores its last successful value, subject to KeyedQuery's settled-entry limit, which may evict retained data. Other pending keys are unaffected. Interruption reclaims already-running work; a cancellation executed before the fetch starts may find no running holder, but its late result is rejected. Cancellation uses generation-specific keys, so it cannot interrupt a subsequent request at the same key.
 
 Set `notifyOnCompletion: true` to receive `OutMessage.CompletedFetch` through a registered Binding policy after an accepted success or failure. Stale, canceled, duplicate, and evicted completions do not notify. Queries omit this OutMessage contract by default.
 

@@ -3,10 +3,8 @@ import { Array, Equal, Option } from 'effect'
 import { Html, createKeyedLazy } from 'foldkit/html'
 import apiModuleIndex from 'virtual:api-module-index'
 
-import { Disclosure } from '@foldkit/ui'
-import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
+import { Dialog, Disclosure } from '@foldkit/ui'
 
-import { Shared } from '../component'
 import type { ApplicationViewBuilder } from '../composition'
 import { MobileMenuDialogBinding } from '../composition'
 import {
@@ -19,6 +17,7 @@ import {
   isNavPageActive,
 } from '../docsNav'
 import { Icon } from '../icon'
+import * as Site from '../layout/site'
 import { Link } from '../link'
 import { Message } from '../message'
 import { type Model } from '../model'
@@ -31,7 +30,7 @@ import {
 } from '../route'
 import { type GroupKey, type SidebarGroups } from '../sidebarStorage'
 
-const GROUP_ID: Record<typeof GroupKey.Type, string> = {
+const GROUP_ID: Record<GroupKey, string> = {
   blog: 'blog-group',
   introduction: 'introduction-group',
   coreConcepts: 'core-concepts-group',
@@ -52,7 +51,7 @@ const sidebarGroup = (
     id: string
     label: string
     isOpen: boolean
-    onToggle: (isOpen: boolean) => typeof Message.Type
+    onToggle: (isOpen: boolean) => Message
     children: Html
     isLocked: boolean
   }>,
@@ -161,7 +160,7 @@ const getStartedClass = (isActive: boolean) =>
   })
 
 const getStartedNavItem = (
-  route: (typeof Model.Type)['route'],
+  route: Model['route'],
   maybeExampleSlug: Option.Option<string>,
   h: ApplicationViewBuilder,
 ): Html => {
@@ -191,8 +190,8 @@ const MOBILE_ID_PREFIX = 'mobile'
 
 const computeNavLinks = (
   idPrefix: string,
-  route: (typeof Model.Type)['route'],
-  sidebarGroups: typeof SidebarGroups.Type,
+  route: Model['route'],
+  sidebarGroups: SidebarGroups,
   h: ApplicationViewBuilder,
 ): Html => {
   const isOnApiModulePage = route._tag === 'ApiModule'
@@ -201,7 +200,7 @@ const computeNavLinks = (
     route._tag,
     maybeExampleSlug,
   )
-  const isLocked = (key: typeof GroupKey.Type): boolean =>
+  const isLocked = (key: GroupKey): boolean =>
     Option.exists(maybeActiveSectionKey, Equal.equals(key))
 
   const pageGroupList = (pages: ReadonlyArray<NavPage>): Html =>
@@ -292,10 +291,7 @@ const computeNavLinks = (
 
 const lazyNavLinks = createKeyedLazy()
 
-export const view = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+export const view = (model: Model, h: ApplicationViewBuilder): Html => {
   const desktopNavLinks = lazyNavLinks(DESKTOP_ID_PREFIX, computeNavLinks, [
     DESKTOP_ID_PREFIX,
     model.route,
@@ -323,10 +319,7 @@ export const view = (
   )
 }
 
-export const mobileView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+export const mobileView = (model: Model, h: ApplicationViewBuilder): Html => {
   const mobileNavLinks = lazyNavLinks(MOBILE_ID_PREFIX, computeNavLinks, [
     MOBILE_ID_PREFIX,
     model.route,
@@ -339,7 +332,7 @@ export const mobileView = (
     description,
     initialFocus,
     title,
-  }: DialogRenderInfo): Html =>
+  }: Dialog.RenderInfo): Html =>
     h.div(
       [h.Class('flex flex-col h-full')],
       [
@@ -366,7 +359,7 @@ export const mobileView = (
                   h.Decoding('sync'),
                   h.Class('h-6 w-auto dark:invert'),
                 ]),
-                Shared.betaTag,
+                Site.betaTag,
               ],
             ),
             h.button(
@@ -401,14 +394,10 @@ export const mobileView = (
             h.div(
               [h.Class('flex items-center justify-center gap-8')],
               [
-                Shared.iconLink(Link.github, 'GitHub', Icon.github('w-6 h-6')),
-                Shared.iconLink(
-                  Link.discord,
-                  'Discord',
-                  Icon.discord('w-6 h-6'),
-                ),
-                Shared.iconLink(Link.xSocial, 'X', Icon.xSocial('w-6 h-6')),
-                Shared.iconLink(Link.npm, 'npm', Icon.npm('w-8 h-8')),
+                Site.iconLink(Link.github, 'GitHub', Icon.github('w-6 h-6')),
+                Site.iconLink(Link.discord, 'Discord', Icon.discord('w-6 h-6')),
+                Site.iconLink(Link.xSocial, 'X', Icon.xSocial('w-6 h-6')),
+                Site.iconLink(Link.npm, 'npm', Icon.npm('w-8 h-8')),
               ],
             ),
           ],

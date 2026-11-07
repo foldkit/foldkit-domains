@@ -1,22 +1,25 @@
-import { Command, given, message, model, story } from 'foldkit/story'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import {
+  ApplicationBlock,
   DetermineStartTime,
   DetermineTickTime,
   Message,
   type Model,
-  update,
-} from './application'
+  layer,
+} from './block'
 
-const idleModel: typeof Model.Type = {
+const idleModel: Model = {
   elapsedMs: 0,
   isRunning: false,
   startTime: 0,
 }
 
-const runningModel: typeof Model.Type = {
+const runningModel: Model = {
   elapsedMs: 5000,
   isRunning: true,
   startTime: 1000,
@@ -24,104 +27,110 @@ const runningModel: typeof Model.Type = {
 
 describe('update', () => {
   describe('start', () => {
-    test('ClickedStart fires DetermineStartTime with current elapsed time', () => {
-      story(
-        update,
-        given(modifyFields(idleModel, { elapsedMs: () => 2000 })),
-        message(Message.ClickedStart()),
-        Command.expectHas(DetermineStartTime),
-        model(model => {
-          expect(model.isRunning).toBe(false)
-        }),
-        Command.resolve(
-          DetermineStartTime,
-          Message.CompletedDetermineStartTime({ startTime: 500 }),
+    it.effect(
+      'ClickedStart fires DetermineStartTime with current elapsed time',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(modifyFields(idleModel, { elapsedMs: () => 2000 })),
+          Story.message(Message.ClickedStart()),
+          Story.Command.expectHas(DetermineStartTime),
+          Story.model(model => {
+            expect(model.isRunning).toBe(false)
+          }),
+          Story.Command.resolve(
+            DetermineStartTime,
+            Message.CompletedDetermineStartTime({ startTime: 500 }),
+          ),
+          Story.model(model => {
+            expect(model.isRunning).toBe(true)
+            expect(model.startTime).toBe(500)
+          }),
         ),
-        model(model => {
-          expect(model.isRunning).toBe(true)
-          expect(model.startTime).toBe(500)
-        }),
-      )
-    })
+    )
 
-    test('CompletedDetermineStartTime stores the offset start time and starts running', () => {
-      story(
-        update,
-        given(idleModel),
-        message(Message.CompletedDetermineStartTime({ startTime: 1000 })),
-        model(model => {
-          expect(model.isRunning).toBe(true)
-          expect(model.startTime).toBe(1000)
-        }),
-      )
-    })
+    it.effect(
+      'CompletedDetermineStartTime stores the offset start time and starts running',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(idleModel),
+          Story.message(
+            Message.CompletedDetermineStartTime({ startTime: 1000 }),
+          ),
+          Story.model(model => {
+            expect(model.isRunning).toBe(true)
+            expect(model.startTime).toBe(1000)
+          }),
+        ),
+    )
   })
 
   describe('stop and reset', () => {
-    test('ClickedStop pauses the stopwatch without zeroing time', () => {
-      story(
-        update,
-        given(runningModel),
-        message(Message.ClickedStop()),
-        model(model => {
+    it.effect('ClickedStop pauses the stopwatch without zeroing time', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(runningModel),
+        Story.message(Message.ClickedStop()),
+        Story.model(model => {
           expect(model.isRunning).toBe(false)
           expect(model.elapsedMs).toBe(5000)
           expect(model.startTime).toBe(1000)
         }),
-      )
-    })
+      ),
+    )
 
-    test('ClickedReset zeros elapsedMs, isRunning, and startTime', () => {
-      story(
-        update,
-        given(runningModel),
-        message(Message.ClickedReset()),
-        model(model => {
+    it.effect('ClickedReset zeros elapsedMs, isRunning, and startTime', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(runningModel),
+        Story.message(Message.ClickedReset()),
+        Story.model(model => {
           expect(model.elapsedMs).toBe(0)
           expect(model.isRunning).toBe(false)
           expect(model.startTime).toBe(0)
         }),
-      )
-    })
+      ),
+    )
 
-    test('ClickedReset on an idle stopwatch is a no-op', () => {
-      story(
-        update,
-        given(idleModel),
-        message(Message.ClickedReset()),
-        model(model => {
+    it.effect('ClickedReset on an idle stopwatch is a no-op', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(idleModel),
+        Story.message(Message.ClickedReset()),
+        Story.model(model => {
           expect(model).toEqual(idleModel)
         }),
-      )
-    })
+      ),
+    )
   })
 
   describe('ticking', () => {
-    test('Ticked fires DetermineTickTime with the stored startTime', () => {
-      story(
-        update,
-        given(runningModel),
-        message(Message.Ticked()),
-        Command.expectHas(DetermineTickTime),
-        Command.resolve(
+    it.effect('Ticked fires DetermineTickTime with the stored startTime', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(runningModel),
+        Story.message(Message.Ticked()),
+        Story.Command.expectHas(DetermineTickTime),
+        Story.Command.resolve(
           DetermineTickTime,
           Message.CompletedDetermineTickTime({ elapsedMs: 6000 }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.elapsedMs).toBe(6000)
         }),
-      )
-    })
+      ),
+    )
 
-    test('CompletedDetermineTickTime stores the new elapsed time', () => {
-      story(
-        update,
-        given(runningModel),
-        message(Message.CompletedDetermineTickTime({ elapsedMs: 7500 })),
-        model(model => {
+    it.effect('CompletedDetermineTickTime stores the new elapsed time', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(runningModel),
+        Story.message(Message.CompletedDetermineTickTime({ elapsedMs: 7500 })),
+        Story.model(model => {
           expect(model.elapsedMs).toBe(7500)
         }),
-      )
-    })
+      ),
+    )
   })
 })

@@ -20,6 +20,7 @@ type Diagnostics = Readonly<{
 const DiagnosticMaximum = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: globalThis.Number.MAX_SAFE_INTEGER }),
 )
+type DiagnosticMaximum = typeof DiagnosticMaximum.Type
 const TypePerformanceBudget = Schema.Struct({
   maxInstantiationsDelta: DiagnosticMaximum,
   maxTypesDelta: DiagnosticMaximum,
@@ -37,6 +38,7 @@ const FixtureManifest = Schema.Struct({
     Schema.Struct({ name: Schema.String, file: Schema.String }),
   ),
 })
+type FixtureManifest = typeof FixtureManifest.Type
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const typePerformanceRoot = join(packageRoot, 'type-performance')
@@ -83,7 +85,7 @@ const readBudgets = (path: string): BudgetsFile => {
   }
 }
 
-const readFixtureManifest = (): typeof FixtureManifest.Type => {
+const readFixtureManifest = (): FixtureManifest => {
   try {
     return Schema.decodeUnknownSync(FixtureManifest)(
       readJson(fixtureManifestPath),
@@ -160,6 +162,7 @@ const measure = (
   )
 
   const result = runCompiler([
+    '--singleThreaded',
     '-p',
     configPath,
     '--extendedDiagnostics',
@@ -351,6 +354,10 @@ const main = (): void => {
         .join(', ')}.`,
     )
   }
+
+  process.stderr.write(
+    `[block-type-performance] TypeScript ${typescriptVersion}; --singleThreaded diagnostics\n`,
+  )
 
   const runRoot = mkdtempSync(join(tmpdir(), 'foldkit-block-type-performance-'))
 

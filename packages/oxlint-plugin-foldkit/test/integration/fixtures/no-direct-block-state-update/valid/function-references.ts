@@ -19,14 +19,14 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message,
 })
-const ChildBinding = ApplicationDefinition.makeBinding(
+const ChildBinding = ApplicationDefinition.makeRequiredFieldBinding(
   Child.FunctionReferenceChildBlock,
   {
     field: 'child',
     init: false,
   },
 )
-const EntriesBinding = ApplicationDefinition.makeBinding(
+const EntriesBinding = ApplicationDefinition.makeKeyedArrayBinding(
   Child.FunctionReferenceChildBlock,
   {
     field: 'entries',
@@ -36,7 +36,7 @@ const EntriesBinding = ApplicationDefinition.makeBinding(
 const ApplicationComposition = ApplicationDefinition.makeComposition({
   bindings: [ChildBinding, EntriesBinding],
 })
-const revealPreferenceErrorsStep = ApplicationDefinition.makeFieldsStep(() => ({
+const revealPreferenceErrors = ApplicationDefinition.makeFieldsStep(() => ({
   preferences: Foreign.revealErrors,
 }))
 
@@ -54,10 +54,10 @@ export const update = ApplicationComposition.makeUpdate({
     })
 
     return Update.combineSteps(model, [
-      revealPreferenceErrorsStep,
+      revealPreferenceErrors,
       ApplicationDefinition.makeNoopStep(),
-      ChildBinding.informThemeChanged({ theme: 'Light' }),
-      EntriesBinding.informThemeChanged('retained', { theme: 'Light' }),
+      ChildBinding.informOfThemeChanged({ theme: 'Light' }),
+      EntriesBinding.informOfThemeChanged('retained', { theme: 'Light' }),
     ])
   },
 })

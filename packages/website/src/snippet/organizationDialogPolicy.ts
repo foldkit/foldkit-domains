@@ -1,18 +1,21 @@
 import { Dialog } from '@foldkit/ui'
 
+import {
+  EditorBlock,
+  makeCommandsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from '../block'
 import { SaveDraft } from '../command'
-import { EditorDefinition, makeCommandsStep, makeNoopStep } from '../definition'
 
-const foldDialogOutMessage = EditorDefinition.makeOutMessageFold(
-  Dialog.DialogBlock,
-  {
+export const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
+  field: 'dialog',
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     CompletedClose: makeNoopStep,
     Closed: () =>
       makeCommandsStep(model => [SaveDraft({ contents: model.contents })]),
-  },
-)
-
-export const DialogBinding = EditorDefinition.makeBinding(Dialog.DialogBlock, {
-  field: 'dialog',
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
+  }),
+})

@@ -1,10 +1,10 @@
-import { initAndInsert } from 'foldkit/bindingInit'
+import { initAndInsert } from 'foldkit/binding'
 
+import { makeStep } from './block'
 import { EditorsBinding } from './composition'
-import { makeStep } from './definition'
 import { Issue } from './domain'
 
-const initIssueEditorStep = (issue: typeof Issue.Type) =>
+const initIssueEditor = (issue: Issue) =>
   makeStep(model =>
     initAndInsert(EditorsBinding, model, {
       key: issue.id,

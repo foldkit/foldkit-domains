@@ -1,6 +1,6 @@
 import { DateTime } from 'effect'
 
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import { Message } from '../message'
@@ -36,10 +36,7 @@ export const loadingPanel = (text: string, h: ApplicationViewBuilder) =>
   )
 
 export const errorPanel = (
-  {
-    error,
-    retryMessage,
-  }: Readonly<{ error: string; retryMessage: typeof Message.Type }>,
+  { error, retryMessage }: Readonly<{ error: string; retryMessage: Message }>,
   h: ApplicationViewBuilder,
 ) =>
   h.div(

@@ -1,7 +1,7 @@
 import { Array, Option } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Post, PostDetail } from '../data'
@@ -16,30 +16,36 @@ import {
 } from './shared'
 
 const isPostCached = (
-  postDetails: (typeof Model.Type)['postDetails'],
+  postDetails: Model['postDetails'],
   postId: string,
 ): boolean => AsyncData.hasData(postQuery.read(postDetails, { postId }))
 
 export const postsTabView = (
-  model: typeof Model.Type,
+  maybeSelectedPostId: Model['maybeSelectedPostId'],
+  posts: Model['posts'],
+  postDetails: Model['postDetails'],
   h: ApplicationViewBuilder,
 ) =>
-  Option.match(model.maybeSelectedPostId, {
+  Option.match(maybeSelectedPostId, {
     onNone: () =>
-      h.section([h.Class('flex flex-col gap-4')], [postsListView(model, h)]),
+      h.section(
+        [h.Class('flex flex-col gap-4')],
+        [postsListView(posts, postDetails, h)],
+      ),
     onSome: postId =>
       h.keyed('section')(
         postId,
         [h.Class('flex flex-col gap-4')],
-        [postDetailView({ model, postId }, h)],
+        [postDetailView(postDetails, postId, h)],
       ),
   })
 
 export const postsListView = (
-  model: typeof Model.Type,
+  posts: Model['posts'],
+  postDetails: Model['postDetails'],
   h: ApplicationViewBuilder,
 ) => {
-  const postsAsyncData = postsQuery.read(model.posts)
+  const postsAsyncData = postsQuery.read(posts)
   const isPending = AsyncData.isPending(postsAsyncData)
 
   return h.div(
@@ -92,7 +98,7 @@ export const postsListView = (
               }),
               h.ul(
                 [h.Class('flex flex-col gap-2')],
-                postListItems({ posts, postDetails: model.postDetails }, h),
+                postListItems({ posts, postDetails }, h),
               ),
             ],
           ),
@@ -106,8 +112,8 @@ export const postListItems = (
     posts,
     postDetails,
   }: Readonly<{
-    posts: ReadonlyArray<typeof Post.Type>
-    postDetails: (typeof Model.Type)['postDetails']
+    posts: ReadonlyArray<Post>
+    postDetails: Model['postDetails']
   }>,
   h: ApplicationViewBuilder,
 ) =>
@@ -161,10 +167,11 @@ export const postListItems = (
   )
 
 export const postDetailView = (
-  { model, postId }: Readonly<{ model: typeof Model.Type; postId: string }>,
+  postDetails: Model['postDetails'],
+  postId: string,
   h: ApplicationViewBuilder,
 ) => {
-  const postAsyncData = postQuery.read(model.postDetails, { postId })
+  const postAsyncData = postQuery.read(postDetails, { postId })
 
   return h.div(
     [h.Class('flex flex-col gap-4')],
@@ -217,10 +224,7 @@ export const postDetailView = (
 }
 
 export const postCard = (
-  {
-    post,
-    fetchedAt,
-  }: Readonly<{ post: typeof PostDetail.Type; fetchedAt: number }>,
+  { post, fetchedAt }: Readonly<{ post: PostDetail; fetchedAt: number }>,
   h: ApplicationViewBuilder,
 ) =>
   h.article(

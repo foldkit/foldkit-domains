@@ -755,13 +755,14 @@ const isFoldkitViewBuilderType = (
 const isFoldkitDefinitionViewCallback = (
   references: WeakMap<ESTree.Node, Reference>,
   functionNode: ESTree.ArrowFunctionExpression | ESTree.Function,
+  importerFilename?: string,
 ): boolean => {
   const parent = functionNode.parent
   if (!isCallExpression(parent) || !parent.arguments.includes(functionNode)) {
     return false
   }
 
-  if (isOwnedDefinitionCall(parent, 'makeView', references)) {
+  if (isOwnedDefinitionCall(parent, 'makeView', references, importerFilename)) {
     return true
   }
 
@@ -773,7 +774,12 @@ const isFoldkitDefinitionViewCallback = (
 
     return (
       isMemberExpression(parent.callee) &&
-      isOwnedDefinitionCallee(parent.callee.object, 'makeView', references)
+      isOwnedDefinitionCallee(
+        parent.callee.object,
+        'makeView',
+        references,
+        importerFilename,
+      )
     )
   })
 }
@@ -825,7 +831,12 @@ const isHtmlBuilderParameter = (
         Option.exists(
           Array.last(definition.node.params),
           parameter => parameter === definition.name,
-        ) && isFoldkitDefinitionViewCallback(references, definition.node)
+        ) &&
+        isFoldkitDefinitionViewCallback(
+          references,
+          definition.node,
+          importerFilename,
+        )
       )
     }),
   )
@@ -931,49 +942,6 @@ export const firstCommandNameArgument = (
   return isStringLiteral(name) ? name : undefined
 }
 
-const bindingConfigHasProperties = (
-  node: ESTree.CallExpression,
-  names: ReadonlyArray<string>,
-  references?: WeakMap<ESTree.Node, Reference>,
-  importerFilename?: string,
-): boolean => {
-  const config = blockBindingConfiguration(node, references, importerFilename)
-  if (!isObjectExpression(config)) {
-    return false
-  }
-
-  const properties = new Set(
-    config.properties.flatMap(property =>
-      isObjectProperty(property)
-        ? Option.match(staticPropertyName(property), {
-            onNone: () => [],
-            onSome: name => [name],
-          })
-        : [],
-    ),
-  )
-  return names.every(name => properties.has(name))
-}
-
-const bindingConfigHasStaticStringProperty = (
-  node: ESTree.CallExpression,
-  name: string,
-  references?: WeakMap<ESTree.Node, Reference>,
-  importerFilename?: string,
-): boolean => {
-  const config = blockBindingConfiguration(node, references, importerFilename)
-  if (!isObjectExpression(config)) {
-    return false
-  }
-
-  return config.properties.some(
-    property =>
-      isObjectProperty(property) &&
-      Option.contains(staticPropertyName(property), name) &&
-      Option.isSome(staticStringValue(property.value)),
-  )
-}
-
 const directBindingCall = (
   node: ESTree.CallExpression,
 ): ESTree.CallExpression => {
@@ -993,6 +961,34 @@ export const blockBindingSourceCall = (
   node: ESTree.CallExpression,
 ): ESTree.CallExpression => directBindingCall(node)
 
+type BindingMethod =
+  | 'makeRequiredFieldBinding'
+  | 'makeOptionalFieldBinding'
+  | 'makeOptionalKeyedFieldBinding'
+  | 'makeKeyedArrayBinding'
+  | 'makeRecordBinding'
+  | 'makeHashMapBinding'
+  | 'makeCustomBinding'
+  | 'makeCustomKeyedBinding'
+  | 'makeVariantBinding'
+
+const staticBindingMethods: ReadonlyArray<BindingMethod> = [
+  'makeRequiredFieldBinding',
+  'makeOptionalFieldBinding',
+  'makeCustomBinding',
+  'makeVariantBinding',
+]
+
+const keyedBindingMethods: ReadonlyArray<BindingMethod> = [
+  'makeOptionalKeyedFieldBinding',
+  'makeKeyedArrayBinding',
+  'makeRecordBinding',
+  'makeHashMapBinding',
+  'makeCustomKeyedBinding',
+]
+
+const bindingMethods = [...staticBindingMethods, ...keyedBindingMethods]
+
 /** Resolves a Binding constructor to its Definition owner. */
 export const blockBindingOwner = (
   node: ESTree.CallExpression,
@@ -1000,17 +996,21 @@ export const blockBindingOwner = (
   importerFilename?: string,
 ): Option.Option<DefinitionMethodOwner> => {
   const bindingCall = directBindingCall(node)
-  return Option.orElse(
-    ownedDefinitionMethodOwner(
-      bindingCall.callee,
-      'makeMapBinding',
-      references,
-      importerFilename,
+  return Option.flatMap(
+    Array.findFirst(bindingMethods, method =>
+      Option.isSome(
+        ownedDefinitionMethodOwner(
+          bindingCall.callee,
+          method,
+          references,
+          importerFilename,
+        ),
+      ),
     ),
-    () =>
+    method =>
       ownedDefinitionMethodOwner(
         bindingCall.callee,
-        'makeBinding',
+        method,
         references,
         importerFilename,
       ),
@@ -1053,7 +1053,7 @@ export const blockBindingChild = (
     : undefined
 }
 
-/** Recognizes static and keyed parent-owned child Bindings from their configuration. */
+/** Recognizes static and keyed parent-owned child Binding constructors. */
 export const blockBindingMethod = (
   node: ESTree.CallExpression,
   references?: WeakMap<ESTree.Node, Reference>,
@@ -1061,62 +1061,16 @@ export const blockBindingMethod = (
 ): Option.Option<'Static' | 'Keyed'> => {
   const bindingCall = directBindingCall(node)
   if (
-    isOwnedDefinitionCall(
-      bindingCall,
-      'makeMapBinding',
-      references,
-      importerFilename,
+    Array.some(keyedBindingMethods, method =>
+      isOwnedDefinitionCall(bindingCall, method, references, importerFilename),
     )
   ) {
     return Option.some('Keyed')
   }
   if (
-    !isOwnedDefinitionCall(
-      bindingCall,
-      'makeBinding',
-      references,
-      importerFilename,
+    Array.some(staticBindingMethods, method =>
+      isOwnedDefinitionCall(bindingCall, method, references, importerFilename),
     )
-  ) {
-    return Option.none()
-  }
-
-  if (
-    bindingConfigHasProperties(
-      node,
-      ['field', 'key'],
-      references,
-      importerFilename,
-    ) &&
-    bindingConfigHasStaticStringProperty(
-      node,
-      'key',
-      references,
-      importerFilename,
-    )
-  ) {
-    return Option.some('Keyed')
-  }
-
-  if (
-    bindingConfigHasProperties(
-      node,
-      ['readAll', 'key', 'read', 'writeAt'],
-      references,
-      importerFilename,
-    )
-  ) {
-    return Option.some('Keyed')
-  }
-
-  if (
-    bindingConfigHasProperties(
-      node,
-      ['read', 'write'],
-      references,
-      importerFilename,
-    ) ||
-    bindingConfigHasProperties(node, ['field'], references, importerFilename)
   ) {
     return Option.some('Static')
   }
@@ -1266,6 +1220,12 @@ const directlyExportedDefinitionMethodOwner = (
     return Option.none()
   }
 
+  const isBlockAuthoringOwner = (name: string): boolean =>
+    new RegExp(
+      `^\\s*(?:export\\s+)?const\\s+${escapedRegExp(name)}\\s*=\\s*Block\\.(?:makeDefinition|make)\\s*\\(`,
+      'mu',
+    ).test(source.text)
+
   const declarations = source.text.matchAll(
     /^\s*export\s+const\s*\{([^}]*)\}\s*=\s*([A-Za-z_$][\w$]*)/gmu,
   )
@@ -1292,11 +1252,18 @@ const directlyExportedDefinitionMethodOwner = (
       continue
     }
 
-    const ownsFoldkitDefinition = new RegExp(
-      `^\\s*(?:export\\s+)?const\\s+${escapedRegExp(ownerName)}\\s*=\\s*Block\\.makeDefinition\\s*\\(`,
+    if (isBlockAuthoringOwner(ownerName)) {
+      return Option.some(ownerName)
+    }
+
+    const compositionOwner = new RegExp(
+      `^\\s*(?:export\\s+)?const\\s+${escapedRegExp(ownerName)}\\s*=\\s*([A-Za-z_$][\\w$]*)\\.makeComposition\\s*\\(`,
       'mu',
-    ).test(source.text)
-    if (ownsFoldkitDefinition) {
+    ).exec(source.text)?.[1]
+    if (
+      compositionOwner !== undefined &&
+      isBlockAuthoringOwner(compositionOwner)
+    ) {
       return Option.some(ownerName)
     }
   }
@@ -1545,6 +1512,7 @@ const isOwnedDefinitionPath = (
           apiPath => {
             const resolvedPath = Array.join(apiPath, '.')
             return (
+              resolvedPath === 'Block.make' ||
               resolvedPath === 'Block.makeDefinition' ||
               resolvedPath === 'Block.makeNamespace'
             )
@@ -1577,6 +1545,17 @@ const isOwnedDefinitionPath = (
     }
 
     return variable.defs.some(definition => {
+      if (
+        definition.type === 'ImportBinding' &&
+        definition.parent?.type === 'ImportDeclaration'
+      ) {
+        const { value: source } = definition.parent.source
+        return (
+          source.startsWith('.') ||
+          source.startsWith('@/') ||
+          source.startsWith('~/')
+        )
+      }
       if (
         definition.type !== 'Variable' ||
         !isVariableDeclarator(definition.node)

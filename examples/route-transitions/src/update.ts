@@ -5,12 +5,12 @@ import { Transition } from 'foldkit/route'
 import { modifyFields } from 'foldkit/struct'
 import { toString as urlToString } from 'foldkit/url'
 
+import { makeFieldsStep, makeNoopStep } from './block'
 import { LoadExternal, NavigateInternal } from './command'
 import { ApplicationComposition } from './composition'
-import { makeFieldsStep, makeNoopStep } from './definition'
 import { PaintingStatus } from './model'
 import { urlToApplicationRoute } from './route'
-import { handleTransitionStep } from './steps'
+import { handleTransition } from './steps'
 
 export const update = ApplicationComposition.makeUpdate({
   CompletedNavigateInternal: makeNoopStep(),
@@ -33,7 +33,7 @@ export const update = ApplicationComposition.makeUpdate({
     const transition = Transition.make(model.route, nextRoute)
     return Update.combineSteps(model, [
       makeFieldsStep(() => ({ route: () => nextRoute })),
-      handleTransitionStep(transition),
+      handleTransition(transition),
     ])
   },
 

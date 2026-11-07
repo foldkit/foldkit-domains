@@ -20,12 +20,15 @@ import { withOperationGraph } from './operationGraph.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   CompletedRead: { count: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 const ChildOutMessage = defineMessageUnion({
   ChangedCount: { count: Schema.Number },
 })
+type ChildOutMessage = typeof ChildOutMessage.Type
 const ChildDefinition = Block.makeDefinition('InsertChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -59,31 +62,39 @@ const ChildBlock: Block.FromAssemblyWithOutMessage<
 const EntryId = Schema.String.check(Schema.isMinLength(2)).pipe(
   Schema.brand('InsertEntryId'),
 )
+type EntryId = typeof EntryId.Type
 const Wrapper = Schema.Struct({ child: ChildModel, label: Schema.String })
+type Wrapper = typeof Wrapper.Type
 const Model = Schema.Struct({
   childrenById: Schema.Record(EntryId, ChildModel),
   childrenByNumber: Schema.HashMap(Schema.Int, ChildModel),
   rowsById: Schema.Record(EntryId, Wrapper),
   label: Schema.String,
 })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedRecordInsert: { key: EntryId, count: Schema.Number },
   RequestedHashMapInsert: { key: Schema.Int, count: Schema.Number },
   RequestedRecordInit: { key: EntryId, count: Schema.Number },
   RequestedHashMapInit: { key: Schema.Int, count: Schema.Number },
   RequestedInitTwice: { key: EntryId, count: Schema.Number },
+  RequestedInitFromModel: { key: EntryId, label: Schema.String },
 })
+type Message = typeof Message.Type
 const ParentDefinition = Block.makeDefinition('InsertParent', {
   Model,
   Message,
 })
-const ChildrenByIdBinding = ParentDefinition.makeMapBinding(ChildBlock, {
+const ChildrenByIdBinding = ParentDefinition.makeRecordBinding(ChildBlock, {
   field: 'childrenById',
 })
-const ChildrenByNumberBinding = ParentDefinition.makeMapBinding(ChildBlock, {
-  field: 'childrenByNumber',
-})
-const RowsByIdBinding = ParentDefinition.makeMapBinding(ChildBlock, {
+const ChildrenByNumberBinding = ParentDefinition.makeHashMapBinding(
+  ChildBlock,
+  {
+    field: 'childrenByNumber',
+  },
+)
+const RowsByIdBinding = ParentDefinition.makeRecordBinding(ChildBlock, {
   field: 'rowsById',
   childField: 'child',
 })
@@ -133,15 +144,25 @@ const prepareParent = () =>
             args: [count + 1],
           }),
         ]),
+      RequestedInitFromModel: ParentDefinition.makeStep.fromMessage(
+        ({ key, label }) =>
+          Update.combineSteps([
+            ParentDefinition.makeFieldsStep(() => ({ label: () => label })),
+            makeInitIfMissingStep(ChildrenByIdBinding, model =>
+              Option.some({ key, args: [model.label.length] }),
+            ),
+          ]),
+      ),
     }),
     operations: {
-      insertRecord: (key: typeof EntryId.Type, count: number) =>
+      insertRecord: (key: EntryId, count: number) =>
         Tuple.make(Message.RequestedRecordInsert({ key, count })),
       insertHashMap: (key: number, count: number) =>
         Tuple.make(Message.RequestedHashMapInsert({ key, count })),
       initRecord: Message.RequestedRecordInit,
       initHashMap: Message.RequestedHashMapInit,
       initTwice: Message.RequestedInitTwice,
+      initFromModel: Message.RequestedInitFromModel,
     },
   })
 const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<
@@ -167,16 +188,263 @@ beforeEach(() => {
 })
 
 describe('makeInitIfMissingStep', () => {
+  it('runs a producer once per application with the current Model and treats None as identity', () => {
+    const { model } = makeModel()
+    const produced = vi.fn<(current: Model) => void>()
+    const initChild = makeInitIfMissingStep(ChildrenByIdBinding, current => {
+      produced(current)
+
+      return current.label === 'insert'
+        ? Option.some({ key: secondId, args: [current.label.length] })
+        : Option.none()
+    })
+
+    expect(produced).not.toHaveBeenCalled()
+    expect(initialized).not.toHaveBeenCalled()
+
+    const retained = withOperationGraph([ChildrenByIdBinding], () =>
+      resolveOperationOutput(
+        Reflect.apply(initChild, undefined, [model]),
+        model,
+      ),
+    )
+
+    expect(produced).toHaveBeenCalledExactlyOnceWith(model)
+    expect(retained.model).toBe(model)
+    expect(retained.commands ?? []).toEqual([])
+    expect(initialized).not.toHaveBeenCalled()
+
+    const currentModel = modifyFields(model, { label: () => 'insert' })
+    const inserted = withOperationGraph([ChildrenByIdBinding], () =>
+      resolveOperationOutput(
+        Reflect.apply(initChild, undefined, [currentModel]),
+        currentModel,
+      ),
+    )
+
+    expect(produced).toHaveBeenCalledTimes(2)
+    expect(produced).toHaveBeenLastCalledWith(currentModel)
+    expect(Reflect.get(inserted.model.childrenById, secondId)).toEqual({
+      count: 6,
+    })
+    expect(inserted.model.label).toBe('insert')
+    const command = Option.getOrThrow(Array.head(inserted.commands ?? []))
+    if (!Predicate.isObject(command)) {
+      throw new Error('Expected an initialized child Command')
+    }
+    expect(commandInstances(command)).toEqual([
+      {
+        binding: ChildrenByIdBinding,
+        key: secondId,
+        isInitialization: true,
+      },
+    ])
+    expect(initialized).toHaveBeenCalledExactlyOnceWith(6)
+  })
+
+  it('delegates produced Record and HashMap configurations without replacing existing entries', () => {
+    const { model } = makeModel()
+    const recordProduced = vi.fn<(current: Model) => void>()
+    const retainRecord = makeInitIfMissingStep(ChildrenByIdBinding, current => {
+      recordProduced(current)
+
+      return Option.some({ key: firstId, args: [99] })
+    })
+    const retained = withOperationGraph([ChildrenByIdBinding], () =>
+      resolveOperationOutput(
+        Reflect.apply(retainRecord, undefined, [model]),
+        model,
+      ),
+    )
+
+    expect(recordProduced).toHaveBeenCalledExactlyOnceWith(model)
+    expect(retained.model).toBe(model)
+    expect(retained.commands ?? []).toEqual([])
+    expect(initialized).not.toHaveBeenCalled()
+
+    const hashMapProduced = vi.fn<(current: Model) => void>()
+    const initHashMap = makeInitIfMissingStep(
+      ChildrenByNumberBinding,
+      current => {
+        hashMapProduced(current)
+
+        return Option.some({ key: 2, args: [5] })
+      },
+    )
+    const inserted = withOperationGraph([ChildrenByNumberBinding], () =>
+      resolveOperationOutput(
+        Reflect.apply(initHashMap, undefined, [model]),
+        model,
+      ),
+    )
+
+    expect(hashMapProduced).toHaveBeenCalledExactlyOnceWith(model)
+    expect(
+      Option.getOrThrow(HashMap.get(inserted.model.childrenByNumber, 1)),
+    ).toBe(Option.getOrThrow(HashMap.get(model.childrenByNumber, 1)))
+    expect(
+      Option.getOrThrow(HashMap.get(inserted.model.childrenByNumber, 2)),
+    ).toEqual({ count: 5 })
+    const command = Option.getOrThrow(Array.head(inserted.commands ?? []))
+    if (!Predicate.isObject(command)) {
+      throw new Error('Expected an initialized child Command')
+    }
+    expect(commandInstances(command)).toEqual([
+      {
+        binding: ChildrenByNumberBinding,
+        key: 2,
+        isInitialization: true,
+      },
+    ])
+    expect(initialized).toHaveBeenCalledExactlyOnceWith(5)
+  })
+
+  it('rejects absent and foreign graphs before calling a producer that returns None', () => {
+    const { model } = makeModel()
+    const producer = vi.fn(() => Option.none())
+    const initChild = makeInitIfMissingStep(ChildrenByIdBinding, producer)
+    const recipe = Reflect.apply(initChild, undefined, [model])
+
+    expect(producer).not.toHaveBeenCalled()
+    expect(() =>
+      withOperationGraph([], () => resolveOperationOutput(recipe, model)),
+    ).toThrow('not registered in the current Block graph')
+    expect(producer).not.toHaveBeenCalled()
+
+    expect(() =>
+      withOperationGraph([ChildrenByNumberBinding], () =>
+        resolveOperationOutput(recipe, model),
+      ),
+    ).toThrow('not registered in the current Block graph')
+    expect(producer).not.toHaveBeenCalled()
+    expect(initialized).not.toHaveBeenCalled()
+  })
+
+  it('rejects direct, wrapped, and custom storage before calling a producer', () => {
+    const DirectChildDefinition = Block.makeDefinition('DirectInsertChild', {
+      Model: ChildModel,
+      Message: Schema.Never,
+    })
+    const DirectChildComposition = DirectChildDefinition.makeComposition()
+    const prepareDirectChild = () =>
+      DirectChildComposition.prepareBlock({
+        init: DirectChildComposition.makeInit(() => ({ model: { count: 0 } })),
+        update: DirectChildComposition.makeUpdate({}),
+      })
+    const DirectChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
+      typeof ChildModel,
+      typeof prepareDirectChild
+    > = Block.assemble(prepareDirectChild)
+    const DirectParentModel = Schema.Struct({ child: ChildModel })
+    const DirectParent = Block.makeDefinition('DirectInsertParent', {
+      Model: DirectParentModel,
+      Message: Schema.Never,
+    })
+    const DirectBinding = DirectParent.makeRequiredFieldBinding(
+      DirectChildBlock,
+      {
+        field: 'child',
+      },
+    )
+    const CustomEntry = Schema.Struct({ id: Schema.String, child: ChildModel })
+    const CustomParentModel = Schema.Struct({
+      entries: Schema.Array(CustomEntry),
+    })
+    const CustomParent = Block.makeDefinition('CustomInsertParent', {
+      Model: CustomParentModel,
+      Message: Schema.Never,
+    })
+    const CustomBinding = CustomParent.makeCustomKeyedBinding(ChildBlock, {
+      readAll: model => model.entries,
+      key: entry => entry.id,
+      keySchema: Schema.String,
+      read: entry => entry.child,
+      writeAt: (model, key, child) =>
+        modifyFields(model, {
+          entries: Array.map(entry =>
+            entry.id === key ? CustomEntry.make({ id: key, child }) : entry,
+          ),
+        }),
+    })
+    const producer = vi.fn(() => Option.none())
+
+    for (const binding of [DirectBinding, RowsByIdBinding, CustomBinding]) {
+      expect(() =>
+        Reflect.apply(makeInitIfMissingStep, undefined, [binding, producer]),
+      ).toThrow('exact Record or HashMap child Binding')
+    }
+
+    expect(producer).not.toHaveBeenCalled()
+    expect(initialized).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    {
+      label: 'a non-Option result',
+      produced: { key: secondId, args: [4] },
+      error: 'must return an Option',
+    },
+    {
+      label: 'non-tuple args',
+      produced: Option.some({ key: secondId, args: 4 }),
+      error: 'args must be a child init argument tuple',
+    },
+    {
+      label: 'an unsupported configuration field',
+      produced: Option.some({
+        key: secondId,
+        args: [4],
+        commands: Array.empty(),
+      }),
+      error: 'does not support the configuration field "commands"',
+    },
+  ])('rejects erased producer output with $label', ({ produced, error }) => {
+    const { model } = makeModel()
+    const producer = vi.fn(() => produced)
+    const initChild = Reflect.apply(makeInitIfMissingStep, undefined, [
+      ChildrenByIdBinding,
+      producer,
+    ])
+    const recipe = Reflect.apply(initChild, undefined, [model])
+
+    expect(producer).not.toHaveBeenCalled()
+    expect(() =>
+      withOperationGraph([ChildrenByIdBinding], () =>
+        resolveOperationOutput(recipe, model),
+      ),
+    ).toThrow(error)
+    expect(producer).toHaveBeenCalledExactlyOnceWith(model)
+    expect(initialized).not.toHaveBeenCalled()
+  })
+
+  it('retains the supplied parent Model when initialization is resolved later', () => {
+    const { model } = makeModel()
+    const nextModel = modifyFields(model, { label: () => 'changed' })
+    const initChild = makeInitIfMissingStep(ChildrenByIdBinding, {
+      key: secondId,
+      args: [4],
+    })
+    const recipe = Reflect.apply(initChild, undefined, [nextModel])
+    const inserted = withOperationGraph([ChildrenByIdBinding], () =>
+      resolveOperationOutput(recipe, model),
+    )
+
+    expect(inserted.model.label).toBe('changed')
+    expect(Reflect.get(inserted.model.childrenById, secondId)).toEqual({
+      count: 4,
+    })
+  })
+
   it('defers initialization and captures the key and argument tuple at construction', () => {
     const { model } = makeModel()
     const args: [number] = [4]
     const config = { key: secondId, args }
-    const initChildStep = makeInitIfMissingStep(ChildrenByIdBinding, config)
+    const initChild = makeInitIfMissingStep(ChildrenByIdBinding, config)
 
     args.splice(0, 1, 99)
     config.key = EntryId.make('changed')
 
-    const recipe = Reflect.apply(initChildStep, undefined, [model])
+    const recipe = Reflect.apply(initChild, undefined, [model])
 
     expect(initialized).not.toHaveBeenCalled()
     expect(recipe).not.toHaveProperty('model')
@@ -272,15 +540,31 @@ describe('makeInitIfMissingStep', () => {
     expect(initialized).toHaveBeenCalledExactlyOnceWith(4)
   })
 
+  it('evaluates a producer against the Model returned by preceding Steps', () => {
+    const { model } = makeModel()
+    const label = 'Selected from the latest Model'
+    const inserted = ParentBlock.operations.initFromModel(model, {
+      key: secondId,
+      label,
+    })
+
+    expect(inserted.model.label).toBe(label)
+    expect(Reflect.get(inserted.model.childrenById, secondId)).toEqual({
+      count: label.length,
+    })
+    expect(inserted.commands).toHaveLength(1)
+    expect(initialized).toHaveBeenCalledExactlyOnceWith(label.length)
+  })
+
   it.each([firstId, secondId])(
     'requires the registered Binding even when key %s already exists',
     key => {
       const { model } = makeModel()
-      const initChildStep = makeInitIfMissingStep(ChildrenByIdBinding, {
+      const initChild = makeInitIfMissingStep(ChildrenByIdBinding, {
         key,
         args: [4],
       })
-      const recipe = Reflect.apply(initChildStep, undefined, [model])
+      const recipe = Reflect.apply(initChild, undefined, [model])
 
       expect(() =>
         withOperationGraph([], () => resolveOperationOutput(recipe, model)),
@@ -291,19 +575,19 @@ describe('makeInitIfMissingStep', () => {
 
   it('rechecks storage when the same Step is applied after the parent removes a key', () => {
     const { model } = makeModel()
-    const initChildStep = makeInitIfMissingStep(ChildrenByIdBinding, {
+    const initChild = makeInitIfMissingStep(ChildrenByIdBinding, {
       key: firstId,
       args: [4],
     })
-    const applyStep = (model: typeof Model.Type) =>
+    const apply = (model: Model) =>
       withOperationGraph([ChildrenByIdBinding], () =>
         resolveOperationOutput(
-          Reflect.apply(initChildStep, undefined, [model]),
+          Reflect.apply(initChild, undefined, [model]),
           model,
         ),
       )
 
-    const retained = applyStep(model)
+    const retained = apply(model)
 
     expect(retained.model).toBe(model)
     expect(initialized).not.toHaveBeenCalled()
@@ -311,7 +595,7 @@ describe('makeInitIfMissingStep', () => {
     const removedModel = modifyFields(model, {
       childrenById: () => ({}),
     })
-    const inserted = applyStep(removedModel)
+    const inserted = apply(removedModel)
 
     expect(Reflect.get(inserted.model.childrenById, firstId)).toEqual({
       count: 4,

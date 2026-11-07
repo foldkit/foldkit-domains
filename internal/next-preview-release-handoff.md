@@ -1,10 +1,226 @@
 # Next preview release handoff
 
+## November 6 follow-up feedback
+
+The [follow-up report](preview-followup-feedback-20261106.md) and
+[task board](next-preview-tasks.md#november-6-follow-up-feedback) supersede the
+earlier readiness checkpoints below. The explicit Binding adoption is frozen in
+#1903; the new initializer, acquisition and testing follow-ups are separate work.
+The source/emitted/relocated consumer gate and all eight existing compiler
+workloads pass without budget changes. Focused application and UI verification
+is complete. The final full pre-push gate, rendering comparison, exact-commit
+review and protected integration remain in progress. No final candidate is
+frozen yet.
+
+Daybreak is held for this additional feedback. Do not act on the older pending
+authorization card for `3d3eb8998eeced834d4a7fa1810f72179796a3c3`. A later approval
+must cover the final integrated source. Publication is separately held, and
+`90746b32d2ca` remains the verified published snapshot. Rendering and bundle
+review still require the final candidate's evidence; earlier measurements below
+are historical comparisons rather than acceptance of the new candidate.
+
+## November 6 preparation
+
+The [current release review](preview-release-review-20261106.md) supersedes the
+November 5 summary. The implementation is integrated into
+`codex/layers-and-submodels` as `253cf72ed47ead5ee5a46e2530e10dcbaa1283e7`,
+with its pull request and protected merge-group checks passing. Its tree is
+identical to the reviewed Daybreak candidate `50d8e5f375`. The
+[original security report and receipt](daybreak-20261106/README.md) preserve the
+static review's scope and limits. No substantiated new security finding or
+release-blocking correctness defect required a source fix.
+
+The published Ready snapshot remains `90746b32d2ca`; no replacement has been
+published or deployed. The documentation follow-up refreshes both migration
+paths, the release description and the handoff. It changes no framework or
+application behavior. Freeze the preview branch's full final SHA after those
+changes pass review and protected integration; a development-branch commit is
+not the publication target.
+
+### Before publication approval
+
+- Review the [changes since the published preview](preview-release-review-20261106.md#changes-since-the-published-preview),
+  migration guides and [prepared PR text](preview-pr-next-release.md).
+- Review the remaining rendering and bundle costs: main/candidate medians are
+  637.1/672.8 ms naive and 207.2/269.4 ms optimized, with 45,201/45,848 added
+  gzip bytes. The single-checker compiler measurement approval does not accept
+  these runtime costs.
+- Review the [two moderate build-tool advisories](layered-constructor/dependency-advisories/README.md).
+  The fresh audit has no high or critical findings; it is not a clean audit.
+- Refresh relevant issues, PRs, review replies and main synchronization once
+  more at the final freeze. Only #1662 and #1663 have an explicit post-main
+  deferral.
+- Retain separate user approval for publication. All preparation and integration
+  above leave that hold in place.
+
+### After publication approval
+
+1. Select the frozen full preview-branch SHA. Dispatch the existing Release
+   workflow on `codex/layers-and-submodels` with `published_commit` equal to
+   that exact ref and checkout. [Dispatch boundary](preview-release-dispatch.md).
+   Ordinary pushes do not publish or deploy.
+2. Verify the workflow-produced package manifest and all nine registry package
+   versions, coherent dependencies and peers, and installed consumer acceptance.
+   Keep local packed-fixture results separate from registry verification.
+3. Verify the matching immutable Website deployment, its same-origin
+   `preview-release.json`, source identity, embedded examples, migration pages
+   and browser behavior.
+4. Generate the Ready section through `scripts/preview-release-manifest.mjs
+summary` using the actual manifest, full source SHA and observed immutable
+   HTTPS deployment. The generator supplies exact versions, all three starting
+   paths and both agent prompts. No version or deployment URL is assigned
+   during preparation.
+5. Replace #1655's preparation section with the generated Ready section and
+   prepared change summary. Preserve the prior verified snapshot and user prose;
+   read the result back to check source, versions, links and prompts. Complete
+   any separately authorized application migration and announcement handoff,
+   then record the publication receipt.
+
+Earlier sections below retain their dated checkpoint scope. Their older
+publication mechanics and performance dispositions do not supersede this
+section or the current dispatch instructions.
+
+### Fresh feedback after the reviewed snapshot
+
+[#1897](https://github.com/foldkit/foldkit/issues/1897) reproduces on the preview:
+DevTools follows an Effect Chunk's circular internal fields and overflows the
+stack. The preparation branch includes Wayne Maurer's
+[#1899](https://github.com/foldkit/foldkit/pull/1899) fix, preserving the original
+commit and author, plus a separate nested-secret and reference-sharing
+regression. The documentation-only follow-up above does not itself change
+behavior; this later DevTools fix does. Its separately authorized
+[Daybreak addendum and artifact verification](daybreak-20261106-addendum/README.md)
+are complete, with no substantiated new security or release-correctness defect.
+The rebuilt production benchmark artifacts are byte-identical to the previously
+measured workloads; their existing timing and gzip results remain applicable.
+
+The new [profiling proposal (#1898)](https://github.com/foldkit/foldkit/pull/1898)
+is assessed separately and is not included. Canonical Block-aware Scene already
+preserves its boundary registry and supports `unhover`. Native Scene registry
+parity remains outside this change; the proposed profiling APIs need their own
+acceptance, Program/Block integration and lifecycle/timing design. This is an
+unaccepted proposal, not an agreed deferral or implemented release feature.
+
+## November 5 checkpoint
+
+The [November 5 review](preview-review-20261105.md) records changes since published
+preview `90746b32d2ca`, verification, remaining review items and publication holds.
+It includes the repository-wide convention and Story/Scene migration, preserved
+user edits, incoming Node/Scene/Menu/DragAndDrop/Query contributions, and Dialog
+terminal-cleanup and public provider-declaration repairs. Earlier sections below
+retain their dated checkpoint scope.
+
+## November 4 checkpoint
+
+The last verified publication remains `90746b32d2ca`; this candidate is not
+published. The [unified adoption report](block-api-simplification/adoption-20261104.md)
+owns the current verification and integration status.
+
+Changes since that publication include:
+
+- One passive `FooBlock = Block.make(...)` carries the public contracts and
+  typed authoring helpers. `FooBlock.makeLayer(...)` returns an ordinary Effect
+  Layer; Program, Server, Story and Scene select `{ block, layer }`.
+- Effectful graph construction retains portable init, update, view and Binding
+  expressions, deferred child initialization and Model-owned lifecycles.
+- Separate InMessages and `makeInMessageUpdate` share checked ordered
+  composition with local updates. Exhaustive handler records remain the default.
+- Standard child arrays can use ready Instance Schemas and passive Binding
+  creation requests, demonstrated by Counters.
+- Main's Effect 4.1 integration and preview feedback repairs cover Mount cleanup,
+  SSR development identity/reloads, embedding disposal, DevTools and VirtualList.
+- Examples, Website, Typing Game, UI/Query families, scoped tests, scaffolds,
+  active guidance and lint recognition adopt the same construction model.
+- The [attribute typing adaptation](pr1882-preview-adaptation.md) preserves
+  child Mount capabilities and reduces compiler work for shared attribute bundles.
+
+Machine authoring, Query cache/cancellation capabilities and the earlier
+VirtualList additions already shipped in the October 29 snapshot. Their factory
+and construction migrations here are not new versions of those features.
+
+The complete repository pre-push gate, all 22 Website browser tests, installed
+packed consumers in Chromium/Firefox/WebKit, original compiler fixtures and
+retained adapted workloads pass. The corrected foundation and migration commits
+pass exact independent review. The final
+[rendering comparison](block-api-simplification/rendering-20261104/README.md)
+records a 10.42% naive and 29.69% optimized execution-time increase against actual
+main, plus 43,981/44,615 gzip bytes. All 64 samples from both batches remain.
+The bounded Mount-validation bookkeeping trial preserves all checks but does not
+establish an optimized speedup. These runtime and bundle costs need review;
+the user's compiler-cost acceptance does not accept them. The migration is
+pushed through `9c276260f9` in [PR #1883](https://github.com/foldkit/foldkit/pull/1883).
+Its [standalone fixture follow-up](block-api-simplification/execution-fixtures-20261104.md)
+passes all 87 browser cases with the original 21 skips, the resize-readiness
+negative control, source checks for 16 fixture modules and 188 plugin tests.
+Exact review and required checks precede integration; the adoption report records
+current status.
+PR #1883 subsequently merged as `44e94feeba0e` with an identical reviewed tree
+and all required checks passing. The authorized Daybreak review of that commit
+completed with no substantiated new security or release-blocking correctness
+finding. The user requested both non-blocking
+[hardening improvements](daybreak-hardening-20261104.md); their implementation
+retains a separate verification and review scope. Publication remains held.
+Only #1662 and #1663 have an explicit post-main deferral.
+
+## October 30 stabilization follow-up
+
+The [current feedback pass](preview-feedback-stabilization-20261030.md) repairs
+Binding startup allocation and VirtualList external offset anchoring, and
+reconciles the Work Orders diagnostics and guidance. It starts from reviewed
+`9964c056` on the isolated main-sync branch. Integration gates pass;
+the exact committed diff requires independent review before pushing. The
+published Ready snapshot below remains unchanged.
+
+## Published October 29
+
+The approved preview is published from
+`90746b32d2ca8bc0476de7a051ace396ca590ae0`. Its complete public package cohort,
+immutable Website, installed consumers, PR Ready entry points and actual
+Coverchart upgrade are verified. See the
+[publication report and receipt](preview-publication-20261029.md) for the
+matching links, recovery, checks and retained limits.
+
+PR #1655 remains open against main. The user explicitly deferred #1662 and
+#1663 until after that merge. The following preparation sections preserve
+their original status, source pins and approval holds as historical evidence;
+they do not override this completed publication.
+
+## Approved follow-up after the frozen review
+
+The user requested adoption work for Model-aware general `makeStep` Message
+inference and `Scene.unhover` after the `564adb49e9` review. These are currently
+implemented and verified in source, relocated declarations and paired editor
+workflows. [Follow-up evidence](step-inference-unhover-20261029.md). The exact
+`d35d3ceb7a` follow-up now passes independent review, an approved Daybreak
+addendum and a fresh nine-package build/pack rehearsal. [Final scope and receipts](preview-followup-final-20261029.md).
+Earlier full installed-app and browser results retain their source pins.
+
+The user explicitly deferred #1662's OutMessage propagation and #1663's derived
+view slots until after Blocks + Effect Layers merges to main. Neither is a
+requirement for this preview. Publication remains held for separate approval.
+
 ## Current release documentation scope, October 28
 
 Include Machine, Query/KeyedQuery and VirtualList in the next preview update,
 PR release notes and announcement handoff. The user has superseded the earlier
 instruction to omit VirtualList from the PR description and next X post.
+
+The next preview also standardizes generic UI Block factories as `makeBlock`.
+Selection components and VirtualList replace `create`; Toast replaces `make`.
+Type parameters and Schema arguments remain unchanged. Include this required
+rename in the upgrade instructions for affected consumers.
+
+Effect peers accept the tested `4.0.0 || 4.0.6` versions, covered by packed
+consumer compatibility checks. Unverified releases are excluded; development
+and application pins are unchanged.
+The Node adapter also pins platform-node-shared 4.0.0 to preserve the Effect
+floor. [Platform constraints and evidence](effect-peer-compatibility-20261028.md).
+
+Active source, examples, scaffold templates and guidance now use same-named
+decoded type aliases immediately after their Schemas. This is an authoring
+convention, not a required consumer API migration. Schema arguments retain
+`typeof Foo`, and generic or recursive contracts retain their precise types.
+[Repo-wide adoption and verification](schema-type-alias-adoption-20261028.md).
 
 Machine's Schema-bound Definition and checked completion test authoring
 consistency with Blocks. Query/KeyedQuery lifecycle capabilities and VirtualList
@@ -17,6 +233,21 @@ covers the new APIs and affected migrations. Detailed implementation and
 verification are recorded in the [Machine report](machine-authoring-20261027.md),
 [VirtualList report](virtual-list-preview-integration-20261027.md) and
 [Query report](keyed-query-capabilities-20261028.md).
+
+The [October 28 feedback integration](preview-feedback-integration-20261028.md)
+adds contextual update inference repairs, large-Root registration-evidence
+extraction, SSR development reload/disposal, renderer-aligned Scene Mounts,
+Runtime cleanup and entry-owned Subscription gates/activity assertions. The
+mixed-result inferred-`any` report remains unconfirmed after bounded regression
+probes; do not announce it as fixed or close it from this evidence alone.
+
+The [final preparation](preview-final-prep-20261028.md) repairs the Website's
+Playground declaration collection and lazy loading, verifies ordinary development
+SSR, and records the bounded inferred-`any` disposition. The final nine-package
+consumer rehearsal and Website checks pass at reviewed source `564adb49e9`.
+The [completed Daybreak review](preview-daybreak-20261028.md) returns PASS for
+that same source after the user approved the transfer. Dependency findings and
+review limits remain explicit. Publication awaits separate release approval.
 
 Publication stays held for approval. Preserve the PR's three starting paths,
 user-authored content and verified Ready snapshot. Link the updated guide to
@@ -148,7 +379,10 @@ The local nine-package artifact snapshot is `f5277e87…`; the rehearsal records
 
 The final source sweep includes the internal benchmark and Vite fixtures that its first run found using removed callback/no-argument forms. TodoMVC uses its existing exhaustive record directly. Three dedicated Typing Game handlers now follow `handle<MessageTag>` naming without changing their argument contracts. The Vite suite uses loopback-enabled execution; the sandbox-blocked run is excluded. Website uses the pinned cached pnpm; its stalled default-Corepack attempt is excluded. No timeout or compiler ceiling was increased.
 
-## Release status and boundary
+## Historical release status and boundary
+
+This checkpoint predates the current manual-dispatch publication gate. Use the
+November 6 procedure above for the next release.
 
 Published Ready remains `1f6776fa7ececa766188df5201eefec6ba781b5d`. Final preparation does not promote that snapshot. Publication is held for the user’s approval, and preview integration targets `codex/layers-and-submodels`, never `main`.
 
@@ -256,7 +490,11 @@ The real Workspace root emits 80 declaration files after the internal repair and
 
 The subsequent October 24 followup independently passes all 53 source configurations, 132 focused core runtime tests, full core/UI external declaration harnesses, focused lint, and all five unchanged compiler ceilings with identical counts. Three alternating paired native runs show no material incremental regression. Its bounded independent review found no blocking issue. [Current verification, exact scope, mutations, and limitations](preview-type-feedback-20261024.md). Production JavaScript and dependencies are unchanged; the existing security disposition remains in effect, without claiming a new Daybreak run or clean audit.
 
-## Release sequence
+## Historical release sequence
+
+These steps retain the older automation assumptions. Follow the current
+[manual dispatch procedure](preview-release-dispatch.md) and November 6 section
+above instead.
 
 Local verification and review precede final approval. The candidate remains unpublished until the user approves release.
 

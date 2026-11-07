@@ -6,11 +6,11 @@ import type { Html } from 'foldkit/html'
 import { Button, Nav } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
-import { issueHref } from '../issueLinks'
 import { Message } from '../message'
 import type { Model } from '../model'
 import {
   ApplicationRoute,
+  issueHref,
   issuesRouter,
   maybeIssueId,
   maybeProjectId,
@@ -20,10 +20,14 @@ import {
   savedViewRouter,
   settingsRouter,
 } from '../route'
-import { unsavedIssueDrafts } from '../selection'
+import {
+  effectiveIssueFilters,
+  maybeConfirmedIssue,
+  unsavedIssueSummaries,
+} from '../selectors'
 import { navigationLink } from './navigationLink'
 
-const maybeConfirmedWorkspace = (model: typeof Model.Type) =>
+const maybeConfirmedWorkspace = (model: Model) =>
   AsyncData.getData(model.workspaceAsyncData)
 
 const SIDEBAR_COLLECTION_CLASS =
@@ -34,11 +38,8 @@ const SAVED_VIEW_LINK_CLASS =
 
 const DRAFT_LINK_CLASS = 'block rounded-lg px-3 py-2'
 
-export const sidebarView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
-  const issueDrafts = unsavedIssueDrafts(model)
+export const sidebarView = (model: Model, h: ApplicationViewBuilder): Html => {
+  const unsavedIssues = unsavedIssueSummaries(model)
   const { route } = model
   const maybeCurrentProjectId = maybeProjectId(route)
 
@@ -241,9 +242,9 @@ export const sidebarView = (
         [
           h.Class(
             clsx({
-              hidden: Array.isReadonlyArrayEmpty(issueDrafts),
+              hidden: Array.isReadonlyArrayEmpty(unsavedIssues),
               [SIDEBAR_COLLECTION_CLASS]:
-                Array.isReadonlyArrayNonEmpty(issueDrafts),
+                Array.isReadonlyArrayNonEmpty(unsavedIssues),
             }),
           ),
           h.AriaLabel('Drafts'),
@@ -257,27 +258,26 @@ export const sidebarView = (
             ],
             ['Drafts'],
           ),
-          ...Array.map(issueDrafts, retainedDraft => {
-            const maybeIssue = Option.flatMap(
-              maybeConfirmedWorkspace(model),
-              workspace =>
-                Array.findFirst(
-                  workspace.issues,
-                  issue => issue.id === retainedDraft.issueId,
-                ),
-            )
+          ...Array.map(unsavedIssues, issueSummary => {
+            const maybeIssue = maybeConfirmedIssue(model, issueSummary.issueId)
             const isActive = Option.contains(
               maybeIssueId(model.route),
-              retainedDraft.issueId,
+              issueSummary.issueId,
             )
 
             return h.keyed('div')(
-              retainedDraft.issueId,
+              issueSummary.issueId,
               [],
               [
                 h.a(
                   [
-                    h.Href(issueHref(model, retainedDraft.issueId)),
+                    h.Href(
+                      issueHref(
+                        route,
+                        effectiveIssueFilters(model),
+                        issueSummary.issueId,
+                      ),
+                    ),
                     h.Class(
                       clsx(DRAFT_LINK_CLASS, {
                         'bg-white text-indigo-700 shadow-xs': isActive,
@@ -292,14 +292,14 @@ export const sidebarView = (
                       [h.Class('block text-xs font-semibold')],
                       [
                         Option.match(maybeIssue, {
-                          onNone: () => retainedDraft.issueId,
+                          onNone: () => issueSummary.issueId,
                           onSome: issue => issue.identifier,
                         }),
                       ],
                     ),
                     h.span(
                       [h.Class('block truncate text-sm font-medium')],
-                      [retainedDraft.title],
+                      [issueSummary.title],
                     ),
                   ],
                 ),

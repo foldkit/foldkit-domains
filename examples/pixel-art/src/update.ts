@@ -2,13 +2,13 @@ import { Array, Match, Option } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeCommandsStep, makeFieldsStep, makeNoopStep } from './block'
 import { ExportPng, saveCanvas } from './command'
 import {
   ApplicationComposition,
   ErrorDialogBinding,
   GridSizeConfirmDialogBinding,
 } from './composition'
-import { makeCommandsStep, makeFieldsStep, makeNoopStep } from './definition'
 import {
   createEmptyGrid,
   erasePixels,
@@ -17,25 +17,25 @@ import {
   pushHistory,
   setPixels,
 } from './grid'
-import { Model } from './model'
+import { type MirrorMode, Model } from './model'
 import {
-  applyGridSizeChangeStep,
-  requestGridSizeChangeStep,
-  selectColorStep,
-  selectToolStep,
+  applyGridSizeChange,
+  changeGridSize,
+  selectColor,
+  selectTool,
 } from './steps'
 
-const applyEraser = (model: typeof Model.Type, x: number, y: number) => {
+const applyEraser = (model: Model, x: number, y: number) => {
   const positions = getMirroredPositions(x, y, model.gridSize, model.mirrorMode)
   return erasePixels(model.grid, positions)
 }
 
-const applyBrush = (model: typeof Model.Type, x: number, y: number) => {
+const applyBrush = (model: Model, x: number, y: number) => {
   const positions = getMirroredPositions(x, y, model.gridSize, model.mirrorMode)
   return setPixels(model.grid, positions, model.selectedColorIndex)
 }
 
-const applyFill = (model: typeof Model.Type, x: number, y: number) => {
+const applyFill = (model: Model, x: number, y: number) => {
   const positions = getMirroredPositions(x, y, model.gridSize, 'None')
   return Array.reduce(positions, model.grid, (currentGrid, [fillX, fillY]) =>
     floodFill(currentGrid, fillX, fillY, model.selectedColorIndex),
@@ -104,18 +104,19 @@ export const update = ApplicationComposition.makeUpdate({
     return { model: nextModel, commands: [saveCanvas(nextModel)] }
   },
 
-  SelectedColor: (model, { colorIndex }) => selectColorStep(colorIndex)(model),
+  SelectedColor: (model, { colorIndex }) => selectColor(colorIndex)(model),
 
-  SelectedTool: (model, { tool }) => selectToolStep(tool)(model),
+  SelectedTool: (model, { tool }) => selectTool(tool)(model),
 
-  SelectedGridSize: (model, { size }) => requestGridSizeChangeStep(size)(model),
+  SelectedGridSize: (model, { size }) => changeGridSize(size)(model),
 
   ToggledMirrorHorizontal: makeFieldsStep(model => {
     const nextMirrorMode = Match.value(model.mirrorMode).pipe(
-      Match.when('None', () => 'Horizontal' as const),
-      Match.when('Horizontal', () => 'None' as const),
-      Match.when('Vertical', () => 'Both' as const),
-      Match.when('Both', () => 'Vertical' as const),
+      Match.withReturnType<MirrorMode>(),
+      Match.when('None', () => 'Horizontal'),
+      Match.when('Horizontal', () => 'None'),
+      Match.when('Vertical', () => 'Both'),
+      Match.when('Both', () => 'Vertical'),
       Match.exhaustive,
     )
     return { mirrorMode: () => nextMirrorMode }
@@ -123,10 +124,11 @@ export const update = ApplicationComposition.makeUpdate({
 
   ToggledMirrorVertical: makeFieldsStep(model => {
     const nextMirrorMode = Match.value(model.mirrorMode).pipe(
-      Match.when('None', () => 'Vertical' as const),
-      Match.when('Vertical', () => 'None' as const),
-      Match.when('Horizontal', () => 'Both' as const),
-      Match.when('Both', () => 'Horizontal' as const),
+      Match.withReturnType<MirrorMode>(),
+      Match.when('None', () => 'Vertical'),
+      Match.when('Vertical', () => 'None'),
+      Match.when('Horizontal', () => 'Both'),
+      Match.when('Both', () => 'Horizontal'),
       Match.exhaustive,
     )
     return { mirrorMode: () => nextMirrorMode }
@@ -159,10 +161,12 @@ export const update = ApplicationComposition.makeUpdate({
     }),
 
   ClickedHistoryStep: (model, { stepIndex }) => {
-    const targetGrid = model.undoStack[stepIndex]
-    if (targetGrid === undefined) {
+    const maybeTargetGrid = Array.get(model.undoStack, stepIndex)
+    if (Option.isNone(maybeTargetGrid)) {
       return { model }
     }
+
+    const targetGrid = maybeTargetGrid.value
 
     const statesAfterTarget = Array.drop(model.undoStack, stepIndex + 1)
 
@@ -180,10 +184,12 @@ export const update = ApplicationComposition.makeUpdate({
   },
 
   ClickedRedoStep: (model, { stepIndex }) => {
-    const targetGrid = model.redoStack[stepIndex]
-    if (targetGrid === undefined) {
+    const maybeTargetGrid = Array.get(model.redoStack, stepIndex)
+    if (Option.isNone(maybeTargetGrid)) {
       return { model }
     }
+
+    const targetGrid = maybeTargetGrid.value
 
     const statesBetweenCurrentAndTarget = Array.drop(
       model.redoStack,
@@ -237,7 +243,7 @@ export const update = ApplicationComposition.makeUpdate({
       onNone: () => makeNoopStep()(model),
       onSome: pendingSize =>
         Update.combineSteps(model, [
-          applyGridSizeChangeStep(pendingSize),
+          applyGridSizeChange(pendingSize),
           GridSizeConfirmDialogBinding.requestClose(),
           makeCommandsStep(stepModel => [saveCanvas(stepModel)]),
         ]),

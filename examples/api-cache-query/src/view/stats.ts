@@ -1,7 +1,7 @@
 import { Option } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Stats } from '../data'
@@ -17,10 +17,10 @@ import {
 } from './shared'
 
 export const statsTabView = (
-  model: typeof Model.Type,
+  stats: Model['stats'],
   h: ApplicationViewBuilder,
 ) => {
-  const statsAsyncData = statsQuery.read(model.stats)
+  const statsAsyncData = statsQuery.read(stats)
   const isPending = AsyncData.isPending(statsAsyncData)
 
   return h.div(
@@ -88,7 +88,7 @@ export const statsCards = (
     fetchedAt,
     isRefreshing,
   }: Readonly<{
-    stats: typeof Stats.Type
+    stats: Stats
     fetchedAt: number
     isRefreshing: boolean
   }>,

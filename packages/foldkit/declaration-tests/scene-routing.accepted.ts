@@ -10,6 +10,7 @@ import {
   inside,
   role,
   scene,
+  unhover,
 } from 'foldkit/scene'
 import { Url } from 'foldkit/url'
 
@@ -25,7 +26,7 @@ export const update = (
 export const view = (
   _model: typeof Model.Type,
   h: HtmlBuilder<typeof Message.Type>,
-) => h.div([h.Role('region')])
+) => h.div([h.Role('region'), h.OnMouseLeave(Message.Ticked())])
 
 export const initial = Model.make({ url: '/' })
 export const canonicalScene = () =>
@@ -34,6 +35,7 @@ export const canonicalScene = () =>
     given(initial),
     Navigation.changedUrl('/?q=foldkit#results'),
     inside(role('region'), Navigation.changedUrl('?q=next')),
+    unhover(role('region')),
   )
 export const callbackScene = () =>
   scene(

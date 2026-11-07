@@ -1,7 +1,5 @@
 import { Array, Option, Schema, String, pipe } from 'effect'
 
-// POST FRONTMATTER
-
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 
 const MONTH_LENGTHS: ReadonlyArray<number> = [
@@ -45,6 +43,7 @@ const PostCoverImagePath = Schema.String.check(
     },
   ),
 )
+type PostCoverImagePath = typeof PostCoverImagePath.Type
 
 const POSITIVE_INTEGER_PATTERN = /^[1-9][0-9]*$/
 
@@ -60,6 +59,7 @@ const PostCoverImageDimension = Schema.String.check(
     },
   ),
 )
+type PostCoverImageDimension = typeof PostCoverImageDimension.Type
 
 /**
  * Frontmatter schema for blog posts. One schema drives both halves of the
@@ -119,8 +119,7 @@ export const PostFrontmatter = Schema.Struct({
     },
   ),
 )
-
-// POST COVER
+export type PostFrontmatter = typeof PostFrontmatter.Type
 
 /**
  * A post's cover image: the root-relative path it serves from, its alt text
@@ -140,7 +139,7 @@ export type PostCover = Readonly<{
  * reads as no cover rather than a broken one.
  */
 export const maybePostCover = (
-  frontmatter: typeof PostFrontmatter.Type,
+  frontmatter: PostFrontmatter,
 ): Option.Option<PostCover> =>
   Option.all({
     src: Option.fromNullishOr(frontmatter.coverImage),

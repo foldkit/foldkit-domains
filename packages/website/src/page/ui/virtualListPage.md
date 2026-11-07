@@ -6,10 +6,10 @@ VirtualList renders large lists by mounting only items inside the viewport plus 
 
 VirtualList supports fixed, known-variable, and measured row heights. Logical scroll targets can address an index, stable item key, pixel offset, or the end. End following and stable-key anchoring cover chat, logs, and reverse infinite feeds while keeping DOM and visual row order aligned.
 
-Create a typed completed Block once at module scope with `VirtualList.create<Item>()`, then connect it in the parent.
+Create a typed public Block contract once at module scope with `VirtualList.makeBlock<Item>()`, bind it in the parent, and supply `VirtualList.layer` to the parent's construction Layer.
 
 :::Info{label="See it in an app"}
-Check out how VirtualList is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/ui/view/virtualList.ts).
+Check out how VirtualList is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/blocks/ui/view/virtualList.ts).
 :::
 
 ## Example
@@ -81,7 +81,7 @@ For chat, logs, and reverse infinite feeds, combine an initial `End` target, `fo
 
 Dynamic mode treats `rowHeightPx` as the default estimate. Rendered rows are measured with `ResizeObserver`. Keep the stable-key and height-estimate functions stable across renders so VirtualList can reuse row offsets as the user scrolls.
 
-Call the Binding’s `informItemsChanged` operation in the same parent update for ordinary item changes. Appends follow the end while the user is within the configured threshold. When the user scrolls away, VirtualList preserves the visible keyed row.
+Call the Binding’s `informOfItemsChanged` operation in the same parent update for ordinary item changes. Appends follow the end while the user is within the configured threshold. When the user scrolls away, VirtualList preserves the visible keyed row.
 
 ### Requesting older history
 
@@ -91,7 +91,7 @@ Choose the buffer and prefetch distance for the expected request latency and scr
 
 ### Prepending a page
 
-In the update that prepends fetched items to the parent Model, call the Binding’s `informHistoryPrepended` operation with the complete loaded array, the new page, the same `itemToKey` function used by the view, and `HistoryPage.More()`. VirtualList extends the upward scroll range without a position write, so an ongoing gesture can continue through the new rows. The parent controls how many items remain loaded; VirtualList bounds the mounted DOM rows.
+In the update that prepends fetched items to the parent Model, call the Binding’s `informOfHistoryPrepended` operation with the complete loaded array, the new page, the same `itemToKey` function used by the view, and `HistoryPage.More()`. VirtualList extends the upward scroll range without a position write, so an ongoing gesture can continue through the new rows. The parent controls how many items remain loaded; VirtualList bounds the mounted DOM rows.
 
 ### Completing history
 
@@ -109,7 +109,7 @@ Rows report their position and set size to assistive technology. The default `Ac
 
 ### Choose a target
 
-The Binding’s `requestScrollToIndex`, `requestScrollToKey`, `requestScrollToOffset`, and `requestScrollToEnd` operations return logical scroll requests. The next view selects the target window, then the Command aligns the live rendered row or applies the live maximum offset.
+The Binding’s `requestScrollToIndex`, `requestScrollToKey`, `requestScrollToOffset`, and `requestScrollToEnd` operations return logical scroll requests. `requestScrollToEnd()` is generated from `RequestedScrollToEnd` in the InMessage contract. The InMessage handler applies the logical end request; the other scrolling and item-change methods retain their positional, defaulted, and generic adapters. The next view selects the target window, then the Command aligns the live rendered row or applies the live maximum offset.
 
 An initial index, key, offset, or end target remains pending if the list mounts before its items arrive. Notify VirtualList when the parent loads the items; it applies the target once a row can be rendered. A later scrolling operation supersedes the initial target.
 
@@ -199,7 +199,7 @@ Pass the child Model as `model` and these fields as `viewInputs` to the VirtualL
 
 ### History loading
 
-The `ApproachedLoadedStart` OutMessage includes `distanceToLoadedStartPx` and `containerHeight`. Handle it in the Binding’s OutMessage policy and return a parent-owned fetch Command when a page is needed. Call the Binding’s `informHistoryPrepended` operation in the update that puts fetched rows in the parent Model. Pass `{ items, prependedItems, itemToKey, page }`, using the same stable key function as the view. Pass `HistoryPage.Complete()` on the last page so the real beginning becomes reachable.
+The `ApproachedLoadedStart` OutMessage includes `distanceToLoadedStartPx` and `containerHeight`. Handle it in the Binding’s OutMessage policy and return a parent-owned fetch Command when a page is needed. Call the Binding’s `informOfHistoryPrepended` operation in the update that puts fetched rows in the parent Model. Pass `{ items, prependedItems, itemToKey, page }`, using the same stable key function as the view. Pass `HistoryPage.Complete()` on the last page so the real beginning becomes reachable.
 
 ### ScrollTarget {#scroll-target}
 

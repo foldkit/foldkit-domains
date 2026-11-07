@@ -20,20 +20,21 @@ import {
   isObjectExpression,
   isObjectProperty,
   isOwnedDefinitionCallee,
-  ownedDefinitionMethodOwner,
   isVariableDeclaration,
   isVariableDeclarator,
+  ownedDefinitionMethodOwner,
   resolveFoldkitApiPath,
   resolveImportedPath,
   resolvedVariable,
   staticMemberPath,
   staticPropertyName,
 } from '../guards.ts'
+import { ownedUpdateAuthoringCallee } from '../update-authoring.ts'
 
 const pascalIdentifierPattern = /^[A-Z][A-Za-z0-9]*$/
 
 const childMessageConstructionMessage = (calleeLabel: string): string =>
-  `Do not construct the child Message \`${calleeLabel}(...)\` from a parent. Generated child delivery is owned by the registered Binding. For parent-driven behavior, expose the local Message constructor through the child Block's \`operations\` record and call the named Binding method, such as \`child.requestClearSelection()(model)\`. Child-owned views, Steps, Commands, and Subscriptions may construct their own Messages.`
+  `Do not construct the child Message \`${calleeLabel}(...)\` from a parent. Generated child delivery is owned by the registered Binding. For parent-driven behavior, declare a public child InMessage and call the named Binding method, such as \`ChildBinding.requestClearSelection()(model)\`. Child-owned views, Steps, inMessageUpdate handlers, Commands, and Subscriptions may construct their own Messages.`
 
 type ImportedMessagePath = Pick<ImportedPath, 'source' | 'members'>
 
@@ -405,7 +406,7 @@ type DefinitionOperation = Readonly<{
   importedDefinitionPath: ImportedMessagePath | undefined
   members: ReadonlyArray<string>
   operation:
-    | 'makeBinding'
+    | 'binding'
     | 'makeCommand'
     | 'makeCommandsStep'
     | 'makeFieldsStep'
@@ -418,6 +419,7 @@ type DefinitionOperation = Readonly<{
     | 'makeStep'
     | 'makeSubscriptions'
     | 'update'
+    | 'inMessageUpdate'
     | 'view'
   root: ESTree.IdentifierReference
 }>
@@ -436,15 +438,6 @@ const definitionOperationName = (
   ) {
     return 'view'
   }
-  if (
-    method === 'withContext' &&
-    Option.contains(maybePreviousMethod, 'makeUpdate')
-  ) {
-    return 'update'
-  }
-  if (method === 'makeUpdate') {
-    return 'update'
-  }
   if (method === 'makeView') {
     return 'view'
   }
@@ -461,7 +454,6 @@ const definitionOperationName = (
     )
   }
   if (
-    method === 'makeBinding' ||
     method === 'makeCommand' ||
     method === 'makeCommandsStep' ||
     method === 'makeFieldsStep' ||
@@ -566,8 +558,35 @@ const definitionOperationForCall = (
           importedBindingParentPath,
         ),
         members: bindingParentPath.members,
-        operation: 'makeBinding',
+        operation: 'binding',
         root: bindingParentPath.root,
+      }
+    }
+
+    const authored = ownedUpdateAuthoringCallee(
+      parent.callee,
+      references,
+      importerFilename,
+    )
+    if (Option.isSome(authored)) {
+      const { owner, method } = authored.value
+      const path = compositionDefinitionPath(references, owner.path)
+      const imported =
+        owner.importedPath === undefined
+          ? Option.map(
+              resolveImportedPathThroughConst(references, path.root),
+              imported => ({
+                source: imported.source,
+                members: [...imported.members, ...path.members],
+              }),
+            )
+          : Option.some(owner.importedPath)
+      return {
+        importedDefinitionPath: Option.getOrUndefined(imported),
+        members: path.members,
+        operation:
+          method === 'makeInMessageUpdate' ? 'inMessageUpdate' : 'update',
+        root: path.root,
       }
     }
 
@@ -597,9 +616,6 @@ const definitionOperationForCall = (
     const isViewWithInputs =
       method === 'withInputs' &&
       Option.contains(maybePreviousMethod, 'makeView')
-    const isUpdateWithContext =
-      method === 'withContext' &&
-      Option.contains(maybePreviousMethod, 'makeUpdate')
     const operation =
       Option.getOrUndefined(namedOperation) ??
       definitionOperationName(method, maybePreviousMethod)
@@ -623,25 +639,6 @@ const definitionOperationForCall = (
       return yield* Option.none()
     }
 
-    if (
-      operation === 'update' &&
-      !isUpdateWithContext &&
-      !isOwnedDefinitionCallee(parent.callee, 'makeUpdate', references)
-    ) {
-      return yield* Option.none()
-    }
-    if (
-      isUpdateWithContext &&
-      (!isMemberExpression(parent.callee) ||
-        !isOwnedDefinitionCallee(
-          parent.callee.object,
-          'makeUpdate',
-          references,
-        ))
-    ) {
-      return yield* Option.none()
-    }
-
     const namedOwner = Option.flatMap(namedOperation, named =>
       ownedDefinitionMethodOwner(
         parent.callee,
@@ -651,11 +648,7 @@ const definitionOperationForCall = (
       ),
     )
     const suffixLength =
-      isViewWithInputs ||
-      isUpdateWithContext ||
-      (isStepProducer && method === 'fromMessage')
-        ? 2
-        : 1
+      isViewWithInputs || (isStepProducer && method === 'fromMessage') ? 2 : 1
     const definitionPath = Option.match(namedOwner, {
       onNone: () =>
         compositionDefinitionPath(references, {
@@ -783,20 +776,29 @@ const ownedHandlerFunctions = (
     const handler = resolvedFunctionValue(authored, references)
     return handler === undefined ? [] : [{ handler, operation }]
   }
-  if (operation?.operation !== 'update') {
+  if (
+    operation?.operation !== 'update' &&
+    operation?.operation !== 'inMessageUpdate'
+  ) {
     return []
   }
 
-  const maybePath = staticMemberPath(node.callee)
-  if (Option.isNone(maybePath)) {
+  const authoredCall = ownedUpdateAuthoringCallee(
+    node.callee,
+    references,
+    importerFilename,
+  )
+  if (Option.isNone(authoredCall)) {
     return []
   }
 
   const [authored] = node.arguments
-  const isWithContext =
-    maybePath.value.members.slice(-2).join('.') === 'makeUpdate.withContext'
+  if (authoredCall.value.kind === 'Shared') {
+    const handler = resolvedFunctionValue(authored, references)
+    return handler === undefined ? [] : [{ handler, operation }]
+  }
   const handlerObjects: Array<ESTree.ObjectExpression> = []
-  if (isWithContext) {
+  if (authoredCall.value.kind === 'ContextRecord') {
     const createHandlers = resolvedFunctionValue(authored, references)
     if (createHandlers !== undefined) {
       for (const returned of returnedExpressions(createHandlers)) {
@@ -864,7 +866,12 @@ const localDefinitionMessagePath = (
 
     const defineCall = definition.node.init
     const definePath = yield* staticMemberPath(defineCall.callee)
-    if (!Option.contains(Array.last(definePath.members), 'makeDefinition')) {
+    if (
+      !Option.exists(
+        Array.last(definePath.members),
+        method => method === 'makeDefinition' || method === 'make',
+      )
+    ) {
       return yield* Option.none()
     }
 
@@ -988,7 +995,12 @@ const featureDefinitionDirectory = (
       filename,
       messagePath.source,
     )
-    if (!Option.contains(Array.last(messageModule), 'definition')) {
+    if (
+      !Option.exists(
+        Array.last(messageModule),
+        name => name === 'definition' || name === 'block',
+      )
+    ) {
       return yield* Option.none()
     }
 
@@ -1148,7 +1160,8 @@ const definitionOperationCallOwnsMessage = (
     definitionOperationForCall(references, operationCall, filename),
     operation =>
       (operation.operation === 'update' ||
-        operation.operation === 'makeBinding') &&
+        operation.operation === 'inMessageUpdate' ||
+        operation.operation === 'binding') &&
       operationOwnsMessage(references, operation, messagePath, filename),
   )
 
@@ -1215,8 +1228,10 @@ const importedOperationOwnsMessage = (
       )
       const isViewWithInputs =
         operation === 'withInputs' && previousOperation === 'makeView'
-      const isUpdateWithContext =
-        operation === 'withContext' && previousOperation === 'makeUpdate'
+      const isTransitionWithContext =
+        operation === 'withContext' &&
+        (previousOperation === 'makeUpdate' ||
+          previousOperation === 'makeInMessageUpdate')
       const isStepFromMessage =
         operation === 'fromMessage' &&
         (previousOperation === 'makeFieldsStep' ||
@@ -1233,14 +1248,14 @@ const importedOperationOwnsMessage = (
       if (
         !isDefinitionOperation &&
         !isViewWithInputs &&
-        !isUpdateWithContext &&
+        !isTransitionWithContext &&
         !isPreparation
       ) {
         return false
       }
 
       const suffixLength =
-        isViewWithInputs || isUpdateWithContext || isStepFromMessage ? 2 : 1
+        isViewWithInputs || isTransitionWithContext || isStepFromMessage ? 2 : 1
       const members = path.members.slice(0, -suffixLength)
       return (
         Array.isReadonlyArrayNonEmpty(members) &&
@@ -1362,7 +1377,11 @@ const isTopLevelRootAlias = (source: string): boolean => {
   return !source.slice(2).includes('/')
 }
 
-const isRootMessageModule = (source: string): boolean => {
+const isRootMessageModule = (
+  source: string,
+  members: ReadonlyArray<string>,
+  filename: string | undefined,
+): boolean => {
   if (isLocalSiblingModule(source, 'definition')) {
     return true
   }
@@ -1372,6 +1391,14 @@ const isRootMessageModule = (source: string): boolean => {
   const [parentSourceSegment] = sourceSegments.slice(-2, -1)
 
   if (lastSourceSegment === undefined) {
+    return true
+  }
+
+  if (
+    moduleSegmentName(lastSourceSegment) === 'block' &&
+    filename !== undefined &&
+    Option.isSome(featureDefinitionDirectory({ source, members }, filename))
+  ) {
     return true
   }
 
@@ -1453,9 +1480,95 @@ const resolveImportedPathThroughConst = (
   })
 }
 
+const testCommandResolution = (
+  references: WeakMap<ESTree.Node, Reference>,
+  callee: ESTree.Node,
+): Option.Option<string> =>
+  Option.flatMap(resolveImportedPathThroughConst(references, callee), path => {
+    const members = (() => {
+      if (path.source === 'foldkit') {
+        return path.members
+      }
+      if (path.source === 'foldkit/story') {
+        return ['Story', ...path.members]
+      }
+      if (path.source === 'foldkit/scene') {
+        return ['Scene', ...path.members]
+      }
+      return []
+    })()
+    const [namespace, command, method, extra] = members
+
+    return (namespace === 'Story' || namespace === 'Scene') &&
+      command === 'Command' &&
+      (method === 'resolve' ||
+        method === 'resolveAll' ||
+        method === 'resolveAllExact') &&
+      extra === undefined
+      ? Option.some(method)
+      : Option.none()
+  })
+
+const isTestCommandResult = (
+  node: ESTree.Node,
+  references: WeakMap<ESTree.Node, Reference>,
+): boolean => {
+  const parent = node.parent
+  if (parent === null || parent === undefined || isFunction(parent)) {
+    return false
+  }
+
+  if (
+    isCallExpression(parent) &&
+    Option.contains(Array.get(parent.arguments, 1), node) &&
+    Option.contains(testCommandResolution(references, parent.callee), 'resolve')
+  ) {
+    return true
+  }
+
+  if (
+    parent.type === 'ArrayExpression' &&
+    parent.elements.length === 2 &&
+    Option.contains(Array.get(parent.elements, 1), node) &&
+    isCallExpression(parent.parent) &&
+    parent.parent.arguments.includes(parent) &&
+    Option.exists(
+      testCommandResolution(references, parent.parent.callee),
+      method => method === 'resolveAll' || method === 'resolveAllExact',
+    )
+  ) {
+    return true
+  }
+
+  return isTestCommandResult(parent, references)
+}
+
+const isWithinBlockAuthoring = (
+  node: ESTree.Node,
+  references: WeakMap<ESTree.Node, Reference>,
+  ownedHandlers: WeakMap<ESTree.Node, ReadonlyArray<DefinitionOperation>>,
+  filename: string,
+): boolean => {
+  const parent = node.parent
+  if (parent === null || parent === undefined) {
+    return false
+  }
+
+  if (
+    ownedHandlers.has(parent) ||
+    (isCallExpression(parent) &&
+      Option.isSome(definitionOperationForCall(references, parent, filename)))
+  ) {
+    return true
+  }
+
+  return isWithinBlockAuthoring(parent, references, ownedHandlers, filename)
+}
+
 const childMessageConstruction = (
   callee: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<ChildMessageConstruction> => {
   if (hasComputedMember(callee)) {
     return Option.none()
@@ -1490,7 +1603,7 @@ const childMessageConstruction = (
         constructorName === undefined ||
         constructorName === 'Message' ||
         !pascalIdentifierPattern.test(constructorName) ||
-        isRootMessageModule(path.source)
+        isRootMessageModule(path.source, path.members.slice(0, -1), filename)
       ) {
         return Option.none()
       }
@@ -1509,6 +1622,8 @@ const childMessageConstruction = (
 /**
  * Flags construction of a child Block Message variant from outside the
  * child, such as Chat.Message.ClickedOpen(...) or an immutable local alias.
+ * Imported Story and Scene Command resolvers may author their result Messages
+ * outside Block authoring callbacks.
  */
 export const noChildMessageConstructionInRoot = Rule.define({
   name: 'no-child-message-construction-in-root',
@@ -1553,7 +1668,7 @@ export const noChildMessageConstructionInRoot = Rule.define({
         }
 
         const construction = Option.getOrUndefined(
-          childMessageConstruction(node.callee, references),
+          childMessageConstruction(node.callee, references, ctx.filename),
         )
         if (construction === undefined) {
           return Effect.void
@@ -1592,7 +1707,14 @@ export const noChildMessageConstructionInRoot = Rule.define({
                   references,
                   messagePath,
                   ctx.filename,
-                ))
+                ) ||
+                (isTestCommandResult(node, references) &&
+                  !isWithinBlockAuthoring(
+                    node,
+                    references,
+                    ownedHandlers,
+                    ctx.filename,
+                  )))
             ) {
               return []
             }

@@ -1,18 +1,24 @@
 // ✅ Match the original Definition and supply the child's raw result.
-import { Command, given, message, story } from 'foldkit/story'
+import { Effect } from 'effect'
+import { Story } from 'foldkit'
 
 import {
-  init,
+  ApplicationBlock,
   Message,
   PinsBlock,
   ReadPins,
-  update,
+  layer,
 } from './testingMigrationFixture'
 
-story(
-  update,
-  given(init().model),
-  message(Message.RequestedRefreshPins()),
-  Command.expectHas(ReadPins),
-  Command.resolve(ReadPins, PinsBlock.Message.CompletedReadPins({ count: 3 })),
+await Effect.runPromise(
+  Story.story(
+    { block: ApplicationBlock, layer },
+    Story.init(),
+    Story.message(Message.RequestedRefreshPins()),
+    Story.Command.expectHas(ReadPins),
+    Story.Command.resolve(
+      ReadPins,
+      PinsBlock.Message.CompletedReadPins({ count: 3 }),
+    ),
+  ),
 )

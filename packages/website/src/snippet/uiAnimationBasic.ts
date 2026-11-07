@@ -1,7 +1,4 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -13,36 +10,45 @@ const Model = Schema.Struct({
   animation: Animation.AnimationBlock.Model,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // Declare only parent-owned facts. The Composition derives Animation delivery.
 const Message = defineMessageUnion({
   ClickedToggleAnimation: {},
 })
+type Message = typeof Message.Type
 
-const AnimationExampleDefinition = Block.makeDefinition('AnimationExample', {
+export const AnimationExampleKey = Symbol('AnimationExample')
+export const AnimationExampleBlock = Block.make('AnimationExample', {
+  key: AnimationExampleKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = AnimationExampleDefinition
+const {
+  makeNoopStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = AnimationExampleBlock
 
 // Bind before defining the policy so its standard leave operation is available
 // inside the StartedLeaveAnimating branch.
-const AnimationBinding = AnimationExampleDefinition.makeBinding(
+const BaseAnimationBinding = makeRequiredFieldBinding(
   Animation.AnimationBlock,
   {
     field: 'animation',
-    init: { contextToArgs: () => Tuple.make({ id: 'content' }) },
+    init: { contextToArgs: () => [{ id: 'content' }] },
   },
 )
 
-const foldAnimationOutMessage = AnimationExampleDefinition.makeOutMessageFold(
-  Animation.AnimationBlock,
-  {
+const AnimationBinding = BaseAnimationBinding.withOutMessagePolicy({
+  fold: makeOutMessageFold(Animation.AnimationBlock, {
     // The operation asks Animation to wait for its wrapper's CSS to settle.
     // A custom policy can race another signal against that settlement instead.
     StartedLeaveAnimating: () =>
-      AnimationBinding.requestWaitForLeaveSettlement(),
+      BaseAnimationBinding.requestWaitForLeaveSettlement(),
     // TransitionedOut is Animation's signal that the leave has fully
     // settled (your leave Command's EndedAnimation message has been
     // processed). Return Commands for any post-animation work, for
@@ -51,13 +57,11 @@ const foldAnimationOutMessage = AnimationExampleDefinition.makeOutMessageFold(
     // element mounted (collapsed to zero height) so there's nothing to
     // tear down.
     TransitionedOut: makeNoopStep,
-  },
-)
+  }),
+})
 
-const AnimationExampleComposition = AnimationExampleDefinition.makeComposition({
-  bindings: [
-    AnimationBinding.withOutMessagePolicy({ fold: foldAnimationOutMessage }),
-  ],
+const AnimationExampleComposition = makeComposition({
+  bindings: [AnimationBinding],
 })
 
 // In your init function, specify the fields the parent owns. The Composition
@@ -106,3 +110,16 @@ const view = AnimationExampleComposition.makeView((model, h) =>
     ],
   ),
 )
+
+export const layer = AnimationExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* AnimationExampleComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Animation.layer))

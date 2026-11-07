@@ -1,7 +1,7 @@
 import { Option } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Stats } from '../data'
@@ -13,10 +13,10 @@ const formatFetchedAt = (fetchedAt: number): string =>
   new Date(fetchedAt).toLocaleTimeString()
 
 export const statsTabView = (
-  model: typeof Model.Type,
+  statsAsyncData: Model['stats'],
   h: ApplicationViewBuilder,
 ) => {
-  const isPending = AsyncData.isPending(model.stats)
+  const isPending = AsyncData.isPending(statsAsyncData)
 
   return h.div(
     [h.Class('flex flex-col gap-4')],
@@ -45,7 +45,7 @@ export const statsTabView = (
           'Stats refetch every 5 seconds while this tab is open. The old numbers stay on screen while the new ones load.',
         ],
       ),
-      AsyncData.matchDataSplitEmpty(model.stats, {
+      AsyncData.matchDataSplitEmpty(statsAsyncData, {
         onIdle: () => loadingPanel('Loading stats...', h),
         onLoading: () => loadingPanel('Loading stats...', h),
         onFailure: error =>
@@ -54,7 +54,7 @@ export const statsTabView = (
           h.div(
             [h.Class('flex flex-col gap-4')],
             [
-              ...Option.match(AsyncData.getError(model.stats), {
+              ...Option.match(AsyncData.getError(statsAsyncData), {
                 onNone: () => [],
                 onSome: error => [
                   errorPanel(
@@ -67,7 +67,7 @@ export const statsTabView = (
                 {
                   stats,
                   fetchedAt,
-                  isRefreshing: AsyncData.isRefreshing(model.stats),
+                  isRefreshing: AsyncData.isRefreshing(statsAsyncData),
                 },
                 h,
               ),
@@ -79,7 +79,7 @@ export const statsTabView = (
 }
 
 type StatsCardsInput = Readonly<{
-  stats: typeof Stats.Type
+  stats: Stats
   fetchedAt: number
   isRefreshing: boolean
 }>

@@ -7,10 +7,12 @@ import * as Update from '../update/public.js'
 import * as Block from './public.js'
 
 const DialogModel = Schema.Struct({ count: Schema.Number })
+type DialogModel = typeof DialogModel.Type
 const DialogMessage = defineMessageUnion({
   RequestedClose: {},
   CompletedRememberClose: {},
 })
+type DialogMessage = typeof DialogMessage.Type
 const DialogDefinition = Block.makeDefinition('CombinedOutMessageDialog', {
   Model: DialogModel,
   Message: DialogMessage,
@@ -48,29 +50,29 @@ const EditorModel = Schema.Struct({
   dialog: DialogBlock.Model,
   count: Schema.Number,
 })
+type EditorModel = typeof EditorModel.Type
 const EditorMessage = defineMessageUnion({
   RequestedSave: {},
   RequestedNestedSave: {},
   RequestedPlain: {},
 })
+type EditorMessage = typeof EditorMessage.Type
 const EditorOutMessage = defineMessageUnion({ Saved: {}, Plain: {} })
+type EditorOutMessage = typeof EditorOutMessage.Type
 const EditorDefinition = Block.makeDefinition('CombinedOutMessageEditor', {
   Model: EditorModel,
   Message: EditorMessage,
   OutMessage: EditorOutMessage,
 })
-const DialogBinding = EditorDefinition.makeBinding(DialogBlock, {
+const DialogBinding = EditorDefinition.makeRequiredFieldBinding(DialogBlock, {
   field: 'dialog',
 })
 const EditorComposition = EditorDefinition.makeComposition({
   bindings: [DialogBinding],
 })
-const closeDialogStep = DialogBinding.requestClose()
-const steps: ReadonlyArray<typeof closeDialogStep> = [
-  closeDialogStep,
-  closeDialogStep,
-]
-const leaveStep = EditorDefinition.makeFieldsStep(() => ({
+const closeDialog = DialogBinding.requestClose()
+const steps: ReadonlyArray<typeof closeDialog> = [closeDialog, closeDialog]
+const leave = EditorDefinition.makeFieldsStep(() => ({
   count: Number.increment,
 }))
 const update = EditorComposition.makeUpdate({
@@ -81,11 +83,7 @@ const update = EditorComposition.makeUpdate({
     ),
   RequestedNestedSave: model =>
     pipe(
-      Update.combineSteps(model, [
-        leaveStep,
-        Update.combineSteps(steps),
-        leaveStep,
-      ]),
+      Update.combineSteps(model, [leave, Update.combineSteps(steps), leave]),
       Update.withOutMessage(EditorOutMessage.Saved()),
     ),
   RequestedPlain: EditorDefinition.makeOutMessageStep(() =>
@@ -139,12 +137,14 @@ it('runs the parent OutMessage policy after the nested combination', () => {
     editor: EditorBlock.Model,
     count: Schema.Number,
   })
+  type ParentModel = typeof ParentModel.Type
   const ParentMessage = defineMessageUnion({ RequestedSave: {} })
+  type ParentMessage = typeof ParentMessage.Type
   const ParentDefinition = Block.makeDefinition('CombinedOutMessageParent', {
     Model: ParentModel,
     Message: ParentMessage,
   })
-  const EditorBinding = ParentDefinition.makeBinding(EditorBlock, {
+  const EditorBinding = ParentDefinition.makeRequiredFieldBinding(EditorBlock, {
     field: 'editor',
   }).withOutMessagePolicy({
     fold: ParentDefinition.makeOutMessageFold(EditorBlock, {

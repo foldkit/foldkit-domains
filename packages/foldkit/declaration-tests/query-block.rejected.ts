@@ -14,29 +14,34 @@ Notes.provideHandlers(Layer.empty)
 
 const ParentModel = Schema.Struct({ label: Schema.String, notes: Notes.Model })
 const ParentMessage = Message.defineMessageUnion({ ClickedParent: {} })
+const RejectedParentKey = Symbol('RejectedDeclarationQueryParent')
 const RejectedDeclarationQueryParentDefinition = Block.makeDefinition(
   'RejectedDeclarationQueryParent',
   {
+    key: RejectedParentKey,
     Model: ParentModel,
     Message: ParentMessage,
+    InitArgs: Schema.Tuple([]),
   },
 )
 
 // @ts-expect-error The direct parent field must contain the Query Model.
-RejectedDeclarationQueryParentDefinition.makeBinding(Notes, { field: 'label' })
+RejectedDeclarationQueryParentDefinition.makeRequiredFieldBinding(Notes, {
+  field: 'label',
+})
 
 // @ts-expect-error Authored parent Message constructors are no longer Binding configuration.
-RejectedDeclarationQueryParentDefinition.makeBinding(Notes, {
+RejectedDeclarationQueryParentDefinition.makeRequiredFieldBinding(Notes, {
   field: 'notes',
   parentMessage: ParentMessage.ClickedParent,
 })
 // @ts-expect-error Authored child-to-parent Message mappers are no longer Binding configuration.
-RejectedDeclarationQueryParentDefinition.makeBinding(Notes, {
+RejectedDeclarationQueryParentDefinition.makeRequiredFieldBinding(Notes, {
   field: 'notes',
   toParentMessage: () => ParentMessage.ClickedParent(),
 })
 // @ts-expect-error Authored parent-to-child Message routes are no longer Binding configuration.
-RejectedDeclarationQueryParentDefinition.makeBinding(Notes, {
+RejectedDeclarationQueryParentDefinition.makeRequiredFieldBinding(Notes, {
   field: 'notes',
   fromParentMessage: false,
 })
@@ -69,7 +74,7 @@ const ForeignCanonicalNotes = Query.define({
 })
 
 // @ts-expect-error A canonical Query replacement must provide its own Fetch handler.
-CanonicalNotes.replaceEffectsLayer(ForeignCanonicalNotes.EffectsLayer)
+CanonicalNotes.provideHandlers(ForeignCanonicalNotes.EffectsLayer)
 
 const CanonicalNoteById = Query.define({
   name: 'RejectedCanonicalNoteById',
@@ -91,4 +96,15 @@ const ForeignCanonicalNoteById = Query.define({
 })
 
 // @ts-expect-error A canonical KeyedQuery replacement must provide its own Fetch handler.
-CanonicalNoteById.replaceEffectsLayer(ForeignCanonicalNoteById.EffectsLayer)
+CanonicalNoteById.provideHandlers(ForeignCanonicalNoteById.EffectsLayer)
+
+// @ts-expect-error Query parent requests are separate from local completion Messages.
+CanonicalNotes.Message.RequestedLoadIfMissing()
+// @ts-expect-error Query reset is accepted through inMessageUpdate rather than local update.
+CanonicalNotes.Message.RequestedReset()
+// @ts-expect-error The Clock adapter preserves its explicit positional operation.
+CanonicalNotes.InMessage.RequestedLoadIfStale({ nowMillis: 0 })
+// @ts-expect-error KeyedQuery reset is separate from local completion Messages.
+CanonicalNoteById.Message.RequestedReset()
+// @ts-expect-error Keyed argument adapters retain their existing direct signatures.
+CanonicalNoteById.InMessage.RequestedLoadIfMissing({ args: { noteId: '1' } })

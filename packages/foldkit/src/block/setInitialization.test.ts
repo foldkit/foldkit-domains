@@ -10,10 +10,12 @@ import { withOperationGraph } from './operationGraph.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   CompletedRead: { count: Schema.Number },
   CompletedAudit: { count: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 const ChildDefinition = Block.makeDefinition('SetChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -55,30 +57,33 @@ const ChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 > = Block.assemble(prepareChild)
 
 const Sibling = Schema.Struct({ label: Schema.String })
+type Sibling = typeof Sibling.Type
 const Model = Schema.Struct({
   requiredChild: ChildBlock.Model,
   maybeChild: Schema.Option(ChildBlock.Model),
   projectedChild: ChildBlock.Model,
   sibling: Sibling,
 })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedRequiredSet: { count: Schema.Number },
   RequestedOptionalSet: { count: Schema.Number },
   RequestedProjectedSet: { count: Schema.Number },
 })
+type Message = typeof Message.Type
 const ParentDefinition = Block.makeDefinition('SetParent', { Model, Message })
-const RequiredBinding = ParentDefinition.makeBinding(ChildBlock, {
+const RequiredBinding = ParentDefinition.makeRequiredFieldBinding(ChildBlock, {
   placement: 'required',
   field: 'requiredChild',
   init: { contextToArgs: () => [0] },
 })
-const OptionalBinding = ParentDefinition.makeBinding(ChildBlock, {
+const OptionalBinding = ParentDefinition.makeOptionalFieldBinding(ChildBlock, {
   placement: 'optional',
   field: 'maybeChild',
   init: { contextToArgs: () => Option.none() },
 })
-const projected = vi.fn<(child: typeof ChildModel.Type) => void>()
-const ProjectedBinding = ParentDefinition.makeBinding(ChildBlock, {
+const projected = vi.fn<(child: ChildModel) => void>()
+const ProjectedBinding = ParentDefinition.makeCustomBinding(ChildBlock, {
   placement: 'projected',
   read: model => Option.some(model.projectedChild),
   write: (model, nextChild) =>
@@ -121,15 +126,21 @@ const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof prepareParent
 > = Block.assemble(prepareParent)
 
-const DisabledStartupBinding = ParentDefinition.makeBinding(ChildBlock, {
-  placement: 'disabledStartup',
-  field: 'requiredChild',
-  init: false,
-})
-const ParentOwnedOptionalBinding = ParentDefinition.makeBinding(ChildBlock, {
-  placement: 'parentOwnedOptional',
-  field: 'maybeChild',
-})
+const DisabledStartupBinding = ParentDefinition.makeRequiredFieldBinding(
+  ChildBlock,
+  {
+    placement: 'disabledStartup',
+    field: 'requiredChild',
+    init: false,
+  },
+)
+const ParentOwnedOptionalBinding = ParentDefinition.makeOptionalFieldBinding(
+  ChildBlock,
+  {
+    placement: 'parentOwnedOptional',
+    field: 'maybeChild',
+  },
+)
 const ParentOwnedComposition = ParentDefinition.makeComposition({
   bindings: [DisabledStartupBinding, ParentOwnedOptionalBinding],
 })
@@ -288,7 +299,7 @@ describe('initAndSet', () => {
   })
 
   it('rejects custom accessor Bindings without initialization metadata', () => {
-    const noInit = ParentDefinition.makeBinding(ChildBlock, {
+    const noInit = ParentDefinition.makeCustomBinding(ChildBlock, {
       placement: 'noInit',
       read: model => Option.some(model.requiredChild),
       write: (model, nextChild) =>
@@ -305,7 +316,7 @@ describe('initAndSet', () => {
   })
 
   it('uses the native Binding guard when a projected field is not selected by its accessor', () => {
-    const binding = ParentDefinition.makeBinding(ChildBlock, {
+    const binding = ParentDefinition.makeCustomBinding(ChildBlock, {
       placement: 'mismatchedProjection',
       read: model => Option.some(model.requiredChild),
       write: (model, nextChild) =>

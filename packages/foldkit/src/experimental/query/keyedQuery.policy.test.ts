@@ -24,7 +24,7 @@ import {
 import { defineMessageUnion } from '../../message/index.js'
 import * as Story from '../../test/story.js'
 import * as Update from '../../update/index.js'
-import * as Query from './index.js'
+import * as Query from './native.js'
 
 const provideRegistry =
   (registry: __Registry) =>
@@ -624,6 +624,7 @@ describe('KeyedQuery accepted completion notifications', () => {
       windows: reporting.Model,
       acceptedCount: Schema.Number,
     })
+    type ParentModel = typeof ParentModel.Type
     const ParentMessage = defineMessageUnion({
       RequestedWindow: {
         args: Schema.Struct({
@@ -633,11 +634,12 @@ describe('KeyedQuery accepted completion notifications', () => {
         }),
       },
     })
+    type ParentMessage = typeof ParentMessage.Type
     const ParentDefinition = Block.makeDefinition('ProgressiveWindows', {
       Model: ParentModel,
       Message: ParentMessage,
     })
-    const BaseBinding = ParentDefinition.makeBinding(reporting, {
+    const BaseBinding = ParentDefinition.makeRequiredFieldBinding(reporting, {
       field: 'windows',
     })
     const WindowsBinding = BaseBinding.withOutMessagePolicy({

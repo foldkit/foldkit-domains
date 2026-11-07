@@ -1,23 +1,24 @@
+// ✅ Declare the parent input and handle it inside the child.
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 
-// ✅ Good: the child declares an operation that runs its update.
+import { InMessage } from './settings/inMessage'
+import { Message, OutMessage } from './settings/message'
+import { Model } from './settings/model'
 
-const SettingsComposition = SettingsDefinition.makeComposition()
-const requestThemeChange = Message.RequestedThemeChange
-
-const prepare = () =>
-  SettingsComposition.prepareBlock({
-    init,
-    update,
-    operations: { requestThemeChange },
-    EffectsLayer,
-  })
-export const block: Block.FromAssemblyWithoutViewOrOutMessage<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const SettingsKey = Symbol('Settings')
+export const SettingsBlock = Block.make('Settings', {
+  key: SettingsKey,
+  Model,
+  Message,
+  InMessage,
+  OutMessage,
+  InitArgs: Schema.Tuple([]),
+  inMessageOutputs: {
+    RequestedThemeChange: { outMessage: OutMessage.ChangedTheme },
+  },
+})
 
 const update = ParentComposition.makeUpdate({
-  ClickedResetSettings: model =>
-    SettingsBinding.requestThemeChange({ theme: 'Light' })(model),
+  ClickedResetSettings: SettingsBinding.requestThemeChange({ theme: 'Light' }),
 })

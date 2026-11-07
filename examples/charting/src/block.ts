@@ -1,20 +1,28 @@
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 
-import { ApplicationComposition } from './composition'
-import { init } from './init'
-import { EffectsLayer } from './layer'
-import type { Model } from './model'
-import { update } from './update'
-import { view } from './view'
+import { ChartRegistry } from './chartRegistry'
+import { GitHubApi } from './githubApi'
+import { Message } from './message'
+import { Model } from './model'
+import { NpmApi } from './npmApi'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Document' },
+  effects: { services: [ChartRegistry, GitHubApi, NpmApi] },
+  Model,
+  Message,
+})
+
+export const {
+  makeRequiredFieldBinding,
+  makeCommand,
+  makeComposition,
+  makeFieldsStep,
+  makeMountStream,
+  makeOutMessageFold,
+  makeStep,
+} = ApplicationBlock

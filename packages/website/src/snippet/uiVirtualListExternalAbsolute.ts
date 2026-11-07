@@ -1,4 +1,4 @@
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -9,46 +9,57 @@ const Activity = Schema.Struct({
   title: Schema.String,
   summary: Schema.String,
 })
-const ActivityListBlock = VirtualList.create<typeof Activity.Type>()
+type Activity = typeof Activity.Type
+
+const ActivityListBlock = VirtualList.makeBlock<Activity>()
 const Model = Schema.Struct({
   activities: Schema.Array(Activity),
   activityList: ActivityListBlock.Model,
 })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({ ClickedJumpToLatestActivity: {} })
-const ActivityFeedDefinition = Block.makeDefinition('ActivityFeed', {
+type Message = typeof Message.Type
+
+export const ActivityFeedKey = Symbol('ActivityFeed')
+export const ActivityFeedBlock = Block.make('ActivityFeed', {
+  key: ActivityFeedKey,
+  InitArgs: Schema.Tuple([Schema.Array(Activity)]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
-const { makeNoopStep } = ActivityFeedDefinition
+const {
+  makeNoopStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = ActivityFeedBlock
 
-const ActivityListBinding = ActivityFeedDefinition.makeBinding(
-  ActivityListBlock,
-  {
-    field: 'activityList',
-    init: {
-      contextToArgs: () =>
-        Tuple.make({
-          id: 'activity-feed',
-          rowHeightPx: 88,
-          scrollContainer: VirtualList.ScrollContainer.Window(),
-        }),
-    },
+const ActivityListBinding = makeRequiredFieldBinding(ActivityListBlock, {
+  field: 'activityList',
+  init: {
+    contextToArgs: () => [
+      {
+        id: 'activity-feed',
+        rowHeightPx: 88,
+        scrollContainer: VirtualList.ScrollContainer.Window(),
+      },
+    ],
   },
-).withOutMessagePolicy({
-  fold: ActivityFeedDefinition.makeOutMessageFold(ActivityListBlock, {
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ActivityListBlock, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
   }),
 })
-const ActivityFeedComposition = ActivityFeedDefinition.makeComposition({
+const ActivityFeedComposition = makeComposition({
   bindings: [ActivityListBinding],
 })
-const init = ActivityFeedComposition.makeInit(
-  (activities: ReadonlyArray<typeof Activity.Type>) => ({
-    model: { activities },
-  }),
-)
+const init = ActivityFeedComposition.makeInit(activities => ({
+  model: { activities },
+}))
 const update = ActivityFeedComposition.makeUpdate({
   ClickedJumpToLatestActivity: ActivityListBinding.requestScrollToEnd(),
 })
@@ -86,9 +97,15 @@ const view = ActivityFeedComposition.makeView((model, h) =>
   ),
 )
 
-const prepare = () =>
-  ActivityFeedComposition.prepareBlock({ init, update, view })
-export const ActivityFeedBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ActivityFeedBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ActivityFeedComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(VirtualList.layer))

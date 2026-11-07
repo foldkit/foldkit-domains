@@ -17,7 +17,6 @@ import {
   Stream,
   String,
   SubscriptionRef,
-  Tuple,
   pipe,
 } from 'effect'
 import { KeyValueStore } from 'effect/persistence'
@@ -44,28 +43,25 @@ import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
 import { BrowserKeyValueStore } from '@effect/platform-browser'
-import * as Listbox from '@foldkit/ui/listbox'
-import * as Slider from '@foldkit/ui/slider'
-import * as Switch from '@foldkit/ui/switch'
-import * as Tabs from '@foldkit/ui/tabs'
+import { Listbox, Slider, Switch, Tabs } from '@foldkit/ui'
 
 import * as OptionExt from './internal/optionExtensions.js'
 import { overlayStyles } from './overlay-styles.js'
 
-const BlockFilterListboxBlock = Listbox.create<string>()
-
-// MODEL
+const BlockFilterListboxBlock = Listbox.makeBlock()
 
 const DisplayCommand = Schema.Struct({
   name: Schema.String,
   args: Schema.Option(Schema.Record(Schema.String, Schema.Unknown)),
   maybeBlockPath: Schema.Option(Schema.Array(Schema.String)),
 })
+type DisplayCommand = typeof DisplayCommand.Type
 
 const DisplayMount = Schema.Struct({
   name: Schema.String,
   args: Schema.Option(Schema.Record(Schema.String, Schema.Unknown)),
 })
+type DisplayMount = typeof DisplayMount.Type
 
 const DisplayEntry = Schema.Struct({
   tag: Schema.String,
@@ -77,11 +73,13 @@ const DisplayEntry = Schema.Struct({
   timestamp: Schema.Number,
   isModelChanged: Schema.Boolean,
 })
+type DisplayEntry = typeof DisplayEntry.Type
 
 const CopyState = defineTaggedUnion({
   Copying: { requestId: Schema.Number },
   Copied: { requestId: Schema.Number },
 })
+type CopyState = typeof CopyState.Type
 
 const INSPECTOR_TABS_ID = 'dt-inspector'
 const BLOCK_FILTER_ID = 'dt-block-filter'
@@ -91,7 +89,7 @@ const SCRUBBER_SLIDER_ID = 'dt-scrubber'
 const InspectorTab = Schema.Literals(['Model', 'Message', 'Commands', 'Mounts'])
 type InspectorTab = typeof InspectorTab.Type
 const INSPECTOR_TABS: ReadonlyArray<InspectorTab> = InspectorTab.literals
-const InspectorTabsBlock = Tabs.create<InspectorTab>()
+const InspectorTabsBlock = Tabs.makeBlock<InspectorTab>()
 
 /**
  * `Schema.Unknown` whose equivalence is reference equality. Effect 4's default
@@ -107,6 +105,7 @@ const InspectorTabsBlock = Tabs.create<InspectorTab>()
 const UnknownByReference = Schema.Unknown.pipe(
   Schema.overrideToEquivalence(() => (a, b) => a === b),
 )
+type UnknownByReference = typeof UnknownByReference.Type
 
 const Screen = Schema.Literals(['Messages', 'Settings'])
 type Screen = typeof Screen.Type
@@ -116,7 +115,9 @@ const Position = Schema.Literals([
   'TopRight',
   'TopLeft',
 ])
+type Position = typeof Position.Type
 const Mode = Schema.Literals(['TimeTravel', 'Inspect'])
+type Mode = typeof Mode.Type
 
 const Model = Schema.Struct({
   position: Position,
@@ -177,8 +178,7 @@ const Flags = Schema.Struct({
   isPaused: Schema.Boolean,
   pausedAtIndex: Schema.Number,
 })
-
-// MESSAGE
+type Flags = typeof Flags.Type
 
 const Message = defineMessageUnion({
   ClickedToggle: {},
@@ -227,8 +227,7 @@ const Message = defineMessageUnion({
     pausedAtIndex: Schema.Number,
   },
 })
-
-// HELPERS
+type Message = typeof Message.Type
 
 const MILLIS_PER_SECOND = 1000
 const MOBILE_BREAKPOINT = 767
@@ -238,8 +237,8 @@ const MAX_PREVIEW_KEYS = 3
 const JSON_INDENT = 2
 const ALL_MESSAGES_VALUE = ''
 const DEVTOOLS_STORAGE_KEY = 'foldkit-devtools'
-const NO_COMMANDS: ReadonlyArray<typeof DisplayCommand.Type> = []
-const NO_MOUNTS: ReadonlyArray<typeof DisplayMount.Type> = []
+const NO_COMMANDS: ReadonlyArray<DisplayCommand> = []
+const NO_MOUNTS: ReadonlyArray<DisplayMount> = []
 
 const formatTimeDelta = (deltaMs: number): string =>
   Match.value(deltaMs).pipe(
@@ -272,7 +271,7 @@ const sliderValueToHostIndex = (
 const SCROLL_FOLLOW_THRESHOLD_PX = 8
 
 const computeBlockTags = (
-  entries: ReadonlyArray<typeof DisplayEntry.Type>,
+  entries: ReadonlyArray<DisplayEntry>,
 ): ReadonlyArray<string> =>
   pipe(
     entries,
@@ -287,15 +286,13 @@ const blockSegmentLabel = (tag: string): string =>
 const formatBlockPath = (blockPath: ReadonlyArray<string>): string =>
   pipe(blockPath, Array.map(blockSegmentLabel), Array.join(' › '))
 
-const toDisplayCommand = (
-  command: CommandRecord,
-): typeof DisplayCommand.Type => ({
+const toDisplayCommand = (command: CommandRecord): DisplayCommand => ({
   name: command.name,
   args: Option.fromNullishOr(command.args),
   maybeBlockPath: command.maybeBlockPath,
 })
 
-const toDisplayMount = (mount: MountRecord): typeof DisplayMount.Type => ({
+const toDisplayMount = (mount: MountRecord): DisplayMount => ({
   name: mount.name,
   args: Option.fromNullishOr(mount.args),
 })
@@ -383,15 +380,29 @@ const taggedPayload = (
     onSome: argsValue => ({ ...argsValue, _tag: name }),
   })
 
-// UPDATE
+class StoreService extends Context.Service<StoreService, DevToolsStore>()(
+  'foldkit/DevToolsStore',
+) {}
 
+class ShadowRootService extends Context.Service<
+  ShadowRootService,
+  ShadowRoot
+>()('foldkit/DevToolsShadowRoot') {}
+
+const ApplicationKey = Symbol('Application')
 const ApplicationDefinition = Block.makeDefinition('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Flags]),
+  view: { kind: 'Element' },
+  effects: {
+    services: [StoreService, ShadowRootService, KeyValueStore.KeyValueStore],
+  },
   Model,
   Message,
   ChildInitContext: Flags,
 })
 
-const InspectorTabsBinding = ApplicationDefinition.makeBinding(
+const InspectorTabsBinding = ApplicationDefinition.makeRequiredFieldBinding(
   InspectorTabsBlock,
   {
     field: 'inspectorTabs',
@@ -406,20 +417,19 @@ const InspectorTabsBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-const BlockFilterListboxBinding = ApplicationDefinition.makeBinding(
-  BlockFilterListboxBlock,
-  {
+const BlockFilterListboxBinding =
+  ApplicationDefinition.makeRequiredFieldBinding(BlockFilterListboxBlock, {
     field: 'blockFilterListbox',
     init: { contextToArgs: () => [{ id: BLOCK_FILTER_ID }] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(BlockFilterListboxBlock, {
-    Selected: ({ value }) =>
-      ApplicationDefinition.makeFieldsStep(() => ({
-        maybeBlockFilter: () => Option.liftPredicate(value, String.isNonEmpty),
-      })),
-  }),
-})
+  }).withOutMessagePolicy({
+    fold: ApplicationDefinition.makeOutMessageFold(BlockFilterListboxBlock, {
+      Selected: ({ value }) =>
+        ApplicationDefinition.makeFieldsStep(() => ({
+          maybeBlockFilter: () =>
+            Option.liftPredicate(value, String.isNonEmpty),
+        })),
+    }),
+  })
 
 type DevToolsScrubberBlock = ReturnType<typeof Slider.forRoot>
 
@@ -429,7 +439,7 @@ const makeApplicationComposition = (
   // NOTE: Pointer Messages update the thumb immediately, but jumping to and
   // inspecting the corresponding state is expensive. Keep only the latest host
   // index until TickedScrubFrame flushes one navigation on the next frame.
-  const ScrubberBinding = ApplicationDefinition.makeBinding(
+  const ScrubberSliderBinding = ApplicationDefinition.makeRequiredFieldBinding(
     scrubberSliderBlock,
     {
       field: 'scrubberSlider',
@@ -458,17 +468,17 @@ const makeApplicationComposition = (
   const bindings = {
     InspectorTabsBinding,
     BlockFilterListboxBinding,
-    ScrubberBinding,
+    ScrubberSliderBinding,
   }
   const ApplicationComposition = ApplicationDefinition.makeComposition({
-    bindings: Tuple.make(
+    bindings: [
       InspectorTabsBinding,
       BlockFilterListboxBinding,
-      ScrubberBinding,
-    ),
+      ScrubberSliderBinding,
+    ],
   })
 
-  return Tuple.make(bindings, ApplicationComposition)
+  return { bindings, ApplicationComposition }
 }
 
 const getDevToolsShadowRoot = (): ShadowRoot => {
@@ -480,21 +490,12 @@ const getDevToolsShadowRoot = (): ShadowRoot => {
 }
 
 const scrubberSliderBlock = Slider.forRoot(getDevToolsShadowRoot)
-const [bindings, ApplicationComposition] =
+const { bindings, ApplicationComposition } =
   makeApplicationComposition(scrubberSliderBlock)
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
 type OverlayBindings = typeof bindings
-
-class StoreService extends Context.Service<StoreService, DevToolsStore>()(
-  'foldkit/DevToolsStore',
-) {}
-
-class ShadowRootService extends Context.Service<
-  ShadowRootService,
-  ShadowRoot
->()('foldkit/DevToolsShadowRoot') {}
 
 const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
   scrubFrameTicks: entry(
@@ -568,6 +569,7 @@ const DevToolsPersistedState = Schema.Struct({
 })
 type DevToolsPersistedState = typeof DevToolsPersistedState.Type
 const DevToolsPersistedStateJson = Schema.fromJsonString(DevToolsPersistedState)
+type DevToolsPersistedStateJson = typeof DevToolsPersistedStateJson.Type
 const DEFAULT_PERSISTED_STATE: DevToolsPersistedState = {
   isOpen: false,
   isFlattened: false,
@@ -781,7 +783,7 @@ const EffectsLayer = Layer.mergeAll(
   subscriptions.mobileBreakpointChanges.layer,
 )
 
-const init = ApplicationComposition.makeInit((flags: typeof Flags.Type) => {
+const init = ApplicationComposition.makeInit((flags: Flags) => {
   const { isFlattened, ...displayFlags } = flags
   const sliderMax = flags.entries.length
   const initialSliderValue = flags.isPaused
@@ -1026,7 +1028,10 @@ const update = ApplicationComposition.makeUpdate({
           ...Array.filter([ScrollToTop()], () => shouldFollowScroll),
         ],
       })),
-      bindings.ScrubberBinding.informRangeChanged({ min: 0, max: sliderMax }),
+      bindings.ScrubberSliderBinding.informOfRangeChange({
+        min: 0,
+        max: sliderMax,
+      }),
     ])
   },
   TickedScrubFrame: model =>
@@ -1077,8 +1082,6 @@ const update = ApplicationComposition.makeUpdate({
       : model,
   }),
 })
-
-// VIEW
 
 const indexClass = 'text-2xs text-dt-muted font-mono min-w-5'
 
@@ -1140,18 +1143,22 @@ const makeView = (
 
 const view = ApplicationComposition.makeView(makeView(bindings))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer,
-  })
-const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+const ApplicationBlock = ApplicationDefinition.makeBlock(
+  Effect.gen(function* () {
+    const inspectorTabs = yield* bindings.InspectorTabsBinding
+    const blockFilterListbox = yield* bindings.BlockFilterListboxBinding
+    const scrubberSlider = yield* bindings.ScrubberSliderBinding
+
+    return {
+      children: [inspectorTabs, blockFilterListbox, scrubberSlider],
+      init,
+      update,
+      view,
+      subscriptions,
+      EffectsLayer,
+    }
+  }),
+)
 
 const buildOverlayView = (
   position: DevToolsPosition,
@@ -1165,8 +1172,6 @@ const buildOverlayView = (
   const lazyMessageRow = createKeyedLazy()
   const lazyTabContent = createKeyedLazy()
   const lazyMessageList = createLazy()
-
-  // JSON TREE
 
   const leafSpan = (className: string, text: string): Html =>
     h.span([h.Class(className)], [text])
@@ -1652,33 +1657,41 @@ const buildOverlayView = (
     }
   }
 
-  const unwrapIfFiltered = (
+  const unwrapToSelectedBlockMessage = (
     message: unknown,
     maybeBlockFilter: Option.Option<string>,
   ): unknown => {
     if (Option.isNone(maybeBlockFilter)) {
       return message
     }
+
     const { value: filterTag } = maybeBlockFilter
 
-    let current = message
-    let matched = false
-    while (isTagged(current) && GOT_MESSAGE_PATTERN.test(current._tag)) {
-      if (current._tag === filterTag) {
-        matched = true
-      }
-      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-      const inner = (current as Record<string, unknown>)?.['message']
-      if (inner === undefined) {
+    let currentMessage = message
+
+    while (
+      isTagged(currentMessage) &&
+      GOT_MESSAGE_PATTERN.test(currentMessage._tag)
+    ) {
+      if (!Predicate.hasProperty(currentMessage, 'message')) {
         break
       }
-      current = inner
-      if (matched) {
+
+      const nextMessage = currentMessage.message
+
+      if (nextMessage === undefined) {
+        break
+      }
+
+      const isFilterMatched = currentMessage._tag === filterTag
+      currentMessage = nextMessage
+
+      if (isFilterMatched) {
         break
       }
     }
 
-    return current
+    return currentMessage
   }
 
   const messageTabContent = (
@@ -1695,7 +1708,7 @@ const buildOverlayView = (
       onSome: rawMessage => {
         const message = isFlattened
           ? unwrapToLeaf(rawMessage)
-          : unwrapIfFiltered(rawMessage, maybeBlockFilter)
+          : unwrapToSelectedBlockMessage(rawMessage, maybeBlockFilter)
 
         return h.div(
           [h.Class('flex flex-col flex-1 min-h-0 min-w-0')],
@@ -1750,9 +1763,7 @@ const buildOverlayView = (
     )
   }
 
-  const selectedCommands = (
-    model: Model,
-  ): ReadonlyArray<typeof DisplayCommand.Type> => {
+  const selectedCommands = (model: Model): ReadonlyArray<DisplayCommand> => {
     const selectedIndex = selectedHistoryIndex(model)
 
     if (selectedIndex === INIT_INDEX) {
@@ -1768,7 +1779,7 @@ const buildOverlayView = (
   }
 
   const flattenCommand = (
-    command: typeof DisplayCommand.Type,
+    command: DisplayCommand,
     index: number,
     expandedPaths: HashSet.HashSet<string>,
   ): ReadonlyArray<FlatNode> => {
@@ -1791,7 +1802,7 @@ const buildOverlayView = (
   }
 
   const commandsTabContent = (
-    commands: ReadonlyArray<typeof DisplayCommand.Type>,
+    commands: ReadonlyArray<DisplayCommand>,
     expandedPaths: HashSet.HashSet<string>,
     selectedIndex: number,
     copyStates: Model['copyStates'],
@@ -1868,8 +1879,8 @@ const buildOverlayView = (
     })
 
   type SelectedMountActivity = Readonly<{
-    starts: ReadonlyArray<typeof DisplayMount.Type>
-    ends: ReadonlyArray<typeof DisplayMount.Type>
+    starts: ReadonlyArray<DisplayMount>
+    ends: ReadonlyArray<DisplayMount>
   }>
 
   const selectedMountActivity = (model: Model): SelectedMountActivity => {
@@ -1893,7 +1904,7 @@ const buildOverlayView = (
   }
 
   const flattenMount = (
-    mount: typeof DisplayMount.Type,
+    mount: DisplayMount,
     sectionLabel: string,
     index: number,
     expandedPaths: HashSet.HashSet<string>,
@@ -1918,7 +1929,7 @@ const buildOverlayView = (
 
   const mountListSection = (
     label: string,
-    mounts: ReadonlyArray<typeof DisplayMount.Type>,
+    mounts: ReadonlyArray<DisplayMount>,
     expandedPaths: HashSet.HashSet<string>,
     selectedIndex: number,
     copyStates: Model['copyStates'],
@@ -1959,8 +1970,8 @@ const buildOverlayView = (
     )
 
   const mountsTabContent = (
-    starts: ReadonlyArray<typeof DisplayMount.Type>,
-    ends: ReadonlyArray<typeof DisplayMount.Type>,
+    starts: ReadonlyArray<DisplayMount>,
+    ends: ReadonlyArray<DisplayMount>,
     expandedPaths: HashSet.HashSet<string>,
     selectedIndex: number,
     copyStates: Model['copyStates'],
@@ -2135,23 +2146,21 @@ const buildOverlayView = (
       ],
     )
 
-  // MESSAGE LIST
-
-  const badgeView = (model: Model): Html =>
+  const badgeView = (isOpen: boolean, isPaused: boolean): Html =>
     h.button(
       [
         h.Class(
           clsx(
             'fixed bg-dt-bg text-dt cursor-pointer flex flex-col items-center justify-center font-mono outline-none dt-badge',
             BADGE_POSITION_CLASS[position],
-            model.isPaused ? 'dt-badge-paused' : 'dt-badge-accent',
+            isPaused ? 'dt-badge-paused' : 'dt-badge-accent',
           ),
         ),
         h.Style({ width: '22px', height: '56px', fontSize: '10px' }),
         h.OnClick(Message.ClickedToggle()),
       ],
       [
-        model.isOpen
+        isOpen
           ? h.svg(
               [
                 h.AriaHidden(true),
@@ -2175,7 +2184,7 @@ const buildOverlayView = (
                 h.Class(
                   clsx(
                     'flex flex-col items-center gap-0.5 font-semibold tracking-wider leading-none',
-                    model.isPaused ? 'text-dt-bg' : 'text-dt-muted',
+                    isPaused ? 'text-dt-bg' : 'text-dt-muted',
                   ),
                 ),
               ],
@@ -2308,13 +2317,11 @@ const buildOverlayView = (
     )
   }
 
-  // SETTINGS
-
-  const flattenSwitchView = (model: Model): Html =>
+  const flattenSwitchView = (isFlattened: boolean): Html =>
     Switch.view(
       {
         id: FLATTEN_SWITCH_ID,
-        isChecked: model.isFlattened,
+        isChecked: isFlattened,
         hasDescription: true,
         onToggle: isFlattened => Message.ToggledFlatten({ isFlattened }),
         toView: attributes =>
@@ -2347,7 +2354,7 @@ const buildOverlayView = (
       h,
     )
 
-  const settingsScreenView = (model: Model): Html =>
+  const settingsScreenView = (isFlattened: boolean): Html =>
     h.div(
       [h.Class('flex flex-col flex-1 min-h-0 overflow-y-auto overscroll-none')],
       [
@@ -2355,7 +2362,7 @@ const buildOverlayView = (
           [h.Class('flex flex-col')],
           [
             h.span([h.Class('dt-settings-section-title')], ['Message List']),
-            flattenSwitchView(model),
+            flattenSwitchView(isFlattened),
           ],
         ),
       ],
@@ -2513,7 +2520,7 @@ const buildOverlayView = (
     )
 
   const messageListBody = (
-    entries: ReadonlyArray<typeof DisplayEntry.Type>,
+    entries: ReadonlyArray<DisplayEntry>,
     startIndex: number,
     selectedIndex: number,
     isPaused: boolean,
@@ -2533,10 +2540,10 @@ const buildOverlayView = (
     const isInitSelected = selectedIndex === INIT_INDEX
     const isFiltered = Option.isSome(maybeFilterTag)
 
-    const leafOrTag = (entry: typeof DisplayEntry.Type): string =>
+    const leafOrTag = (entry: DisplayEntry): string =>
       Option.getOrElse(entry.maybeLeafTag, () => entry.tag)
 
-    const displayTagFor = (entry: typeof DisplayEntry.Type): string => {
+    const displayTagFor = (entry: DisplayEntry): string => {
       if (isFlattened) {
         return leafOrTag(entry)
       } else {
@@ -2558,7 +2565,7 @@ const buildOverlayView = (
 
     const indexedEntries: ReadonlyArray<
       Readonly<{
-        entry: typeof DisplayEntry.Type
+        entry: DisplayEntry
         absoluteIndex: number
       }>
     > = pipe(
@@ -2628,17 +2635,19 @@ const buildOverlayView = (
     ])
   }
 
-  // SCRUBBER
+  const scrubberPositionLabel = (
+    scrubberValue: number,
+    entryCount: number,
+  ): string => {
+    const total = globalThis.String(entryCount).padStart(3, '0')
+    const current = globalThis.String(scrubberValue).padStart(3, '0')
 
-  const scrubberPositionLabel = (model: Model): string => {
-    const total = globalThis.String(model.entries.length).padStart(3, '0')
-    const current = globalThis.String(model.scrubberValue).padStart(3, '0')
     return `${current} / ${total}`
   }
 
   const scrubberView = (model: Model): Html =>
     h.block(
-      bindings.ScrubberBinding.embedView({
+      bindings.ScrubberSliderBinding.embedView({
         slotId: model.scrubberSlider.id,
         model: model.scrubberSlider,
         viewInputs: {
@@ -2678,15 +2687,18 @@ const buildOverlayView = (
                       'dt-scrubber-position text-2xs text-dt-muted font-mono shrink-0 tabular-nums',
                     ),
                   ],
-                  [scrubberPositionLabel(model)],
+                  [
+                    scrubberPositionLabel(
+                      model.scrubberValue,
+                      model.entries.length,
+                    ),
+                  ],
                 ),
               ],
             ),
         },
       }),
     )
-
-  // FOOTER
 
   const isScrubberVisible = mode === 'TimeTravel'
 
@@ -2770,8 +2782,6 @@ const buildOverlayView = (
       ],
     )
 
-  // PANEL
-
   const messagesScreenView = (model: Model): Html => {
     const blockFilterViews = Array.filter([blockFilterView(model)], () =>
       Array.isReadonlyArrayNonEmpty(model.blockTags),
@@ -2801,7 +2811,7 @@ const buildOverlayView = (
     Match.value(model.screen).pipe(
       Match.withReturnType<Html>(),
       Match.when('Messages', () => messagesScreenView(model)),
-      Match.when('Settings', () => settingsScreenView(model)),
+      Match.when('Settings', () => settingsScreenView(model.isFlattened)),
       Match.exhaustive,
     )
 
@@ -2844,12 +2854,10 @@ const buildOverlayView = (
           () => model.isPaused && mode === 'TimeTravel',
         ),
         ...Array.filter([panelView(model)], () => model.isOpen),
-        badgeView(model),
+        badgeView(model.isOpen, model.isPaused),
       ],
     )
 }
-
-// CREATE
 
 const VIEW_TRANSITION_NAME = 'foldkit-devtools'
 const VIEW_TRANSITION_STYLE_ID = 'foldkit-devtools-view-transition'
@@ -2995,7 +3003,11 @@ export const createOverlay = (
       devTools: false,
       freezeModel: false,
     })
-    const overlay = program.provide(ServicesLayer)
+    const AppLayer = Layer.mergeAll(Tabs.layer, Listbox.layer, Slider.layer)
+    const overlay = program.provide({
+      services: AppLayer,
+      runtime: ServicesLayer,
+    })
 
     yield* Effect.forkScoped(overlay.start())
   })

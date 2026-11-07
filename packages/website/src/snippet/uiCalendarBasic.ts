@@ -1,19 +1,9 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Effect, Match, Option, Schema, Tuple } from 'effect'
+import { Effect, Layer, Match, Option, Schema } from 'effect'
 import { Block, Calendar } from 'foldkit'
 import type { ChildAttribute, Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
 import { Calendar as UiCalendar } from '@foldkit/ui'
-import type {
-  CalendarAttributes as UiCalendarCalendarAttributes,
-  DaysModeAttributes as UiCalendarDaysModeAttributes,
-  MonthsModeAttributes as UiCalendarMonthsModeAttributes,
-  Week as UiCalendarWeek,
-  YearsModeAttributes as UiCalendarYearsModeAttributes,
-} from '@foldkit/ui/calendar'
 
 // Add a field to your Model for the Calendar Block, plus a field the
 // parent owns for the selected date. The calendar no longer stores the
@@ -23,12 +13,13 @@ const Model = Schema.Struct({
   maybeSelectedDate: Schema.Option(Calendar.CalendarDate),
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // Fetch `today` once at the app boundary via flags so init stays pure:
 const Flags = Schema.Struct({
   today: Calendar.CalendarDate,
   // ...your other flags
 })
+type Flags = typeof Flags.Type
 
 const flags = Effect.gen(function* () {
   const today = yield* Calendar.today.local
@@ -38,14 +29,25 @@ const flags = Effect.gen(function* () {
 // This excerpt has no parent-owned facts. The Composition derives Calendar
 // delivery from the Binding.
 const Message = defineMessageUnion({})
+type Message = typeof Message.Type
 
-const CalendarExampleDefinition = Block.makeDefinition('CalendarExample', {
+export const CalendarExampleKey = Symbol('CalendarExample')
+export const CalendarExampleBlock = Block.make('CalendarExample', {
+  key: CalendarExampleKey,
+  InitArgs: Schema.Tuple([Flags]),
+  view: { kind: 'Element' },
   Model,
   Message,
   ChildInitContext: Flags,
 })
 
-const { makeFieldsStep, makeNoopStep } = CalendarExampleDefinition
+const {
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = CalendarExampleBlock
 
 // At module scope, fold the OutMessage into your own Model. When the user
 // commits a date (click, Enter, or Space) it carries `SelectedDate({ date })`.
@@ -53,9 +55,21 @@ const { makeFieldsStep, makeNoopStep } = CalendarExampleDefinition
 // selecting a date. Each arm returns an Update.Step over the parent Model,
 // which already has the next Calendar Model written back. The parent
 // Definition checks every named variant and infers the parent Step:
-const foldCalendarOutMessage = CalendarExampleDefinition.makeOutMessageFold(
-  UiCalendar.CalendarBlock,
-  {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const CalendarDemoBinding = makeRequiredFieldBinding(UiCalendar.CalendarBlock, {
+  field: 'calendarDemo',
+  init: {
+    contextToArgs: flags => [
+      {
+        id: 'calendar-demo',
+        today: flags.today,
+        initialViewDate: flags.today,
+      },
+    ],
+  },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(UiCalendar.CalendarBlock, {
     // The child has emitted `SelectedDate`. This is where the parent lifts
     // the committed date into its own field. That field is then passed back
     // to the calendar as `maybeSelectedDate`, so the parent stays the single
@@ -68,30 +82,11 @@ const foldCalendarOutMessage = CalendarExampleDefinition.makeOutMessageFold(
     // update its own state or dispatch its own Commands, for example
     // prefetch month data, fire analytics, or trigger a downstream Command.
     ChangedViewMonth: makeNoopStep,
-  },
-)
+  }),
+})
 
-// The Binding wires the completed child Block into the parent: it delegates navigation,
-// focus, and picker-mode transitions to UiCalendar.CalendarBlock.update, writes the next
-// Calendar Model back, routes generated delivery and Command results,
-// and hands any OutMessage to the OutMessage fold.
-const CalendarBinding = CalendarExampleDefinition.makeBinding(
-  UiCalendar.CalendarBlock,
-  {
-    field: 'calendarDemo',
-    init: {
-      contextToArgs: flags =>
-        Tuple.make({
-          id: 'calendar-demo',
-          today: flags.today,
-          initialViewDate: flags.today,
-        }),
-    },
-  },
-).withOutMessagePolicy({ fold: foldCalendarOutMessage })
-
-const CalendarExampleComposition = CalendarExampleDefinition.makeComposition({
-  bindings: [CalendarBinding],
+const CalendarExampleComposition = makeComposition({
+  bindings: [CalendarDemoBinding],
 })
 type CalendarExampleViewBuilder = Block.ViewBuilderFor<
   typeof CalendarExampleComposition
@@ -99,15 +94,13 @@ type CalendarExampleViewBuilder = Block.ViewBuilderFor<
 
 // Pass the flags-resolved date through the child init context. `initialViewDate`
 // seeds the month the calendar opens onto. The parent owns the selection.
-const init = CalendarExampleComposition.makeInit(
-  (flags: typeof Flags.Type) => ({
-    childInitContext: flags,
-    model: {
-      maybeSelectedDate: Option.none(),
-      // ...your other fields
-    },
-  }),
-)
+const init = CalendarExampleComposition.makeInit(flags => ({
+  childInitContext: flags,
+  model: {
+    maybeSelectedDate: Option.none(),
+    // ...your other fields
+  },
+}))
 
 const update = CalendarExampleComposition.makeUpdate({})
 
@@ -153,7 +146,7 @@ const navButton = (
 // Months, Months into Years). Pair the text with a chevron so the button reads
 // as interactive at rest.
 const headingButton = (
-  heading: UiCalendarDaysModeAttributes['heading'],
+  heading: UiCalendar.DaysModeAttributes['heading'],
   attributes: ReadonlyArray<ChildAttribute>,
   h: CalendarExampleViewBuilder,
 ): Html =>
@@ -164,7 +157,7 @@ const headingButton = (
 
 // Each Week carries its own row attributes and seven day cells, and each cell
 // is a gridcell wrapping a button.
-const weekRow = (week: UiCalendarWeek, h: CalendarExampleViewBuilder): Html =>
+const weekRow = (week: UiCalendar.Week, h: CalendarExampleViewBuilder): Html =>
   h.div(
     [...week.attributes, h.Class(rowClassName)],
     week.cells.map(cell =>
@@ -183,7 +176,7 @@ const weekRow = (week: UiCalendarWeek, h: CalendarExampleViewBuilder): Html =>
 // One view function per view mode. Each receives the attribute group for its
 // own grid, so the fields it reads are exactly the fields that exist.
 const daysView = (
-  days: UiCalendarDaysModeAttributes,
+  days: UiCalendar.DaysModeAttributes,
   h: CalendarExampleViewBuilder,
 ): Html =>
   h.div(
@@ -218,7 +211,7 @@ const daysView = (
 // The months grid renders 12 cells (one per month). Clicking the heading again
 // drills further into the years grid.
 const monthsView = (
-  months: UiCalendarMonthsModeAttributes,
+  months: UiCalendar.MonthsModeAttributes,
   h: CalendarExampleViewBuilder,
 ): Html =>
   h.div(
@@ -249,7 +242,7 @@ const monthsView = (
 // 12-year windows; clicking a year drills back to the months grid for that
 // year. Years is terminal, so its heading is text rather than a button.
 const yearsView = (
-  years: UiCalendarYearsModeAttributes,
+  years: UiCalendar.YearsModeAttributes,
   h: CalendarExampleViewBuilder,
 ): Html =>
   h.div(
@@ -288,7 +281,7 @@ const yearsView = (
 // calendar's current `viewMode`, so the match hands each grid to its own view
 // function:
 const view = CalendarExampleComposition.makeView((model, h) => {
-  const calendarView = Match.type<UiCalendarCalendarAttributes>().pipe(
+  const calendarView = Match.type<UiCalendar.CalendarAttributes>().pipe(
     Match.tagsExhaustive({
       Days: days => daysView(days, h),
       Months: months => monthsView(months, h),
@@ -297,7 +290,7 @@ const view = CalendarExampleComposition.makeView((model, h) => {
   )
 
   return h.block(
-    CalendarBinding.embedView({
+    CalendarDemoBinding.embedView({
       slotId: model.calendarDemo.id,
       model: model.calendarDemo,
       viewInputs: {
@@ -308,3 +301,16 @@ const view = CalendarExampleComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = CalendarExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* CalendarExampleComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(UiCalendar.layer))

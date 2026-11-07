@@ -2,22 +2,16 @@ import clsx from 'clsx'
 import { Equal, HashSet, Match, Number, flow } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import type { TabInfo } from '@foldkit/ui/tabs'
+import { Tabs } from '@foldkit/ui'
 
-import {
-  type ApplicationViewBuilder,
-  StepMenuBinding as StepMenuBinding,
-} from '../composition'
+import { type ApplicationViewBuilder, StepMenuBinding } from '../composition'
 import { Step } from '../domain'
 import { type Model } from '../model'
 import * as Icon from './icon'
 
 type StepStatus = 'Current' | 'Completed' | 'Upcoming'
 
-const stepToStatus = (
-  step: typeof Step.Step.Type,
-  currentStep: typeof Step.Step.Type,
-): StepStatus =>
+const stepToStatus = (step: Step.Step, currentStep: Step.Step): StepStatus =>
   Match.value(step).pipe(
     Match.withReturnType<StepStatus>(),
     Match.when(Equal.equals(currentStep), () => 'Current'),
@@ -89,9 +83,9 @@ const stepButtonClass = (status: StepStatus, needsAttention: boolean): string =>
   )
 
 export const stepTabButton = (
-  tab: TabInfo<typeof Step.Step.Type>,
-  currentStep: typeof Step.Step.Type,
-  stepsNeedingAttention: HashSet.HashSet<typeof Step.Step.Type>,
+  tab: Tabs.TabInfo<Step.Step>,
+  currentStep: Step.Step,
+  stepsNeedingAttention: HashSet.HashSet<Step.Step>,
   h: ApplicationViewBuilder,
 ): Html => {
   const status = stepToStatus(tab.value, currentStep)
@@ -107,10 +101,7 @@ export const stepTabButton = (
   )
 }
 
-const stepMenuTrigger = (
-  currentStep: typeof Step.Step.Type,
-  h: ApplicationViewBuilder,
-) =>
+const stepMenuTrigger = (currentStep: Step.Step, h: ApplicationViewBuilder) =>
   h.div(
     [h.Class('flex items-center justify-between w-full gap-3')],
     [
@@ -134,8 +125,8 @@ const stepMenuTrigger = (
   )
 
 export const stepMenu = (
-  model: typeof Model.Type,
-  stepsNeedingAttention: HashSet.HashSet<typeof Step.Step.Type>,
+  model: Model,
+  stepsNeedingAttention: HashSet.HashSet<Step.Step>,
   h: ApplicationViewBuilder,
 ): Html =>
   h.block(

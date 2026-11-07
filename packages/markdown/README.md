@@ -117,31 +117,32 @@ markdown({ islands: islandAttributes })
 import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import type { Html } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
 
 import * as Markdown from '@foldkit/markdown'
 
 import * as Counter from './counter'
 import { islandAttributes } from './islands'
 
-const Model = Schema.Struct({ counter: Counter.Model })
+const Model = Schema.Struct({ counter: Counter.CounterBlock.Model })
 type Model = typeof Model.Type
 
-const Message = defineMessageUnion({
-  GotCounterMessage: { message: Counter.Message },
-})
-
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
-  Message,
+  Message: Schema.Never,
 })
 
-const CounterBinding = ApplicationDefinition.makeBinding(Counter.block, {
-  field: 'counter',
-  parentMessage: Message.GotCounterMessage,
-})
+const CounterBinding = ApplicationBlock.makeRequiredFieldBinding(
+  Counter.CounterBlock,
+  {
+    field: 'counter',
+  },
+)
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [CounterBinding],
 })
 type ApplicationViewBuilder = Block.ViewBuilderFor<
@@ -161,7 +162,7 @@ const postView = (
           [
             h.span([], [label ?? 'Counter']),
             h.block(
-              counter.embedView({
+              CounterBinding.embedView({
                 slotId: `counter-${occurrenceIndex}`,
                 model: model.counter,
               }),
@@ -173,6 +174,8 @@ const postView = (
     }),
   })
 ```
+
+The parent constructor yields `CounterBinding`, returns the connection under `children`, and provides `Counter.layer` through `Layer.provide`. The view helper uses the registered Binding directly.
 
 Attribute values are strings on the wire, so transforming field schemas decode past them: `Schema.NumberFromString` turns `::Chart{height="240"}` into `height: number`. A plain `islands` record of untyped views (`Readonly<Record<string, IslandView>>`) also works when you want to skip the schemas.
 
@@ -188,6 +191,7 @@ export const PostFrontmatter = Schema.Struct({
   title: Schema.String.check(Schema.isNonEmpty()),
   date: Schema.String,
 })
+export type PostFrontmatter = typeof PostFrontmatter.Type
 ```
 
 ```typescript

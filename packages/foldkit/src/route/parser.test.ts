@@ -137,8 +137,11 @@ describe('int', () => {
 
 describe('schemaSegment', () => {
   const UserId = Schema.String.pipe(Schema.brand('UserId'))
+  type UserId = typeof UserId.Type
   const PostId = Schema.FiniteFromString.pipe(Schema.brand('PostId'))
+  type PostId = typeof PostId.Type
   const Direction = Schema.Literals(['Horizontal', 'Vertical'])
+  type Direction = typeof Direction.Type
 
   it.effect('captures a segment decoded through the schema', () =>
     Effect.gen(function* () {
@@ -196,6 +199,7 @@ describe('schemaSegment', () => {
   it.effect('parse then build round-trips a branded id', () =>
     Effect.gen(function* () {
       const ApplicationRoute = defineRouteUnion({ Route: { userId: UserId } })
+      type ApplicationRoute = typeof ApplicationRoute.Type
       const router = pipe(
         literal('users'),
         slash(schemaSegment('userId', UserId)),
@@ -243,6 +247,7 @@ describe('rest', () => {
   const ApplicationRoute = defineRouteUnion({
     Files: { path: Schema.NonEmptyArray(Schema.String) },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const filesRouter = pipe(
     literal('files'),
@@ -338,6 +343,7 @@ describe('restString', () => {
     Vault: { path: Schema.String },
     NotFound: { path: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const vaultRouter = pipe(
     literal('vault'),
@@ -633,6 +639,7 @@ describe('oneOf', () => {
         FilesIndex: {},
         Files: { path: Schema.NonEmptyArray(Schema.String) },
       })
+      type ApplicationRoute = typeof ApplicationRoute.Type
       const parser = oneOf(
         pipe(literal('files'), mapTo(ApplicationRoute.FilesIndex)),
         pipe(
@@ -656,6 +663,7 @@ describe('mapTo', () => {
     Home: {},
     UserProfile: { id: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   it.effect('wraps parsed values with a constructor', () =>
     Effect.gen(function* () {
@@ -693,6 +701,7 @@ describe('parseUrlWithFallback', () => {
     Home: {},
     NotFound: { path: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const homeRouter = mapTo(ApplicationRoute.Home)(root)
   const parser = oneOf(homeRouter)
@@ -721,6 +730,7 @@ describe('parsePathWithFallback', () => {
     Person: { personId: Schema.String },
     NotFound: { path: Schema.String },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const homeRouter = mapTo(ApplicationRoute.Home)(root)
   const searchRouter = pipe(
@@ -765,6 +775,7 @@ describe('parsePathWithFallback', () => {
       Search: { query: Schema.Literals(['allowed']) },
       NotFound: { path: Schema.String },
     })
+    type StrictSearchRoute = typeof StrictSearchRoute.Type
     const strictSearchRouter = pipe(
       literal('search'),
       query(Schema.Struct({ query: Schema.Literals(['allowed']) })),
@@ -846,6 +857,7 @@ describe('round-trip: parse then build', () => {
   const ApplicationRoute = defineRouteUnion({
     Route: { userId: Schema.String, postId: Schema.Number },
   })
+  type ApplicationRoute = typeof ApplicationRoute.Type
 
   const router = pipe(
     literal('users'),

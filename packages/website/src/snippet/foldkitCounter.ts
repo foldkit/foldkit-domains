@@ -6,15 +6,25 @@ import { modifyFields } from 'foldkit/struct'
 const Model = Schema.Struct({
   count: Schema.Number,
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   ClickedIncrement: {},
 })
+type Message = typeof Message.Type
 
-const ApplicationComposition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = ApplicationBlock
+
+const ApplicationComposition = makeComposition()
 
 const update = ApplicationComposition.makeUpdate({
   ClickedIncrement: model => ({

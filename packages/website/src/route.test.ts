@@ -42,18 +42,6 @@ const parameterlessRouters: ReadonlyArray<readonly [string, string]> =
     return [entry]
   })
 
-describe('route table', () => {
-  test.each(parameterlessRouters)(
-    '%s builds a URL that parses back to its own route',
-    (name, path) => {
-      const parsed = Route.urlToApplicationRoute(
-        Option.getOrThrow(urlFromString(`${SITE}${path}`)),
-      )
-      expect(parsed._tag).toBe(expectedTag(name))
-    },
-  )
-})
-
 describe('route canonical URLs', () => {
   test.each(parameterlessRouters)(
     '%s canonical round-trips through the route parser',
@@ -135,7 +123,7 @@ describe('section predicates', () => {
   const cases: ReadonlyArray<
     Readonly<{
       name: string
-      route: typeof Route.ApplicationRoute.Type
+      route: Route.ApplicationRoute
       isDocsSection: boolean
       isBlog: boolean
       isSearch: boolean

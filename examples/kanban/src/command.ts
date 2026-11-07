@@ -1,32 +1,30 @@
-import { Crypto, Effect, Layer, Schema } from 'effect'
+import { Effect, Schema } from 'effect'
+import { SecureRandom } from 'effect/crypto'
 import { KeyValueStore } from 'effect/persistence'
 import { Dom } from 'foldkit'
 
+import { makeCommand } from './block'
 import { ADD_CARD_INPUT_ID, STORAGE_KEY } from './constant'
-import { ApplicationDefinition } from './definition'
 import { Column } from './domain'
 import { Message } from './message'
 import { SavedBoardJsonString } from './model'
 
-export const GenerateCardId = ApplicationDefinition.makeCommand(
-  'GenerateCardId',
-  {
-    args: { columnId: Schema.String, title: Schema.String },
-    messages: [Message.CompletedGenerateCardId],
-    handler: function* () {
-      const crypto = yield* Crypto.Crypto
+export const GenerateCardId = makeCommand('GenerateCardId', {
+  args: { columnId: Schema.String, title: Schema.String },
+  messages: [Message.CompletedGenerateCardId],
+  handler: function* () {
+    const secureRandom = yield* SecureRandom.SecureRandom
 
-      return ({ columnId, title }) =>
-        Effect.gen(function* () {
-          const cardId = yield* Effect.orDie(crypto.randomUUIDv4)
+    return ({ columnId, title }) =>
+      Effect.gen(function* () {
+        const cardId = yield* secureRandom.uuidV4()
 
-          return Message.CompletedGenerateCardId({ cardId, columnId, title })
-        })
-    },
+        return Message.CompletedGenerateCardId({ cardId, columnId, title })
+      })
   },
-)
+})
 
-export const SaveBoard = ApplicationDefinition.makeCommand('SaveBoard', {
+export const SaveBoard = makeCommand('SaveBoard', {
   args: { columns: Schema.Array(Column.Column) },
   messages: [Message.CompletedSaveBoard],
   handler: function* () {
@@ -43,22 +41,13 @@ export const SaveBoard = ApplicationDefinition.makeCommand('SaveBoard', {
   },
 })
 
-export const FocusAddCardInput = ApplicationDefinition.makeCommand(
-  'FocusAddCardInput',
-  {
-    messages: [Message.CompletedFocusAddCardInput],
-    handler: function* () {
-      return () =>
-        Dom.focus(`#${ADD_CARD_INPUT_ID}`).pipe(
-          Effect.ignore,
-          Effect.as(Message.CompletedFocusAddCardInput()),
-        )
-    },
+export const FocusAddCardInput = makeCommand('FocusAddCardInput', {
+  messages: [Message.CompletedFocusAddCardInput],
+  handler: function* () {
+    return () =>
+      Dom.focus(`#${ADD_CARD_INPUT_ID}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusAddCardInput()),
+      )
   },
-)
-
-export const EffectsLayer = Layer.mergeAll(
-  GenerateCardId.layer,
-  SaveBoard.layer,
-  FocusAddCardInput.layer,
-)
+})

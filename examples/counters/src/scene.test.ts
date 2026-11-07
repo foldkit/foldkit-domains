@@ -1,90 +1,105 @@
-import {
-  all,
-  click,
-  expect,
-  expectAll,
-  first,
-  given,
-  nth,
-  role,
-  scene,
-  text,
-} from 'foldkit/scene'
-import { describe, test } from 'vitest'
+import { Scene } from 'foldkit'
+import { describe } from 'vitest'
 
-import { Model as ModelSchema, update, view } from './application'
+import { it } from '@effect/vitest'
 
-const initialModel: typeof ModelSchema.Type = {
+import { ApplicationBlock, Model as ModelSchema, layer } from './block'
+import { CounterBlock } from './blocks/counter'
+
+const initialModel: ModelSchema = {
   counters: [
-    { id: 'counter-0', counter: { count: 0 } },
-    { id: 'counter-1', counter: { count: 0 } },
+    CounterBlock.Instance.make({ key: 'counter-0', model: { count: 0 } }),
+    CounterBlock.Instance.make({ key: 'counter-1', model: { count: 0 } }),
   ],
   nextCounterId: 2,
 }
 
 describe('view', () => {
-  test('renders one Counter instance per entry', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expectAll(all.role('button', { name: '+' })).toHaveCount(2),
-      expectAll(all.role('button', { name: '-' })).toHaveCount(2),
-      expectAll(all.role('button', { name: 'Remove' })).toHaveCount(2),
-    )
-  })
+  it.effect('renders one Counter instance per entry', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.expectAll(Scene.all.role('button', { name: '+' })).toHaveCount(2),
+      Scene.expectAll(Scene.all.role('button', { name: '-' })).toHaveCount(2),
+      Scene.expectAll(Scene.all.role('button', { name: 'Remove' })).toHaveCount(
+        2,
+      ),
+    ),
+  )
 
-  test('clicking + on a Counter dispatches through h.block back to the right instance', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expectAll(all.text('0')).toHaveCount(2),
-      click(nth(all.role('button', { name: '+' }), 1)),
-      expect(text('0')).toExist(),
-      expect(text('1')).toExist(),
-    )
-  })
+  it.effect(
+    'clicking + on a Counter dispatches through h.block back to the right instance',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.expectAll(Scene.all.text('0')).toHaveCount(2),
+        Scene.click(Scene.nth(Scene.all.role('button', { name: '+' }), 1)),
+        Scene.expect(Scene.text('0')).toExist(),
+        Scene.expect(Scene.text('1')).toExist(),
+      ),
+  )
 
-  test('clicking - on a Counter dispatches through h.block and decrements', () => {
-    scene(
-      { update, view },
-      given({
-        counters: [{ id: 'counter-0', counter: { count: 3 } }],
-        nextCounterId: 1,
-      }),
-      expect(text('3')).toExist(),
-      click(role('button', { name: '-' })),
-      expect(text('2')).toExist(),
-    )
-  })
+  it.effect(
+    'clicking - on a Counter dispatches through h.block and decrements',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given({
+          counters: [
+            CounterBlock.Instance.make({
+              key: 'counter-0',
+              model: { count: 3 },
+            }),
+          ],
+          nextCounterId: 1,
+        }),
+        Scene.expect(Scene.text('3')).toExist(),
+        Scene.click(Scene.role('button', { name: '-' })),
+        Scene.expect(Scene.text('2')).toExist(),
+      ),
+  )
 
-  test('Add Counter creates a new instance with a fresh Counter', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      click(role('button', { name: '+ Add Counter' })),
-      expectAll(all.role('button', { name: 'Remove' })).toHaveCount(3),
-      expectAll(all.text('0')).toHaveCount(3),
-    )
-  })
+  it.effect('Add Counter creates a new instance with a fresh Counter', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.click(Scene.role('button', { name: '+ Add Counter' })),
+      Scene.expectAll(Scene.all.role('button', { name: 'Remove' })).toHaveCount(
+        3,
+      ),
+      Scene.expectAll(Scene.all.text('0')).toHaveCount(3),
+    ),
+  )
 
-  test('Remove deletes an instance and routes future events to surviving counters', () => {
-    scene(
-      { update, view },
-      given({
-        counters: [
-          { id: 'counter-0', counter: { count: 5 } },
-          { id: 'counter-1', counter: { count: 10 } },
-        ],
-        nextCounterId: 2,
-      }),
-      expect(text('5')).toExist(),
-      expect(text('10')).toExist(),
-      click(first(all.role('button', { name: 'Remove' }))),
-      expectAll(all.role('button', { name: 'Remove' })).toHaveCount(1),
-      expect(text('5')).not.toExist(),
-      expect(text('10')).toExist(),
-      click(role('button', { name: '+' })),
-      expect(text('11')).toExist(),
-    )
-  })
+  it.effect(
+    'Remove deletes an instance and routes future events to surviving counters',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given({
+          counters: [
+            CounterBlock.Instance.make({
+              key: 'counter-0',
+              model: { count: 5 },
+            }),
+            CounterBlock.Instance.make({
+              key: 'counter-1',
+              model: { count: 10 },
+            }),
+          ],
+          nextCounterId: 2,
+        }),
+        Scene.expect(Scene.text('5')).toExist(),
+        Scene.expect(Scene.text('10')).toExist(),
+        Scene.click(Scene.first(Scene.all.role('button', { name: 'Remove' }))),
+        Scene.expectAll(
+          Scene.all.role('button', { name: 'Remove' }),
+        ).toHaveCount(1),
+        Scene.expect(Scene.text('5')).not.toExist(),
+        Scene.expect(Scene.text('10')).toExist(),
+        Scene.click(Scene.role('button', { name: '+' })),
+        Scene.expect(Scene.text('11')).toExist(),
+      ),
+  )
 })

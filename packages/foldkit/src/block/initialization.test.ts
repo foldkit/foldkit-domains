@@ -36,6 +36,7 @@ const ChildMessage = defineMessageUnion({
   CompletedInitialization: { count: Schema.Number },
   CompletedIncrement: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const Child = makeDefinition('InitializationChild', {
   Model: ChildModel,
@@ -64,7 +65,7 @@ const FinishIncrement = Child.makeCommand('FinishIncrement', {
 
 const calls: globalThis.Array<string> = []
 const single = (value: number): [number] => [value]
-const incrementStep = Child.makeStep(model => {
+const increment = Child.makeStep(model => {
   calls.push('child-step')
   return {
     model: modifyFields(model, { count: count => count + 100 }),
@@ -82,7 +83,7 @@ const prepareChildBlock = () =>
       }
     }),
     update: ChildComposition.makeUpdate({
-      RequestedIncrement: model => incrementStep(model),
+      RequestedIncrement: model => increment(model),
       CompletedInitialization: (model, { count }) => ({
         model: modifyFields(model, { count: () => count }),
       }),
@@ -141,7 +142,7 @@ type ChildInitContext = Readonly<{
   maybeSecondCount: Option.Option<number>
 }>
 
-const FirstBinding = Parent.makeBinding(ChildBlock, {
+const FirstBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
   field: 'first',
   init: {
     contextToArgs: (childInitContext: ChildInitContext) => {
@@ -150,7 +151,7 @@ const FirstBinding = Parent.makeBinding(ChildBlock, {
     },
   },
 })
-const SecondBinding = Parent.makeBinding(ChildBlock, {
+const SecondBinding = Parent.makeOptionalFieldBinding(ChildBlock, {
   field: 'maybeSecond',
   init: {
     contextToArgs: (childInitContext: ChildInitContext) => {
@@ -162,7 +163,7 @@ const SecondBinding = Parent.makeBinding(ChildBlock, {
 const ParentComposition = Parent.makeComposition({
   bindings: [FirstBinding, SecondBinding],
 })
-const finishParentStep = Parent.makeStep(model => {
+const finishParent = Parent.makeStep(model => {
   calls.push('parent-step')
   return {
     model: modifyFields(model, { status: () => 'Stepped' }),
@@ -177,7 +178,7 @@ const init = ParentComposition.makeInit(
       childInitContext: { firstCount, maybeSecondCount },
       model: { status: 'Ready' },
       commands: [FinishParentInitialization()],
-      steps: [FirstBinding.increment(), finishParentStep],
+      steps: [FirstBinding.increment(), finishParent],
     }
   },
 )
@@ -262,8 +263,8 @@ it('stays passive, initializes in Binding order, applies Steps sequentially, and
 })
 
 it('preserves a combined Binding operation and Command-producing Definition Step in init', () => {
-  const finishCombinedStep = Parent.makeStep(() =>
-    Update.combineSteps([FirstBinding.increment(), finishParentStep]),
+  const finishCombined = Parent.makeStep(() =>
+    Update.combineSteps([FirstBinding.increment(), finishParent]),
   )
   const initCombined = ParentComposition.makeInit((count: number) => ({
     childInitContext: {
@@ -271,7 +272,7 @@ it('preserves a combined Binding operation and Command-producing Definition Step
       maybeSecondCount: Option.none<number>(),
     },
     model: { status: 'Ready' },
-    steps: [finishCombinedStep],
+    steps: [finishCombined],
   }))
 
   expectTypeOf<Parameters<typeof initCombined>>().toEqualTypeOf<
@@ -338,6 +339,7 @@ it('skips an optional child and drops its init Commands after a Step removes it'
 
 it('preserves default and rest parameters for a graphless Composition', () => {
   const PlainModel = Schema.Struct({ count: Schema.Number })
+  type PlainModel = typeof PlainModel.Type
 
   const PlainComposition = makeDefinition('InitializationPlain', {
     Model: PlainModel,
@@ -379,6 +381,7 @@ it('preserves primitive and tagged union Models for graphless Compositions', () 
     Schema.TaggedStruct('SignedOut', {}),
     Schema.TaggedStruct('SignedIn', { username: Schema.String }),
   ])
+  type SessionModel = typeof SessionModel.Type
 
   const SessionComposition = makeDefinition('InitializationSession', {
     Model: SessionModel,
@@ -555,13 +558,14 @@ it('initializes a projected accessor child and verifies Schema reconstruction', 
     second: ChildModel,
     selected: Schema.Literal('Second'),
   })
+  type AccessorParentModel = typeof AccessorParentModel.Type
   const AccessorParent = makeDefinition('InitializationAccessorParent', {
     Model: AccessorParentModel,
     Message: Schema.Never,
   })
-  const AccessorBinding = AccessorParent.makeBinding(ChildBlock, {
+  const AccessorBinding = AccessorParent.makeCustomBinding(ChildBlock, {
     placement: 'selectedChild',
-    read: (model: typeof AccessorParentModel.Type) => Option.some(model.second),
+    read: (model: AccessorParentModel) => Option.some(model.second),
     write: (model, nextSecond) =>
       modifyFields(model, { second: () => nextSecond }),
     init: {
@@ -591,13 +595,14 @@ it('rejects a projected field that the accessor does not select', () => {
     first: ChildModel,
     second: ChildModel,
   })
+  type AccessorParentModel = typeof AccessorParentModel.Type
   const AccessorParent = makeDefinition('InitializationInvalidAccessorParent', {
     Model: AccessorParentModel,
     Message: Schema.Never,
   })
-  const InvalidAccessorBinding = AccessorParent.makeBinding(ChildBlock, {
+  const InvalidAccessorBinding = AccessorParent.makeCustomBinding(ChildBlock, {
     placement: 'invalidSelectedChild',
-    read: (model: typeof AccessorParentModel.Type) => Option.some(model.first),
+    read: (model: AccessorParentModel) => Option.some(model.first),
     write: (model, nextFirst) =>
       modifyFields(model, { first: () => nextFirst }),
     init: {
@@ -624,12 +629,12 @@ it('runs initialization callbacks and Steps under the exact registered operation
       maybeSecond: Option.none(),
       status: 'Ready',
     })
-  const ForeignBinding = Parent.makeBinding(ChildBlock, {
+  const ForeignBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
     field: 'first',
     placement: 'foreignFirst',
     init: false,
   })
-  const SelectorBinding = Parent.makeBinding(ChildBlock, {
+  const SelectorBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
     field: 'first',
     placement: 'selectorFirst',
     init: {
@@ -640,7 +645,7 @@ it('runs initialization callbacks and Steps under the exact registered operation
       },
     },
   })
-  const SelectorSecondBinding = Parent.makeBinding(ChildBlock, {
+  const SelectorSecondBinding = Parent.makeOptionalFieldBinding(ChildBlock, {
     field: 'maybeSecond',
     init: false,
   })
@@ -651,19 +656,22 @@ it('runs initialization callbacks and Steps under the exact registered operation
     first: ChildModel,
     second: ChildModel,
   })
+  type ProjectedParentModel = typeof ProjectedParentModel.Type
   const ProjectedParent = makeDefinition('InitializationProjectedGraphParent', {
     Model: ProjectedParentModel,
     Message: Schema.Never,
   })
-  const ForeignProjectedBinding = ProjectedParent.makeBinding(ChildBlock, {
-    field: 'first',
-    placement: 'foreignProjectedFirst',
-    init: false,
-  })
-  const ProjectedBinding = ProjectedParent.makeBinding(ChildBlock, {
+  const ForeignProjectedBinding = ProjectedParent.makeRequiredFieldBinding(
+    ChildBlock,
+    {
+      field: 'first',
+      placement: 'foreignProjectedFirst',
+      init: false,
+    },
+  )
+  const ProjectedBinding = ProjectedParent.makeCustomBinding(ChildBlock, {
     placement: 'projectedSecond',
-    read: (model: typeof ProjectedParentModel.Type) =>
-      Option.some(model.second),
+    read: (model: ProjectedParentModel) => Option.some(model.second),
     write: (model, nextSecond) =>
       modifyFields(model, { second: () => nextSecond }),
     init: {
@@ -681,7 +689,7 @@ it('runs initialization callbacks and Steps under the exact registered operation
   const ProjectedComposition = ProjectedParent.makeComposition({
     bindings: [ProjectedBinding],
   })
-  const initWithForeignStep = ParentComposition.makeInit(() => ({
+  const initWithForeign = ParentComposition.makeInit(() => ({
     childInitContext: {
       firstCount: 1,
       maybeSecondCount: Option.none<number>(),
@@ -711,7 +719,7 @@ it('runs initialization callbacks and Steps under the exact registered operation
     model: { first: ChildModel.make({ count: 0 }) },
   }))
 
-  expect(() => initWithForeignStep()).toThrow(
+  expect(() => initWithForeign()).toThrow(
     'is not registered in the current Block graph',
   )
   expect(() => initWithForeignInit()).toThrow(
@@ -865,14 +873,20 @@ it('omits startup when every child selector has no input', () => {
     Model: ParentModel,
     Message: ParentMessage,
   })
-  const FirstBinding = ConstantStartupParent.makeBinding(ChildBlock, {
-    field: 'first',
-    init: { contextToArgs: () => [3] },
-  })
-  const SecondBinding = ConstantStartupParent.makeBinding(ChildBlock, {
-    field: 'maybeSecond',
-    init: { contextToArgs: () => Option.some([4]) },
-  })
+  const FirstBinding = ConstantStartupParent.makeRequiredFieldBinding(
+    ChildBlock,
+    {
+      field: 'first',
+      init: { contextToArgs: () => [3] },
+    },
+  )
+  const SecondBinding = ConstantStartupParent.makeOptionalFieldBinding(
+    ChildBlock,
+    {
+      field: 'maybeSecond',
+      init: { contextToArgs: () => Option.some([4]) },
+    },
+  )
   const ConstantStartupParentComposition =
     ConstantStartupParent.makeComposition({
       bindings: [FirstBinding, SecondBinding],

@@ -89,6 +89,7 @@ type ContextModel = typeof ContextModel.Type
 const ContextMessage = defineMessageUnion({
   UpdatedValue: { value: Schema.String },
 })
+type ContextMessage = typeof ContextMessage.Type
 type DispatchContext = Readonly<{ source: string }>
 
 const ContextComposition = makeDefinition('ExposedMessageRuntimeContextChild', {
@@ -137,6 +138,7 @@ const ContextBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 > = Block.assemble(prepareContextBlock)
 
 const Entry = Schema.Struct({ id: Schema.String, child: ChildModel })
+type Entry = typeof Entry.Type
 const ParentModel = Schema.Struct({
   maybeChild: Schema.Option(ChildModel),
   entries: Schema.Array(Entry),
@@ -157,10 +159,10 @@ const foldChildOutMessage = ChildOutMessage.match<
 >({
   ChangedValue: () => model => ({ model }),
 })
-const ChildBinding = Parent.makeBinding(ChildBlock, {
+const ChildBinding = Parent.makeOptionalFieldBinding(ChildBlock, {
   field: 'maybeChild',
 }).withOutMessagePolicy({ fold: foldChildOutMessage })
-const EntryBinding = Parent.makeBinding(ChildBlock, {
+const EntryBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   placement: 'entries',
   readAll: model => model.entries,
   key: entry => entry.id,
@@ -403,6 +405,7 @@ describe('exposed Message operations', () => {
 
 if (false) {
   const ForeignMessage = defineMessageUnion({ ReceivedForeignMessage: {} })
+  type ForeignMessage = typeof ForeignMessage.Type
   const foreignMessageConfig = {
     init: () => ({ model: ContextModel.make({ value: '' }) }),
     update: contextUpdate,

@@ -13,8 +13,6 @@ import {
 } from 'foldkit/route'
 import type { CallableTaggedStruct } from 'foldkit/schema'
 
-// ROUTE SCHEMAS
-
 export const ApplicationRoute = defineRouteUnion({
   Home: {},
   WhyFoldkit: {},
@@ -122,13 +120,12 @@ export const ApplicationRoute = defineRouteUnion({
   BlogPost: { postSlug: Schema.String },
   NotFound: { path: Schema.String },
 })
+export type ApplicationRoute = typeof ApplicationRoute.Type
 
-export type ApplicationTransition = Transition.Transition<
-  typeof ApplicationRoute.Type
->
+export type ApplicationTransition = Transition.Transition<ApplicationRoute>
 
 export const maybeExampleSlugForRoute = (
-  route: typeof ApplicationRoute.Type,
+  route: ApplicationRoute,
 ): Option.Option<string> =>
   route._tag === 'ExampleDetail'
     ? Option.some(route.exampleSlug)
@@ -236,6 +233,7 @@ export const DocsRoute = ApplicationRoute.subset([
   'ContentApi',
   'NotFound',
 ])
+export type DocsRoute = typeof DocsRoute.Type
 
 export const isPlaygroundRoute = ApplicationRoute.isAnyOf(['Playground'])
 
@@ -245,7 +243,7 @@ const isMarketingRoute = ApplicationRoute.isAnyOf(['Home', 'Newsletter'])
 
 const isDocsUnionRoute = Schema.is(DocsRoute)
 
-export const isSearchRoute = (route: typeof ApplicationRoute.Type): boolean =>
+export const isSearchRoute = (route: ApplicationRoute): boolean =>
   isDocsUnionRoute(route) || isBlogRoute(route) || isMarketingRoute(route)
 
 /**
@@ -254,11 +252,8 @@ export const isSearchRoute = (route: typeof ApplicationRoute.Type): boolean =>
  * top-level route cannot silently join the section. `NotFound` is a member of
  * the union so 404s render in the docs shell, but it belongs to no section.
  */
-export const isDocsSectionRoute = (
-  route: typeof ApplicationRoute.Type,
-): boolean => isDocsUnionRoute(route) && route._tag !== 'NotFound'
-
-// ROUTERS
+export const isDocsSectionRoute = (route: ApplicationRoute): boolean =>
+  isDocsUnionRoute(route) && route._tag !== 'NotFound'
 
 type StaticRouteConstructor<Tag extends string> = CallableTaggedStruct<Tag, {}>
 
@@ -583,8 +578,6 @@ export const aiOverviewRouter = ai('overview', ApplicationRoute.AiOverview)
 export const aiSkillsRouter = ai('skills', ApplicationRoute.AiSkills)
 export const aiMcpRouter = ai('mcp', ApplicationRoute.AiMcp)
 
-// PARSER
-
 const introductionParser = oneOf(
   whyFoldkitRouter,
   roadmapRouter,
@@ -781,11 +774,9 @@ export const urlToApplicationRoute = parseUrlWithFallback(
   ApplicationRoute.NotFound,
 )
 
-// URLS
-
 export const SITE_URL = 'https://foldkit.dev'
 
-export const routeToUrlPath = (route: typeof ApplicationRoute.Type): string =>
+export const routeToUrlPath = (route: ApplicationRoute): string =>
   ApplicationRoute.match(route, {
     Home: () => homeRouter(),
     WhyFoldkit: () => whyFoldkitRouter(),
@@ -895,6 +886,5 @@ export const routeToUrlPath = (route: typeof ApplicationRoute.Type): string =>
     NotFound: ({ path }) => path,
   })
 
-export const routeToCanonicalUrl = (
-  route: typeof ApplicationRoute.Type,
-): string => String.concat(SITE_URL, routeToUrlPath(route))
+export const routeToCanonicalUrl = (route: ApplicationRoute): string =>
+  String.concat(SITE_URL, routeToUrlPath(route))

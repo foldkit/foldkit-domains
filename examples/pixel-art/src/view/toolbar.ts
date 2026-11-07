@@ -2,8 +2,7 @@ import clsx from 'clsx'
 import { Array, Option } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
 
-import { Button, Switch } from '@foldkit/ui'
-import type { AnchorConfig } from '@foldkit/ui/listbox'
+import { Button, Listbox, Switch } from '@foldkit/ui'
 
 import {
   GridSizeRadioGroupBlock,
@@ -13,22 +12,27 @@ import {
 } from '../components'
 import {
   type ApplicationViewBuilder,
-  GridSizeRadioGroupBinding as GridSizeRadioGroupBinding,
-  PaletteRadioGroupBinding as PaletteRadioGroupBinding,
-  ThemeListboxBinding as ThemeListboxBinding,
-  ToolRadioGroupBinding as ToolRadioGroupBinding,
+  GridSizeRadioGroupBinding,
+  PaletteRadioGroupBinding,
+  ThemeListboxBinding,
+  ToolRadioGroupBinding,
 } from '../composition'
 import { EMPTY_COLOR, GRID_SIZE_STRINGS } from '../constant'
 import { Message } from '../message'
 import { type MirrorMode, type PaletteIndex, type Tool } from '../model'
 import { PALETTE_THEMES, type PaletteTheme } from '../palette'
 
-const TOOLS: ReadonlyArray<typeof Tool.Type> = ['Brush', 'Fill', 'Eraser']
+type ThemeListboxModel = typeof ThemeListboxBlock.Model.Type
+type ToolRadioGroupModel = typeof ToolRadioGroupBlock.Model.Type
+type GridSizeRadioGroupModel = typeof GridSizeRadioGroupBlock.Model.Type
+type PaletteRadioGroupModel = typeof PaletteRadioGroupBlock.Model.Type
+
+const TOOLS: ReadonlyArray<Tool> = ['Brush', 'Fill', 'Eraser']
 
 export const MIRROR_HORIZONTAL_SWITCH_ID = 'mirror-horizontal'
 export const MIRROR_VERTICAL_SWITCH_ID = 'mirror-vertical'
 
-const TOOL_SHORTCUTS: Record<typeof Tool.Type, string> = {
+const TOOL_SHORTCUTS: Record<Tool, string> = {
   Brush: 'B',
   Fill: 'F',
   Eraser: 'E',
@@ -36,7 +40,7 @@ const TOOL_SHORTCUTS: Record<typeof Tool.Type, string> = {
 
 export const THEME_INDEX_STRINGS = Array.makeBy(PALETTE_THEMES.length, String)
 
-export const THEME_LISTBOX_ANCHOR: AnchorConfig = {
+export const THEME_LISTBOX_ANCHOR: Listbox.AnchorConfig = {
   placement: 'bottom-start',
   gap: 4,
   padding: 8,
@@ -95,17 +99,17 @@ const chevronDownIcon = (className: string, h: ApplicationViewBuilder): Html =>
   )
 
 export const toolPanelView = (
-  mirrorMode: typeof MirrorMode.Type,
-  tool: typeof Tool.Type,
+  mirrorMode: MirrorMode,
+  tool: Tool,
   gridSize: number,
-  selectedColorIndex: typeof PaletteIndex.Type,
+  selectedColorIndex: PaletteIndex,
   isCanvasEmpty: boolean,
   theme: PaletteTheme,
   paletteThemeIndex: number,
-  themeListbox: typeof ThemeListboxBlock.Model.Type,
-  toolRadioGroup: typeof ToolRadioGroupBlock.Model.Type,
-  gridSizeRadioGroup: typeof GridSizeRadioGroupBlock.Model.Type,
-  paletteRadioGroup: typeof PaletteRadioGroupBlock.Model.Type,
+  themeListbox: ThemeListboxModel,
+  toolRadioGroup: ToolRadioGroupModel,
+  gridSizeRadioGroup: GridSizeRadioGroupModel,
+  paletteRadioGroup: PaletteRadioGroupModel,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -127,8 +131,8 @@ export const toolPanelView = (
   )
 
 const toolSectionView = (
-  selectedTool: typeof Tool.Type,
-  toolRadioGroup: typeof ToolRadioGroupBlock.Model.Type,
+  selectedTool: Tool,
+  toolRadioGroup: ToolRadioGroupModel,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -179,7 +183,7 @@ const toolSectionView = (
   )
 
 const mirrorSectionView = (
-  mirrorMode: typeof MirrorMode.Type,
+  mirrorMode: MirrorMode,
   h: ApplicationViewBuilder,
 ): Html => {
   const isMirrorHorizontal =
@@ -266,7 +270,7 @@ const mirrorSectionView = (
 
 const sizeSectionView = (
   gridSize: number,
-  gridSizeRadioGroup: typeof GridSizeRadioGroupBlock.Model.Type,
+  gridSizeRadioGroup: GridSizeRadioGroupModel,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -311,11 +315,11 @@ const sizeSectionView = (
   )
 
 const paletteSectionView = (
-  selectedColorIndex: typeof PaletteIndex.Type,
+  selectedColorIndex: PaletteIndex,
   theme: PaletteTheme,
   paletteThemeIndex: number,
-  themeListbox: typeof ThemeListboxBlock.Model.Type,
-  paletteRadioGroup: typeof PaletteRadioGroupBlock.Model.Type,
+  themeListbox: ThemeListboxModel,
+  paletteRadioGroup: PaletteRadioGroupModel,
   h: ApplicationViewBuilder,
 ): Html => {
   const paletteIndexStrings = theme.colors.map((_, index) => index.toString())
@@ -373,7 +377,7 @@ const paletteSectionView = (
 }
 
 const themeListboxView = (
-  themeListbox: typeof ThemeListboxBlock.Model.Type,
+  themeListbox: ThemeListboxModel,
   theme: PaletteTheme,
   paletteThemeIndex: number,
   h: ApplicationViewBuilder,

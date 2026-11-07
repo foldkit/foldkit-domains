@@ -1,31 +1,34 @@
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 
 import { Message } from './message'
 import { Model } from './model'
 import * as ThemeMenu from './themeMenu'
 
-export const SettingsDefinition = Block.makeDefinition('Settings', {
+export const SettingsKey = Symbol('Settings')
+export const SettingsBlock = Block.make('Settings', {
+  key: SettingsKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeNoopStep } = SettingsDefinition
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = SettingsBlock
 
-const foldThemeMenuOutMessage = SettingsDefinition.makeOutMessageFold(
-  ThemeMenu.ThemeMenuBlock,
-  {
+const ThemeMenuBinding = makeRequiredFieldBinding(ThemeMenu.ThemeMenuBlock, {
+  field: 'themeMenu',
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ThemeMenu.ThemeMenuBlock, {
     Selected: makeNoopStep,
     Closed: makeNoopStep,
-  },
-)
+  }),
+})
 
-const ThemeMenuBinding = SettingsDefinition.makeBinding(
-  ThemeMenu.ThemeMenuBlock,
-  {
-    field: 'themeMenu',
-  },
-).withOutMessagePolicy({ fold: foldThemeMenuOutMessage })
-
-export const SettingsComposition = SettingsDefinition.makeComposition({
+export const SettingsComposition = makeComposition({
   bindings: [ThemeMenuBinding],
 })

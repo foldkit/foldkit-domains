@@ -1,24 +1,22 @@
 import { Array, type Result, Schema } from 'effect'
 
-import { Issue, Workspace } from '../domain'
+import { Workspace } from '../domain'
 import type { RepositoryError } from './schema'
 
 const FIRST_ISSUE_NUMBER = 101
 
 export const RepositoryState = Schema.Struct({
-  workspace: Workspace,
+  workspace: Workspace.Workspace,
   nextIssueNumber: Schema.Number,
   nextCommentNumber: Schema.Number,
 })
+export type RepositoryState = typeof RepositoryState.Type
 
 export type RepositoryTransition<Value> = Readonly<
-  [
-    Result.Result<Value, typeof RepositoryError.Type>,
-    typeof RepositoryState.Type,
-  ]
+  [Result.Result<Value, RepositoryError>, RepositoryState]
 >
 
-export const makeRepositoryState = (workspace: typeof Workspace.Type) =>
+export const makeRepositoryState = (workspace: Workspace.Workspace) =>
   RepositoryState.make({
     workspace,
     nextIssueNumber: FIRST_ISSUE_NUMBER + workspace.issues.length,
@@ -30,30 +28,7 @@ export const makeRepositoryState = (workspace: typeof Workspace.Type) =>
       ) + 1,
   })
 
-export const findIssue = (
-  state: typeof RepositoryState.Type,
-  issueId: string,
-) => Array.findFirst(state.workspace.issues, issue => issue.id === issueId)
-
-export const hasProject = (
-  state: typeof RepositoryState.Type,
-  projectId: string,
-) => Array.some(state.workspace.projects, project => project.id === projectId)
-
-export const replaceIssue = (
-  workspace: typeof Workspace.Type,
-  issue: typeof Issue.Type,
-) =>
-  Workspace.make({
-    ...workspace,
-    issues: Array.map(workspace.issues, currentIssue =>
-      currentIssue.id === issue.id ? issue : currentIssue,
-    ),
-  })
-
-export const findAvailableIssueNumber = (
-  state: typeof RepositoryState.Type,
-): number => {
+export const findAvailableIssueNumber = (state: RepositoryState): number => {
   let issueNumber = state.nextIssueNumber
 
   while (
@@ -70,9 +45,7 @@ export const findAvailableIssueNumber = (
   return issueNumber
 }
 
-export const findAvailableCommentNumber = (
-  state: typeof RepositoryState.Type,
-): number => {
+export const findAvailableCommentNumber = (state: RepositoryState): number => {
   let commentNumber = state.nextCommentNumber
 
   while (

@@ -8,9 +8,11 @@ import { makeCompositionUpdate } from './delivery.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   ChangedCount: { amount: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const ChildComposition = makeDefinition('StrictRoutingRuntimeChild', {
   Model: ChildModel,
@@ -60,6 +62,7 @@ const ContextChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 > = Block.assemble(prepareContextChildBlock)
 
 const Entry = Schema.Struct({ id: Schema.String, child: ChildModel })
+type Entry = typeof Entry.Type
 const ParentModel = Schema.Struct({
   child: ChildModel,
   contextualChild: ChildModel,
@@ -67,24 +70,26 @@ const ParentModel = Schema.Struct({
   multiplier: Schema.Number,
   resets: Schema.Number,
 })
+type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({
   ClickedReset: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('StrictRoutingRuntimeParent', {
   Model: ParentModel,
   Message: ParentMessage,
 })
 
-const ChildBinding = Parent.makeBinding(ChildBlock, {
+const ChildBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
   field: 'child',
 })
-const ContextBinding = Parent.makeBinding(ContextChildBlock, {
+const ContextBinding = Parent.makeRequiredFieldBinding(ContextChildBlock, {
   field: 'contextualChild',
   delivery: {
     toUpdateContext: model => [{ multiplier: model.multiplier }],
   },
 })
-const EntryBinding = Parent.makeBinding(ChildBlock, {
+const EntryBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   readAll: model => model.entries,
   key: entry => entry.id,
   read: entry => entry.child,
@@ -119,7 +124,7 @@ const parentModel = ParentModel.make({
 })
 
 const rawFullMessageUpdate = (
-  model: typeof ParentModel.Type,
+  model: ParentModel,
   message: Parameters<typeof parentUpdate>[1],
 ) => ({
   model: modifyFields(model, {
@@ -192,7 +197,7 @@ it('does not wrap an update authored by the same Composition twice', () => {
 })
 
 it('rejects duplicate generated delivery placements for erased callers', () => {
-  const duplicateBinding = Parent.makeBinding(ChildBlock, {
+  const duplicateBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
     field: 'child',
     placement: 'child',
     init: false,
@@ -239,6 +244,7 @@ it('reserves every Got prefix independent of its payload field name', () => {
     GotEvent: { event: Schema.String },
     ClickedReset: {},
   })
+  type EventMessage = typeof EventMessage.Type
 
   expect(() => makeCompositionUpdate(EventMessage, [], true)).toThrow(
     'Parent Message "GotEvent" is a Got* child wrapper without an owning Binding',

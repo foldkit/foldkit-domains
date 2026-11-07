@@ -1,30 +1,30 @@
+import { Effect } from 'effect'
+import { Scene } from 'foldkit'
+
+import { ApplicationBlock, Message, layer, rootSubscriptions } from './block'
 import {
-  Subscription,
-  given,
-  scene,
-  subscriptions as sceneSubscriptions,
-} from 'foldkit/scene'
+  ChatBlock,
+  layer as ChatLayer,
+  Message as ChatMessage,
+  subscriptions as chatSubscriptions,
+} from './chat'
 
-const rootSubscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
-  clockTicks: entry('ClockTicks', { messages: [Message.Ticked] }),
-}))
-
-const subscriptions = sceneSubscriptions(
-  ApplicationComposition,
-  rootSubscriptions,
+await Effect.runPromise(
+  Scene.scene(
+    { block: ApplicationBlock, layer },
+    Scene.init(),
+    Scene.Subscription.emit(rootSubscriptions.clockTicks, Message.Ticked()),
+  ),
 )
 
-scene(
-  { update, view, subscriptions },
-  given(initialModel),
-  Subscription.emit(subscriptions.clockTicks, Message.Ticked()),
-)
-
-scene(
-  { update, view, subscriptions },
-  given(initialModel),
-  Subscription.emit(
-    subscriptions['chat/chatServerFrames'],
-    Chat.ChatBlock.Message.ReceivedServerFrame({ frame }),
+// Exercise a private child stream in the Scene owned by that implementation.
+await Effect.runPromise(
+  Scene.scene(
+    { block: ChatBlock, layer: ChatLayer },
+    Scene.init(),
+    Scene.Subscription.emit(
+      chatSubscriptions.chatServerFrames,
+      ChatMessage.ReceivedServerFrame({ frame }),
+    ),
   ),
 )

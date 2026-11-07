@@ -3,28 +3,36 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { type Flags } from './flagsDefinition'
+import { Flags } from './flagsDefinition'
 
 export const Model = Schema.Struct({
   count: Schema.Number,
   startingCount: Schema.Option(Schema.Number),
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({ ClickedIncrement: {} })
+export type Message = typeof Message.Type
 
-export const ApplicationComposition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Flags]),
+  view: { kind: 'Document' },
   Model,
   Message,
-}).makeComposition()
+})
 
-export const init = ApplicationComposition.makeInit(
-  (flags: typeof Flags.Type) => ({
-    model: Model.make({
-      count: Option.getOrElse(flags.savedCount, () => 0),
-      startingCount: flags.savedCount,
-    }),
+const { makeComposition } = ApplicationBlock
+
+export const ApplicationComposition = makeComposition()
+
+export const init = ApplicationComposition.makeInit(flags => ({
+  model: Model.make({
+    count: Option.getOrElse(flags.savedCount, () => 0),
+    startingCount: flags.savedCount,
   }),
-)
+}))
 
 export const update = ApplicationComposition.makeUpdate({
   ClickedIncrement: model => ({

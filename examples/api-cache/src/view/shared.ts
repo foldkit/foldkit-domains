@@ -1,4 +1,4 @@
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Message } from '../message'
@@ -28,7 +28,7 @@ export const loadingPanel = (text: string, h: ApplicationViewBuilder) =>
 
 type ErrorPanelInput = Readonly<{
   error: string
-  retryMessage: typeof Message.Type
+  retryMessage: Message
 }>
 
 export const errorPanel = (

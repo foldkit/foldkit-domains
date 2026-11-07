@@ -1,6 +1,6 @@
 import { Array, Number, Option, pipe } from 'effect'
 
-import { examples } from './page/example/meta'
+import { examples } from './blocks/exampleDetail/meta'
 import {
   type ApplicationRoute,
   aiMcpRouter,
@@ -107,8 +107,6 @@ export const DOCS_SIDEBAR_NAV_ID = 'docs-sidebar-nav'
 
 export const MOBILE_MENU_NAV_ID = 'mobile-menu-nav'
 
-// NAV PAGE
-
 export type NavPage = Readonly<{
   _tag: string
   href: string
@@ -136,10 +134,8 @@ export const isNavPageActive = (
     }),
   )
 
-// DOCS SECTIONS
-
 export type DocsSection = Readonly<{
-  key: typeof GroupKey.Type
+  key: GroupKey
   label: string
   pageGroups: ReadonlyArray<ReadonlyArray<NavPage>>
 }>
@@ -733,14 +729,10 @@ export const docsSections: ReadonlyArray<DocsSection> = [
   },
 ]
 
-// FLAT PAGE LIST
-
 export const allPages: ReadonlyArray<NavPage> = [
   getStartedPage,
   ...Array.flatMap(docsSections, ({ pageGroups }) => Array.flatten(pageGroups)),
 ]
-
-// NEXT / PREV LOOKUP
 
 export type PageNeighbors = Readonly<{
   maybePrevious: Option.Option<NavPage>
@@ -766,7 +758,7 @@ export const pageNeighbors = (_tag: string): PageNeighbors =>
 export const findActiveSectionKey = (
   routeTag: string,
   maybeExampleSlug: Option.Option<string>,
-): Option.Option<typeof GroupKey.Type> => {
+): Option.Option<GroupKey> => {
   // NOTE: ApiModule and Blog pages aren't in docsSections. Their groups are
   // rendered separately, so map them explicitly.
   if (routeTag === 'ApiModule') {
@@ -792,6 +784,6 @@ export const findActiveSectionKey = (
 }
 
 export const findActiveSectionKeyForRoute = (
-  route: typeof ApplicationRoute.Type,
-): Option.Option<typeof GroupKey.Type> =>
+  route: ApplicationRoute,
+): Option.Option<GroupKey> =>
   findActiveSectionKey(route._tag, maybeExampleSlugForRoute(route))

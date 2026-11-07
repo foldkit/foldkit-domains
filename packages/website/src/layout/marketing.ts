@@ -1,17 +1,20 @@
 import { type Html, inertHtml as ih } from 'foldkit/html'
 
-import { Shared } from '../component'
 import type { ApplicationViewBuilder } from '../composition'
 import { Icon } from '../icon'
 import { Link } from '../link'
 import { Message } from '../message'
 import { type Model } from '../model'
 import { getStartedRouter, homeRouter } from '../route'
-import { HeaderNav, Search, Sidebar, ThemeSelector } from '../view'
+import * as HeaderNav from '../view/headerNav'
+import * as Search from '../view/search'
+import * as Sidebar from '../view/sidebar'
+import * as ThemeSelector from '../view/themeSelector'
+import * as Site from './site'
 
 const PagefindBody = ih.DataAttribute('pagefind-body', '')
 
-const headerView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
+const headerView = (model: Model, h: ApplicationViewBuilder) =>
   h.header(
     [
       h.Class(
@@ -32,7 +35,7 @@ const headerView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
                 h.Height('200'),
                 h.Class('h-6 md:h-8 w-auto dark:invert'),
               ]),
-              Shared.betaTag,
+              Site.betaTag,
             ],
           ),
           HeaderNav.view(model.route, 'hidden sm:flex items-center gap-6', h),
@@ -53,7 +56,7 @@ const headerView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
               ),
             ],
           ),
-          Shared.headerGroupDivider('hidden sm:block mx-3'),
+          Site.headerGroupDivider('hidden sm:block mx-3'),
           h.a(
             [
               h.Href(getStartedRouter()),
@@ -102,7 +105,7 @@ const footerView = (currentYear: number): Html =>
         ],
       ),
       ih.p([ih.Class('mt-1')], [`© ${currentYear} Devin Jameson`]),
-      Shared.siteLinks,
+      Site.siteLinks,
     ],
   )
 
@@ -113,14 +116,14 @@ type ViewOptions = Readonly<{
 }>
 
 export const view = (
-  model: typeof Model.Type,
+  model: Model,
   { content, mainClassName, isPagefindBody }: ViewOptions,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [h.Class('flex flex-col min-h-screen')],
     [
-      Shared.skipNavLink,
+      Site.skipNavLink,
       headerView(model, h),
       Search.dialogView(model, h),
       Sidebar.mobileView(model, h),

@@ -16,20 +16,34 @@ import { dual } from 'effect/Function'
 import {
   type AggregatedChildren,
   type AnyBinding,
+  type BindingEvidence,
   type BindingRequirement,
+  type BlockOfBinding,
+  type InspectionOfBinding,
+  type ParentContractOfBinding,
   aggregateChildren,
 } from '../block/binding.js'
+import type { BindingParent } from '../block/bindingConnection.js'
+import { canonicalBindingOf } from '../block/composition.js'
 import { LocalMountsTypeId, isComposition } from '../block/definition.js'
+import { identityOf } from '../block/identity.js'
 import { kebabToPascal } from '../customElement/index.js'
 import type { CustomElementSpec, EventSchema } from '../customElement/index.js'
 import { serializedStylePropertyName } from '../domReflection.js'
+import {
+  type InMessageStep,
+  runInMessageStep,
+} from '../experimental/layered/testing/inMessage.js'
 import type { File } from '../file/index.js'
+import { type BoundaryRegistry, beginRender } from '../html/boundary.js'
 import type { FoldkitMountMarker } from '../html/index.js'
 import {
   FOLDKIT_MOUNT_KEY,
   FileHandlerSymbol,
   __clearRuntime as clearHtmlRuntime,
+  __createBoundaryRegistry as createHtmlBoundaryRegistry,
   __htmlBuilder as htmlBuilderFor,
+  mountOccurrencePath,
   __setRuntime as setHtmlRuntime,
 } from '../html/index.js'
 import type {
@@ -38,8 +52,10 @@ import type {
   HtmlBuilder,
   KeyboardModifiers,
 } from '../html/index.js'
+import { type MountCapture, mountCaptureOf } from '../html/mountCapture.js'
 import type { Entry as ManagedResourceEntry } from '../managedResource/index.js'
-import { MountTracker } from '../mount/index.js'
+import * as RuntimeManagedResource from '../managedResource/managedResource.js'
+import { MountRegistrationTypeId, MountTracker } from '../mount/index.js'
 import type {
   AnyMountHandler,
   LayeredMountDefinition,
@@ -52,16 +68,27 @@ import {
 } from '../runtime/browserListeners.js'
 import { Dispatch } from '../runtime/dispatch.js'
 import {
+  type ChildPairingSteps,
+  pairChildren,
+  sameVnode,
+} from '../snabbdom/init.js'
+import { vnode as makeVNode } from '../snabbdom/vnode.js'
+import {
+  type KeyedSelection as KeyedSubscriptionSelection,
   type Registrations as RuntimeRegistrations,
   type RegistryEntries as RuntimeRegistryEntries,
   type Subscription as RuntimeSubscription,
   type MessageDeclaration as SubscriptionMessageDeclaration,
   aggregate as aggregateSubscriptions,
+  __keyedSelection as keyedSubscriptionSelection,
+  __maybeActiveDependencies as maybeActiveDependencies,
+  __selectKeyed as selectKeyedSubscription,
+  __selectedKeyIsPresent as selectedSubscriptionKeyIsPresent,
   __messageDeclarations as subscriptionMessageDeclarations,
 } from '../subscription/subscription.js'
 import { tagNameFromSelector } from '../tagName.js'
 import { type Url, fromString as urlFromString } from '../url/index.js'
-import type { VNode } from '../vdom.js'
+import { type VNode, dedupeSharedVNodes, memoizedVNodes } from '../vdom.js'
 import { commandArgs, commandMatches } from './bindingMatcher.js'
 import type {
   AnyCommand,
@@ -78,13 +105,17 @@ import type {
   Resolver,
   ResolverEntry,
   SimulationUpdateReturn,
+  StreamMountMatcher,
+  StreamMountMessage,
   SubscriptionEmissionSource,
 } from './internal.js'
 import {
+  applyMountMessage,
   assertAllCommandsResolved,
   assertAllMountsResolved,
   assertAllUnmountsAcknowledged,
   assertExactCommands,
+  assertExactCommandsInOrder,
   assertExactMounts,
   assertHasCommands,
   assertHasMounts,
@@ -103,6 +134,7 @@ import {
   resolveAllInternal,
   resolveByMatcher,
   resolveMountByMatcher,
+  resolveSubscriptionDeclaration,
   resolveSubscriptionMessage,
 } from './internal.js'
 import type { Locator, LocatorAll } from './query.js'
@@ -128,6 +160,10 @@ import {
   allText,
   allTitle,
 } from './query.js'
+import { type SceneHost, SceneHostTypeId } from './sceneHost.js'
+import type { KeyOfBinding } from './toParentMessage.js'
+
+export { type InitStep, init } from './internal.js'
 
 export type {
   AnyCommand,
@@ -136,6 +172,8 @@ export type {
   MountResolver,
   PendingMount,
   Resolver,
+  StreamMountMatcher,
+  StreamMountMessage,
 }
 
 export {
@@ -217,6 +255,12 @@ export type SubscriptionMessageStep<Message, Entry = undefined> = Readonly<{
   _tag: 'SubscriptionMessageStep'
   entry: Entry
   message: Message
+}>
+
+type SubscriptionActivityStep<Entry> = Readonly<{
+  _tag: 'SubscriptionActivityStep'
+  entry: Entry
+  expected: 'Active' | 'Inactive'
 }>
 
 /** URL-change delivery configuration. Uses the same callback or canonical
@@ -307,11 +351,10 @@ type ChildSubscriptions<CompositionValue extends AnyComposition> =
  *
  * This only prepares test configuration. It does not initialize Models,
  * construct handler Layers, or start Streams. Completed feature Blocks already
- * expose their aggregated `subscriptions` directly.
+ * expose their aggregated `subscriptions` directly. Duplicate registration
+ * keys are rejected rather than overwritten.
  *
  * @param composition - The Block Composition whose child graph is tested.
- * @param localSubscriptions - Optional Subscriptions declared by that Block.
- * Duplicate registration keys are rejected rather than overwritten.
  */
 export function subscriptions<const CompositionValue extends AnyComposition>(
   composition: CompositionValue,
@@ -333,7 +376,7 @@ export function subscriptions(
 ): AnySubscriptions {
   if (!isComposition(composition)) {
     throw new Error(
-      '[foldkit] Scene.subscriptions Composition must come from Block.makeDefinition(...).makeComposition(...).',
+      '[foldkit] Scene.subscriptions Composition must come from Block.make(...).makeComposition(...).',
     )
   }
 
@@ -351,6 +394,19 @@ type TestMountRequirements =
 
 type TestHtmlBuilder<Message> = HtmlBuilder<Message, TestMountRequirements>
 
+type SceneSubscriptionEmissionSource<Entry> =
+  Entry extends Readonly<{
+    '#Subscription.KeyedTemplate': infer Metadata
+  }>
+    ? Metadata extends Readonly<{
+        key: infer Key extends string | number
+        placement: infer Placement extends string
+        source: infer Source
+      }>
+      ? KeyedSubscriptionSelection<Key, Placement, Source>
+      : never
+    : SubscriptionEmissionSource<Entry>
+
 /** A single step in a scene: a `given` step, typed Message or OutMessage step,
  *  or scene simulation transform. */
 export type SceneStep<
@@ -359,8 +415,10 @@ export type SceneStep<
   OutMessage,
   Subscriptions = undefined,
   Routing = undefined,
+  InMessage = never,
 > =
   | GivenStep<NoInfer<Model>>
+  | ([InMessage] extends [never] ? never : InMessageStep<NoInfer<InMessage>>)
   | ([Routing] extends [SceneRouting<NoInfer<Message>>]
       ? ChangedUrlStep
       : never)
@@ -377,11 +435,24 @@ export type SceneStep<
           }>
             ? SubscriptionMessageStep<
                 Schema.Schema.Type<Messages[number]>,
-                SubscriptionEmissionSource<
+                SceneSubscriptionEmissionSource<
                   RuntimeRegistryEntries<NoInfer<Subscriptions>>[Key]
                 >
               >
             : never
+        }[keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>]
+      : never)
+  | (RuntimeRegistryEntries<NoInfer<Subscriptions>> extends Readonly<
+      Record<string, RuntimeSubscription<any, any, any, any>>
+    >
+      ? {
+          readonly [
+            Key in keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>
+          ]: SubscriptionActivityStep<
+            SceneSubscriptionEmissionSource<
+              RuntimeRegistryEntries<NoInfer<Subscriptions>>[Key]
+            >
+          >
         }[keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>]
       : never)
   | InsideStep<
@@ -391,7 +462,8 @@ export type SceneStep<
           NoInfer<Message>,
           NoInfer<OutMessage>,
           NoInfer<Subscriptions>,
-          NoInfer<Routing>
+          NoInfer<Routing>,
+          NoInfer<InMessage>
         >
       >
     >
@@ -450,7 +522,15 @@ type MountStatus =
 
 type MountSlotState = Readonly<{
   slot: PendingMount
+  occurrencePath: ReadonlyArray<string>
+  acquisition:
+    | Readonly<{
+        owner: MountCapture['owner']
+        dispatch: (message: unknown) => void
+      }>
+    | undefined
   status: MountStatus
+  vnode: VNode
 }>
 
 const PENDING: MountStatus = { _tag: 'Pending' }
@@ -472,6 +552,8 @@ type InternalSceneSimulation<
     ) => SimulationUpdateReturn<Model, OutMessage>
     resolvers: ReadonlyArray<ResolverEntry>
     viewFn: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+    host: SceneHost | undefined
+    boundaryRegistry: BoundaryRegistry | undefined
     capturingDispatch: CapturingDispatch
     scope: Option.Option<Locator>
     mountSlots: ReadonlyArray<MountSlotState>
@@ -480,6 +562,7 @@ type InternalSceneSimulation<
     lastInteractionOutcome: InteractionOutcome
     maybeUnacknowledgedIgnored: Option.Option<IgnoredInteraction>
     subscriptionDeclarations: ReadonlyArray<SubscriptionMessageDeclaration>
+    managedResourceEntries: ReadonlyArray<object>
     keptPendingCommands: ReadonlyArray<AnyCommand>
     routing:
       | Readonly<{
@@ -489,81 +572,187 @@ type InternalSceneSimulation<
       | undefined
   }>
 
-const slotKey = ({ name, occurrence }: PendingMount): string =>
-  `${name}#${occurrence}`
+const mountMarkerOf = (node: VNode): FoldkitMountMarker | undefined =>
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  node.data?.[FOLDKIT_MOUNT_KEY] as FoldkitMountMarker | undefined
 
-const collectRenderedSlots = (vnode: VNode): ReadonlyArray<PendingMount> => {
-  const counts = new Map<string, number>()
-  const slots: Array<PendingMount> = []
-  const walk = (node: VNode): void => {
-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    const marker = node.data?.[FOLDKIT_MOUNT_KEY] as
-      | FoldkitMountMarker
-      | undefined
-    if (marker !== undefined) {
-      const occurrence = counts.get(marker.name) ?? 0
-      counts.set(marker.name, occurrence + 1)
-      const slotWithArgs: PendingMount =
-        marker.args === undefined
-          ? { ...marker, occurrence }
-          : { ...marker, args: marker.args, occurrence }
-      slots.push(
-        marker.messageMappers === undefined
-          ? slotWithArgs
-          : { ...slotWithArgs, messageMappers: marker.messageMappers },
-      )
+const acquireMount = (
+  marker: FoldkitMountMarker,
+): MountSlotState['acquisition'] => {
+  const capture = mountCaptureOf(marker)
+  return capture === undefined
+    ? undefined
+    : { owner: capture.owner, dispatch: capture.resolver.resolve() }
+}
+
+const mountDelivery =
+  <Model, Message, OutMessage>(
+    internal: InternalSceneSimulation<Model, Message, OutMessage>,
+  ) =>
+  (
+    mount: PendingMount,
+    message: unknown,
+  ): ReadonlyArray<unknown> | undefined => {
+    const acquisition = internal.mountSlots.find(
+      state => state.slot === mount,
+    )?.acquisition
+    if (acquisition === undefined) {
+      return undefined
     }
-    for (const child of node.children ?? []) {
-      if (typeof child !== 'string') {
-        walk(child)
-      }
-    }
+    internal.capturingDispatch.reset()
+    acquisition.dispatch(message)
+    return internal.capturingDispatch.getCapturedMessages()
   }
-  walk(vnode)
-  return slots
+
+const slotOfMarker = (
+  marker: FoldkitMountMarker,
+  occurrence: number,
+): PendingMount => {
+  return { ...marker, occurrence }
+}
+
+const toPatchedChild = (child: VNode | string): VNode =>
+  Predicate.isString(child)
+    ? makeVNode(undefined, undefined, undefined, child, undefined)
+    : child
+
+const patchedChildrenOf = (node: VNode): Array<VNode> =>
+  node.text === undefined ? Array.map(node.children ?? [], toPatchedChild) : []
+
+const recordPatchedChildren: ChildPairingSteps<Map<VNode, VNode>> = {
+  patch: (previousByChild, previousChild, child) => {
+    previousByChild.set(child, previousChild)
+  },
+  moveAfter: Function.constVoid,
+  moveBefore: Function.constVoid,
+  createBefore: Function.constVoid,
+  createAfter: Function.constVoid,
+  indexPreviousKeys: Function.constVoid,
+  addRest: Function.constVoid,
+  removeRest: Function.constVoid,
 }
 
 const reconcileMountSlots = (
   previous: ReadonlyArray<MountSlotState>,
+  previousTree: VNode | undefined,
   rendered: VNode,
 ): ReadonlyArray<MountSlotState> => {
-  const previousByKey = new Map(
-    Array.map(previous, state => [slotKey(state.slot), state] as const),
-  )
-  const renderedSlots = collectRenderedSlots(rendered)
-  const renderedKeys = new Set(Array.map(renderedSlots, slotKey))
-  const fromRendered = Array.map(renderedSlots, slot => {
-    const existing = previousByKey.get(slotKey(slot))
-    if (existing !== undefined && existing.status._tag !== 'Ended') {
-      return existing
+  const previousByVNode = new Map<VNode, MountSlotState>()
+
+  for (const state of previous) {
+    if (!previousByVNode.has(state.vnode) || state.status._tag !== 'Ended') {
+      previousByVNode.set(state.vnode, state)
     }
-    return { slot, status: PENDING }
-  })
-  const fromVanished = pipe(
-    previous,
-    Array.filter(state => !renderedKeys.has(slotKey(state.slot))),
-    Array.map(state => endStatus(state)),
-  )
-  const unacknowledgedRevived = pipe(
+  }
+
+  const occurrenceCounts = new Map<string, number>()
+  const carried = new Set<MountSlotState>()
+  const renderedSlots: Array<MountSlotState> = []
+
+  const nextOccurrence = (name: string): number => {
+    const occurrence = occurrenceCounts.get(name) ?? 0
+    occurrenceCounts.set(name, occurrence + 1)
+
+    return occurrence
+  }
+
+  const visitCreated = (node: VNode): void => {
+    const marker = mountMarkerOf(node)
+
+    if (marker !== undefined) {
+      renderedSlots.push({
+        slot: slotOfMarker(marker, nextOccurrence(marker.name)),
+        occurrencePath: mountOccurrencePath(marker),
+        acquisition: acquireMount(marker),
+        status: PENDING,
+        vnode: node,
+      })
+    }
+
+    for (const child of patchedChildrenOf(node)) {
+      visitCreated(child)
+    }
+  }
+
+  const visitPatched = (previousNode: VNode, node: VNode): void => {
+    const liveState = previousByVNode.get(previousNode)
+    const marker = mountMarkerOf(node)
+
+    if (
+      liveState !== undefined &&
+      (marker === undefined ||
+        (liveState.acquisition?.owner === mountCaptureOf(marker)?.owner &&
+          Array.makeEquivalence(Equal.equals)(
+            liveState.occurrencePath,
+            mountOccurrencePath(marker),
+          )))
+    ) {
+      carried.add(liveState)
+      renderedSlots.push({
+        acquisition: liveState.acquisition,
+        occurrencePath: liveState.occurrencePath,
+        slot: {
+          ...liveState.slot,
+          occurrence: nextOccurrence(liveState.slot.name),
+        },
+        status: liveState.status,
+        vnode: node,
+      })
+    } else if (liveState !== undefined && marker !== undefined) {
+      renderedSlots.push({
+        slot: slotOfMarker(marker, nextOccurrence(marker.name)),
+        occurrencePath: mountOccurrencePath(marker),
+        acquisition: acquireMount(marker),
+        status: PENDING,
+        vnode: node,
+      })
+    }
+
+    const previousByChild = new Map<VNode, VNode>()
+    const children = patchedChildrenOf(node)
+
+    pairChildren(
+      patchedChildrenOf(previousNode),
+      children,
+      recordPatchedChildren,
+      previousByChild,
+    )
+
+    for (const child of children) {
+      const previousChild = previousByChild.get(child)
+
+      if (previousChild === undefined) {
+        visitCreated(child)
+      } else {
+        visitPatched(previousChild, child)
+      }
+    }
+  }
+
+  if (previousTree !== undefined && sameVnode(previousTree, rendered)) {
+    visitPatched(previousTree, rendered)
+  } else {
+    visitCreated(rendered)
+  }
+
+  const ended = pipe(
     previous,
     Array.filter(
       state =>
-        renderedKeys.has(slotKey(state.slot)) &&
-        state.status._tag === 'Ended' &&
-        !state.status.acknowledged,
+        !carried.has(state) &&
+        (state.status._tag !== 'Ended' || !state.status.acknowledged),
     ),
+    Array.map(endStatus),
   )
-  return Array.appendAll(
-    fromRendered,
-    Array.appendAll(fromVanished, unacknowledgedRevived),
-  )
+
+  return Array.appendAll(renderedSlots, ended)
 }
 
 const endStatus = (state: MountSlotState): MountSlotState => {
   if (state.status._tag === 'Ended') {
     return state
   }
-  return { slot: state.slot, status: ENDED_UNACKNOWLEDGED }
+  return { ...state, status: ENDED_UNACKNOWLEDGED }
 }
 
 const pendingMountsOf = (
@@ -590,9 +779,27 @@ const UNINITIALIZED = Symbol('uninitialized')
 
 const toInternal = <Model, Message, OutMessage>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-): InternalSceneSimulation<Model, Message, OutMessage> =>
+): InternalSceneSimulation<Model, Message, OutMessage> => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  simulation as InternalSceneSimulation<Model, Message, OutMessage>
+  const internal = simulation as InternalSceneSimulation<
+    Model,
+    Message,
+    OutMessage
+  >
+  if (
+    !internal.mountSlots.some(
+      state =>
+        state.status._tag !== 'Ended' &&
+        state.acquisition?.owner?.isActive === false,
+    )
+  ) {
+    return internal
+  }
+  const mountSlots = internal.mountSlots.map(state =>
+    state.acquisition?.owner?.isActive === false ? endStatus(state) : state,
+  )
+  return { ...internal, mountSlots, mounts: pendingMountsOf(mountSlots) }
+}
 
 type OutMessageCapture<Model, Message, OutMessage> = Readonly<{
   updateFn: (
@@ -712,15 +919,31 @@ const renderView = <Model, Message>(
   viewFn: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document,
   model: Model,
   dispatch: DispatchService,
+  previousTree: VNode | undefined,
+  host: SceneHost | undefined,
+  registry: BoundaryRegistry | undefined,
 ): VNode => {
-  const sceneContext = Context.make(Dispatch, dispatch).pipe(
+  const sceneContext = (host?.context ?? Context.empty()).pipe(
+    Context.add(Dispatch, dispatch),
     Context.add(MountTracker, {
       started: () => {},
       ended: () => {},
     }),
   )
 
-  setHtmlRuntime(dispatch.dispatchSync, sceneContext, undefined, 'Replay')
+  const boundaryRegistry = registry ?? createHtmlBoundaryRegistry()
+  beginRender(boundaryRegistry)
+
+  if (previousTree !== undefined) {
+    markPreviousRenderVNodes(previousTree, boundaryRegistry.dedupeSeen)
+  }
+
+  setHtmlRuntime(
+    dispatch.dispatchSync,
+    sceneContext,
+    boundaryRegistry,
+    host === undefined ? 'Replay' : 'Live',
+  )
   let result: Html | Document
   try {
     result = viewFn(model, htmlBuilderFor<Message, TestMountRequirements>())
@@ -738,7 +961,19 @@ const renderView = <Model, Message>(
     )
   }
 
-  return vnode
+  return dedupeSharedVNodes(vnode, boundaryRegistry.dedupeSeen)
+}
+
+const markPreviousRenderVNodes = (node: VNode, seen: Set<object>): void => {
+  if (!memoizedVNodes.has(node)) {
+    seen.add(node)
+  }
+
+  for (const child of node.children ?? []) {
+    if (!Predicate.isString(child)) {
+      markPreviousRenderVNodes(child, seen)
+    }
+  }
 }
 
 const isDocument = (value: Html | Document): value is Document =>
@@ -760,6 +995,8 @@ const EVENT_NAMES: Record<string, string> = {
   focusout: 'OnFocusLeave',
   mouseenter: 'OnMouseEnter',
   mouseover: 'OnMouseOver',
+  mouseleave: 'OnMouseLeave',
+  mouseout: 'OnMouseOut',
   keydown:
     'OnKeyDown, OnKeyDownPreventDefault, OnKeyDownSelf, or OnKeyDownSelfPreventDefault',
   pointerdown: 'OnPointerDown',
@@ -881,20 +1118,51 @@ const applyExternalMessages = <Model, Message, OutMessage>(
   return Array.reduce(messages, simulation, applyMessageWithoutBoundaryChecks)
 }
 
+const resolveSelectedSubscriptionEntry = (
+  entry: unknown,
+  host: SceneHost | undefined,
+): unknown => {
+  const selection = keyedSubscriptionSelection(entry)
+  if (selection === undefined) {
+    return entry
+  }
+
+  const binding = host?.resolveBinding(selection.binding) ?? selection.binding
+  return selectKeyedSubscription(binding, selection.key, selection.source)
+}
+
 const applySubscriptionMessage = <Model, Message, OutMessage>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
   step: SubscriptionMessageStep<unknown, unknown>,
 ): SceneSimulation<Model, Message, OutMessage> => {
   const internal = toInternal(simulation)
   const context = 'when a Subscription emitted a new Message'
+  const entry = resolveSelectedSubscriptionEntry(step.entry, internal.host)
 
   assertExternalMessageBoundary(simulation, context)
+
+  if (keyedSubscriptionSelection(entry) !== undefined) {
+    const declaration = resolveSubscriptionDeclaration(
+      'Scene.Subscription.emit',
+      internal.subscriptionDeclarations,
+      entry,
+    )
+    const isSelectedKeyPresent = selectedSubscriptionKeyIsPresent(
+      declaration.entry,
+      internal.model,
+    )
+    if (isSelectedKeyPresent === false) {
+      throw new Error(
+        '[foldkit] Scene.Subscription.emit selected a keyed child occurrence that is absent from the current Model.',
+      )
+    }
+  }
 
   /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
   const message = resolveSubscriptionMessage(
     'Scene.Subscription.emit',
     internal.subscriptionDeclarations,
-    step.entry,
+    entry,
     step.message,
   ) as Message
   const messageUpdate = internal.updateFn(internal.model, message)
@@ -907,6 +1175,55 @@ const applySubscriptionMessage = <Model, Message, OutMessage>(
     commands: Array.appendAll(internal.commands, messageUpdate.commands ?? []),
     outMessage: messageUpdate.outMessage,
   } as SceneSimulation<Model, Message, OutMessage>
+}
+
+const applyInMessage = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: object,
+): SceneSimulation<Model, Message, OutMessage> => {
+  assertExternalMessageBoundary(
+    simulation,
+    'when a Block received an InMessage',
+  )
+  const internal = toInternal(simulation)
+  const received = runInMessageStep<Model, OutMessage>(step, internal.model)
+  internal.host?.synchronize(received.model)
+
+  const next = {
+    ...internal,
+    model: received.model,
+    message: undefined,
+    commands: Array.appendAll(internal.commands, received.commands ?? []),
+  }
+
+  return withOutMessages(
+    next,
+    received.outMessage === undefined ? [] : [received.outMessage],
+  )
+}
+
+const applySubscriptionActivity = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: SubscriptionActivityStep<unknown>,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const entry = resolveSelectedSubscriptionEntry(step.entry, internal.host)
+  const declaration = resolveSubscriptionDeclaration(
+    `Scene.Subscription.expect${step.expected}`,
+    internal.subscriptionDeclarations,
+    entry,
+  )
+  const isActive = Option.isSome(
+    maybeActiveDependencies(declaration.entry, internal.model),
+  )
+
+  if (isActive !== (step.expected === 'Active')) {
+    throw new Error(
+      `Scene.Subscription.expect${step.expected} expected the selected Subscription to be ${step.expected.toLowerCase()}.`,
+    )
+  }
+
+  return simulation
 }
 
 const DEFAULT_SCENE_ORIGIN = 'http://localhost'
@@ -1242,6 +1559,7 @@ export const given = <Model>(model: Model): GivenStep<Model> => {
     simulation: SceneSimulation<M, Message, OutMessage>,
   ): SceneSimulation<M, Message, OutMessage> => {
     const internal = toInternal(simulation)
+    internal.host?.synchronize(model)
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     return { ...internal, model } as unknown as SceneSimulation<
       M,
@@ -1249,6 +1567,34 @@ export const given = <Model>(model: Model): GivenStep<Model> => {
       OutMessage
     >
   }
+  /* eslint-disable @typescript-eslint/consistent-type-assertions */
+  return Object.assign(step, {
+    _phantomModel: undefined as unknown as Model,
+  }) as GivenStep<Model>
+  /* eslint-enable @typescript-eslint/consistent-type-assertions */
+}
+
+/** @internal Seeds a scene from a complete initialization result without executing Commands. */
+export const __givenInit = <Model, OutMessage = undefined>(
+  init: SimulationUpdateReturn<Model, OutMessage>,
+): GivenStep<Model> => {
+  const step = <Message>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    const internal = toInternal(simulation)
+    internal.host?.synchronize(init.model)
+    const seeded = {
+      ...internal,
+      model: init.model,
+      commands: init.commands ?? [],
+    }
+
+    return withOutMessages(
+      seeded,
+      init.outMessage === undefined ? [] : [init.outMessage],
+    )
+  }
+
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   return Object.assign(step, {
     _phantomModel: undefined as unknown as Model,
@@ -1363,6 +1709,18 @@ const expectExactCommandsStep =
     return simulation
   }
 
+/** Asserts that the pending Commands match the given matchers exactly in
+ *  dispatch order. Definitions select their originating identity; instances
+ *  also compare complete args and any scoped occurrence. */
+const expectExactCommandsInOrderStep =
+  (...matchers: ReadonlyArray<CommandMatcher>) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    assertExactCommandsInOrder(toInternal(simulation).commands, matchers)
+    return simulation
+  }
+
 /** Asserts that there are no pending Commands. */
 const expectNoCommandsStep =
   () =>
@@ -1378,8 +1736,8 @@ const expectNoCommandsStep =
  *  complete args and any explicitly scoped composition occurrence. The
  *  first pending mount that matches is resolved. Mirrors `resolve` for
  *  Commands: when the mount lives inside a Block, the boundary's own
- *  `toParentMessage` lift (snapshotted at render time) is applied to
- *  `resultMessage`, so pass the child's raw lifecycle result Message. */
+ *  current delivery chain is applied to `resultMessage`, so pass the child's
+ *  raw lifecycle result Message. */
 const resolveMount: {
   <Name extends string, ResultMessage>(
     matcher: MountDefinition<Name, ResultMessage> | AnyMount,
@@ -1402,6 +1760,7 @@ const resolveMount: {
       internal.mounts,
       matcher,
       resultMessage,
+      mountDelivery(internal),
     )
 
     if (Predicate.isUndefined(next)) {
@@ -1412,22 +1771,13 @@ const resolveMount: {
       )
     }
 
-    const resolvedKeys = new Set(
-      Array.map(next.pendingMounts, slot => slotKey(slot)),
-    )
+    const stillPending = new Set(next.pendingMounts)
     const updatedSlots = Array.map(
       internal.mountSlots,
-      (state): MountSlotState => {
-        if (state.status._tag !== 'Pending') {
-          return state
-        }
-        const key = slotKey(state.slot)
-        return resolvedKeys.has(key)
-          ? state
-          : mountMatches(matcher, state.slot)
-            ? { slot: state.slot, status: RESOLVED }
-            : state
-      },
+      (state): MountSlotState =>
+        state.status._tag === 'Pending' && !stillPending.has(state.slot)
+          ? { ...state, status: RESOLVED }
+          : state,
     )
 
     return {
@@ -1436,6 +1786,70 @@ const resolveMount: {
       mounts: next.pendingMounts,
     } as unknown as SceneSimulation<Model, Message, OutMessage>
     /* eslint-enable @typescript-eslint/consistent-type-assertions */
+  }
+
+/** Delivers a declared Message from one resolved, still-mounted stream. */
+const emitMountMessage =
+  <const Matcher extends StreamMountMatcher>(
+    matcher: Matcher,
+    message: NoInfer<StreamMountMessage<Matcher>>,
+  ) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    assertExternalMessageBoundary(
+      simulation,
+      'when a stream Mount emitted a new Message',
+    )
+    const internal = toInternal(simulation)
+    const matching = Array.filter(
+      internal.mountSlots,
+      state =>
+        state.status._tag === 'Resolved' && mountMatches(matcher, state.slot),
+    )
+    const selected = Array.matchLeft(matching, {
+      onEmpty: () => {
+        throw new Error(
+          `Scene.Mount.emit selected no resolved active Mount matching ${formatMountMatcher(matcher)}.\n\n` +
+            'Resolve its first result before emitting later Messages, and keep its element mounted.',
+        )
+      },
+      onNonEmpty: (first, remaining) => {
+        if (Array.isArrayNonEmpty(remaining)) {
+          throw new Error(
+            `Scene.Mount.emit selected multiple active Mounts matching ${formatMountMatcher(matcher)}.\n\n` +
+              'Select the bound Mount instance and its complete args for the intended occurrence.',
+          )
+        }
+        return first
+      },
+    })
+    const registration = selected.slot[MountRegistrationTypeId]
+
+    if (registration?.kind !== 'Stream') {
+      throw new Error(
+        'Scene.Mount.emit requires a stream Mount declared with makeMountStream or Mount.defineStream.',
+      )
+    }
+
+    if (
+      !Array.some(registration.messages, schema => Schema.is(schema)(message))
+    ) {
+      throw new Error(
+        `Scene.Mount.emit received a Message not declared by ${selected.slot.name}:\n\n` +
+          `    ${JSON.stringify(message)}`,
+      )
+    }
+
+    return {
+      ...internal,
+      ...applyMountMessage(
+        internal,
+        selected.slot,
+        message,
+        mountDelivery(internal),
+      ),
+    }
   }
 
 /** Resolves all listed Mounts with their result Messages. Mounts are resolved
@@ -1486,10 +1900,9 @@ const expectNoMountsStep =
     return simulation
   }
 
-/** Acknowledges that the given Mounts disappeared from the rendered tree.
- *  Required for every Mount that fires and then unmounts during a scene,
- *  whether or not it was resolved first. Without this, the scene throws at
- *  the end of the test for any unacknowledged unmount. Mount matchers may
+/** Acknowledges Mounts ended by element removal/replacement or by retirement
+ *  of their acquiring Block occurrence. Required whether or not the Mount
+ *  resolved first. A scene rejects any unacknowledged end. Mount matchers may
  *  be Definitions or instances; instances acknowledge a specific args shape. */
 const expectEndedMountsStep =
   (...matchers: ReadonlyArray<MountMatcher>) =>
@@ -1498,7 +1911,7 @@ const expectEndedMountsStep =
   ): SceneSimulation<Model, Message, OutMessage> => {
     /* eslint-disable @typescript-eslint/consistent-type-assertions */
     const internal = toInternal(simulation)
-    const remaining: Array<MountMatcher> = Array.fromIterable(matchers)
+    const remaining: Array<MountMatcher> = [...matchers]
     const updatedSlots: Array<MountSlotState> = []
     for (const state of internal.mountSlots) {
       const maybeMatchIndex = Array.findFirstIndex(
@@ -1512,19 +1925,19 @@ const expectEndedMountsStep =
         onNone: () => updatedSlots.push(state),
         onSome: matchIndex => {
           remaining.splice(matchIndex, 1)
-          updatedSlots.push({ slot: state.slot, status: ENDED_ACKNOWLEDGED })
+          updatedSlots.push({ ...state, status: ENDED_ACKNOWLEDGED })
         },
       })
     }
     if (Array.isReadonlyArrayNonEmpty(remaining)) {
       throw new Error(
-        `I tried to acknowledge ended Mounts but some haven't unmounted:\n\n` +
+        `I tried to acknowledge ended Mounts but some are still active:\n\n` +
           pipe(
             remaining,
             Array.map(matcher => `    ${formatMountMatcher(matcher)}`),
             Array.join('\n'),
           ) +
-          '\n\nUse Scene.Mount.expectEnded only after the Mount has disappeared from the rendered tree.',
+          '\n\nUse Scene.Mount.expectEnded after the element is removed or replaced, or its acquiring Block occurrence retires.',
       )
     }
     return {
@@ -1563,8 +1976,301 @@ const emitSubscriptionMessage = <
   message,
 })
 
+type KeyedSubscriptionFactsOf<Template> =
+  Template extends Readonly<{
+    '#Subscription.KeyedTemplate': infer Metadata extends Readonly<{
+      key: string | number
+      placement: string
+      source: unknown
+    }>
+  }>
+    ? Metadata
+    : never
+
+type KeyedSubscriptionFacts<BindingValue> =
+  InspectionOfBinding<BindingValue> extends Readonly<{
+    subscriptions: infer Subscriptions
+  }>
+    ? KeyedSubscriptionFactsOf<
+        Subscriptions[keyof Subscriptions]
+      > extends infer Facts
+      ? [Facts] extends [never]
+        ? DescriptorKeyedSubscriptionFacts<BindingValue>
+        : Facts
+      : never
+    : DescriptorKeyedSubscriptionFacts<BindingValue>
+
+type DescriptorKeyedSubscriptionFacts<BindingValue> =
+  BlockOfBinding<BindingValue> extends Readonly<{
+    Model: Readonly<{ Type: infer ChildModel }>
+    Message: Readonly<{ Type: infer ChildMessage }>
+  }>
+    ? BindingValue extends Readonly<{
+        placement: infer Placement extends string
+      }>
+      ? [DescriptorBindingKey<BindingValue>] extends [never]
+        ? never
+        : Readonly<{
+            key: DescriptorBindingKey<BindingValue>
+            placement: Placement
+            source: RuntimeSubscription<ChildModel, ChildMessage, any, any>
+          }>
+      : never
+    : never
+
+type DescriptorBindingKey<BindingValue> = Extract<
+  KeyOfBinding<BindingValue>,
+  string | number
+>
+
+type ParentBindingEvidence<BindingValue> =
+  BindingValue extends BindingParent<infer ParentOwner>
+    ? BindingParent<ParentOwner>
+    : never
+
+const selectKeyedSubscriptionOccurrence = <
+  const BindingValue extends AnyBinding & BindingEvidence<any, any, any, true>,
+  const Source extends KeyedSubscriptionFacts<BindingValue>['source'],
+>(
+  binding: BindingValue,
+  key: KeyedSubscriptionFacts<BindingValue>['key'],
+  source: Source,
+): KeyedSubscriptionSelection<
+  KeyedSubscriptionFacts<BindingValue>['key'],
+  KeyedSubscriptionFacts<BindingValue>['placement'],
+  Source,
+  ParentBindingEvidence<BindingValue>
+> =>
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  selectKeyedSubscription(
+    canonicalBindingOf(binding),
+    key,
+    source,
+  ) as KeyedSubscriptionSelection<
+    KeyedSubscriptionFacts<BindingValue>['key'],
+    KeyedSubscriptionFacts<BindingValue>['placement'],
+    Source,
+    ParentBindingEvidence<BindingValue>
+  >
+
+type KeyedManagedResourceFactsOf<Template> =
+  Template extends ManagedResourceEntry<
+    infer ParentModel,
+    infer ParentMessage,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any
+  > &
+    Readonly<{
+      '#ManagedResource.KeyedTemplate': infer Metadata extends Readonly<{
+        key: string | number
+        placement: string
+        source: unknown
+      }>
+    }>
+    ? Readonly<{
+        model: ParentModel
+        message: ParentMessage
+        key: Metadata['key']
+        placement: Metadata['placement']
+        source: Metadata['source']
+      }>
+    : never
+
+type KeyedManagedResourceFacts<BindingValue> =
+  InspectionOfBinding<BindingValue> extends Readonly<{
+    managedResources: infer ManagedResources
+  }>
+    ? KeyedManagedResourceFactsOf<
+        ManagedResources[keyof ManagedResources]
+      > extends infer Facts
+      ? [Facts] extends [never]
+        ? DescriptorKeyedManagedResourceFacts<BindingValue>
+        : Facts
+      : never
+    : DescriptorKeyedManagedResourceFacts<BindingValue>
+
+type DescriptorKeyedManagedResourceFacts<BindingValue> =
+  BlockOfBinding<BindingValue> extends Readonly<{
+    Model: Readonly<{ Type: infer ChildModel }>
+    Message: Readonly<{ Type: infer ChildMessage }>
+  }>
+    ? ParentContractOfBinding<BindingValue> extends Readonly<{
+        model: infer ParentModel
+        message: infer ParentMessage
+      }>
+      ? BindingValue extends Readonly<{
+          placement: infer Placement extends string
+        }>
+        ? [DescriptorBindingKey<BindingValue>] extends [never]
+          ? never
+          : Readonly<{
+              model: ParentModel
+              message: ParentMessage
+              key: DescriptorBindingKey<BindingValue>
+              placement: Placement
+              source: ManagedResourceEntry<
+                ChildModel,
+                ChildMessage,
+                any,
+                any,
+                any,
+                any,
+                any,
+                any
+              >
+            }>
+        : never
+      : never
+    : never
+
+type SelectedManagedResourceEntry<BindingValue, Source> =
+  Source extends ManagedResourceEntry<
+    any,
+    any,
+    infer Requirements,
+    infer Value,
+    infer Service,
+    infer OnAcquired extends (...args: ReadonlyArray<any>) => any,
+    infer LifecycleServices,
+    infer Params
+  >
+    ? ManagedResourceEntry<
+        KeyedManagedResourceFacts<BindingValue>['model'],
+        KeyedManagedResourceFacts<BindingValue>['message'],
+        Requirements,
+        Value,
+        Service,
+        (
+          ...args: Parameters<OnAcquired>
+        ) => KeyedManagedResourceFacts<BindingValue>['message'],
+        LifecycleServices,
+        Params
+      > &
+        RuntimeManagedResource.KeyedSelection<
+          KeyedManagedResourceFacts<BindingValue>['key'],
+          KeyedManagedResourceFacts<BindingValue>['placement'],
+          Source
+        >
+    : never
+
+const selectKeyedManagedResourceOccurrence = <
+  const BindingValue extends AnyBinding & BindingEvidence<any, any, any, true>,
+  const Source extends KeyedManagedResourceFacts<BindingValue>['source'],
+>(
+  binding: BindingValue,
+  key: KeyedManagedResourceFacts<BindingValue>['key'],
+  source: Source,
+): SelectedManagedResourceEntry<BindingValue, Source> =>
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  RuntimeManagedResource.__selectKeyed(
+    canonicalBindingOf(binding),
+    key,
+    source,
+  ) as SelectedManagedResourceEntry<BindingValue, Source>
+
+const expectSubscriptionActivity =
+  (expected: SubscriptionActivityStep<unknown>['expected']) =>
+  <Entry>(entry: Entry): SubscriptionActivityStep<Entry> => ({
+    _tag: 'SubscriptionActivityStep',
+    entry,
+    expected,
+  })
+
 const MANAGED_RESOURCE_CONTEXT =
   'when a ManagedResource dispatched a new Message'
+
+const resolveSelectedManagedResourceEntry = <Entry extends object>(
+  entry: Entry,
+  internal: InternalSceneSimulation<any, any, any>,
+): Entry => {
+  const selection = RuntimeManagedResource.__keyedSelection(entry)
+  if (selection === undefined) {
+    return entry
+  }
+
+  const binding =
+    internal.host?.resolveBinding(selection.binding) ?? selection.binding
+  const canonicalBinding = canonicalBindingOf(binding)
+  const sourceIdentity = identityOf(selection.source)
+  const maybeTemplate = Array.findFirst(
+    internal.managedResourceEntries,
+    candidate => {
+      const template = RuntimeManagedResource.__keyedTemplate(candidate)
+      return (
+        template !== undefined &&
+        canonicalBindingOf(template.binding) === canonicalBinding &&
+        (template.source === selection.source ||
+          (sourceIdentity !== undefined &&
+            identityOf(template.source) === sourceIdentity))
+      )
+    },
+  )
+  if (Option.isNone(maybeTemplate)) {
+    throw new Error(
+      '[foldkit] Scene.ManagedResource.at selected a ManagedResource that is not registered for this keyed Binding in the acquired Block implementation.',
+    )
+  }
+
+  const selected = RuntimeManagedResource.__selectFromTemplate(
+    maybeTemplate.value,
+    selection.key,
+  )
+  if (selected === undefined) {
+    throw new Error(
+      '[foldkit] Scene.ManagedResource.at expected a keyed Binding inspection template.',
+    )
+  }
+  Reflect.set(selected.entry, RuntimeManagedResource.KeyedSelectionTypeId, {
+    ...selection,
+    binding,
+    isPresent: selected.isPresent,
+  })
+
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return selected.entry as Entry
+}
+
+const assertSelectedManagedResourceKeyPresent = (
+  entry: object,
+  model: unknown,
+): void => {
+  if (RuntimeManagedResource.__selectedKeyIsPresent(entry, model) === false) {
+    throw new Error(
+      '[foldkit] Scene.ManagedResource selected a keyed child occurrence that is absent from the current Model.',
+    )
+  }
+}
+
+const assertManagedResourceSelection = (
+  entry: object,
+  internal: InternalSceneSimulation<any, any, any>,
+): void => {
+  if (RuntimeManagedResource.__keyedSelection(entry) !== undefined) {
+    return
+  }
+  const sourceIdentity = identityOf(entry)
+  const isAmbiguousKeyedSource = Array.some(
+    internal.managedResourceEntries,
+    candidate => {
+      const template = RuntimeManagedResource.__keyedTemplate(candidate)
+      return (
+        template !== undefined &&
+        (template.source === entry ||
+          (sourceIdentity !== undefined &&
+            identityOf(template.source) === sourceIdentity))
+      )
+    },
+  )
+  if (isAmbiguousKeyedSource) {
+    throw new Error(
+      '[foldkit] A raw child ManagedResource is ambiguous for a keyed Binding. Select an occurrence with Scene.ManagedResource.at(Binding, key, entry).',
+    )
+  }
+}
 
 /** A ManagedResource entry a scene can drive: the Option-shaped requirements
  *  are what the runtime watches, so the steps can check the current Model
@@ -1608,18 +2314,23 @@ const acquireManagedResource =
     simulation: SceneSimulation<EntryModel, Message, OutMessage>,
   ): SceneSimulation<EntryModel, Message, OutMessage> => {
     const internal = toInternal(simulation)
-    const maybeRequirements = entry.modelToMaybeRequirements(internal.model)
+    const selectedEntry = resolveSelectedManagedResourceEntry(entry, internal)
+    assertManagedResourceSelection(selectedEntry, internal)
+    assertSelectedManagedResourceKeyPresent(selectedEntry, internal.model)
+    const maybeRequirements = selectedEntry.modelToMaybeRequirements(
+      internal.model,
+    )
 
     if (Option.isNone(maybeRequirements)) {
       throw new Error(
-        `I tried to acquire the ManagedResource "${entry.resource.key}" but the current Model does not request it.\n\n` +
+        `I tried to acquire the ManagedResource "${selectedEntry.resource.key}" but the current Model does not request it.\n\n` +
           'modelToMaybeRequirements returned None. The runtime only acquires while the Model requests the resource, so drive that transition through real steps first.',
       )
     }
 
     return applyExternalMessage(
       simulation,
-      entry.onAcquired(...args),
+      selectedEntry.onAcquired(...args),
       MANAGED_RESOURCE_CONTEXT,
     )
   }
@@ -1638,18 +2349,23 @@ const failAcquireManagedResource =
     simulation: SceneSimulation<EntryModel, Message, OutMessage>,
   ): SceneSimulation<EntryModel, Message, OutMessage> => {
     const internal = toInternal(simulation)
-    const maybeRequirements = entry.modelToMaybeRequirements(internal.model)
+    const selectedEntry = resolveSelectedManagedResourceEntry(entry, internal)
+    assertManagedResourceSelection(selectedEntry, internal)
+    assertSelectedManagedResourceKeyPresent(selectedEntry, internal.model)
+    const maybeRequirements = selectedEntry.modelToMaybeRequirements(
+      internal.model,
+    )
 
     if (Option.isNone(maybeRequirements)) {
       throw new Error(
-        `I tried to fail acquiring the ManagedResource "${entry.resource.key}" but the current Model does not request it.\n\n` +
+        `I tried to fail acquiring the ManagedResource "${selectedEntry.resource.key}" but the current Model does not request it.\n\n` +
           'modelToMaybeRequirements returned None. The runtime only attempts acquisition while the Model requests the resource, so drive that transition through real steps first.',
       )
     }
 
     return applyExternalMessage(
       simulation,
-      entry.onAcquireError(error),
+      selectedEntry.onAcquireError(error),
       MANAGED_RESOURCE_CONTEXT,
     )
   }
@@ -1670,18 +2386,23 @@ const releaseManagedResource =
     simulation: SceneSimulation<EntryModel, Message, OutMessage>,
   ): SceneSimulation<EntryModel, Message, OutMessage> => {
     const internal = toInternal(simulation)
-    const maybeRequirements = entry.modelToMaybeRequirements(internal.model)
+    const selectedEntry = resolveSelectedManagedResourceEntry(entry, internal)
+    assertManagedResourceSelection(selectedEntry, internal)
+    assertSelectedManagedResourceKeyPresent(selectedEntry, internal.model)
+    const maybeRequirements = selectedEntry.modelToMaybeRequirements(
+      internal.model,
+    )
 
     if (Option.isSome(maybeRequirements)) {
       throw new Error(
-        `I tried to release the ManagedResource "${entry.resource.key}" but the current Model still requests it.\n\n` +
+        `I tried to release the ManagedResource "${selectedEntry.resource.key}" but the current Model still requests it.\n\n` +
           'modelToMaybeRequirements returned Some. This step models the Some to None transition, so drive the Model out of the requesting state through real steps first.',
       )
     }
 
     return applyExternalMessage(
       simulation,
-      entry.onReleased(),
+      selectedEntry.onReleased(),
       MANAGED_RESOURCE_CONTEXT,
     )
   }
@@ -1845,6 +2566,8 @@ export const Command = {
   expectHas: expectHasCommandsStep,
   /** Asserts that the pending Commands match the given definitions exactly (order-independent). */
   expectExact: expectExactCommandsStep,
+  /** Asserts that the pending Commands match the given matchers exactly in dispatch order. */
+  expectExactInOrder: expectExactCommandsInOrderStep,
   /** Asserts that there are no pending Commands. */
   expectNone: expectNoCommandsStep,
   /** Keeps one exact pending invocation active across later interactions and
@@ -1853,27 +2576,35 @@ export const Command = {
   keepPending: keepPendingCommandStep,
 } as const
 
-/** Steps that operate on the pending Mounts of a scene simulation.
+/** Steps that operate on pending and active Mounts of a scene simulation.
  *  Destructure as `const { Mount } = Scene` for concise call sites. */
 export const Mount = {
   /** Resolves a specific pending Mount with the given result Message. */
   resolve: resolveMount,
   /** Resolves all listed Mounts with their result Messages. */
   resolveAll: resolveAllMounts,
+  /** Delivers a declared raw Message from one resolved stream Mount without
+   *  consuming its active registration. The element must still be mounted.
+   *  Select a bound instance and complete args when the same source occurs
+   *  more than once. Pending Commands, Mounts, and unacknowledged unmounts
+   *  must be handled before another emission. */
+  emit: emitMountMessage,
   /** Asserts that every given Mount is among the pending Mounts. */
   expectHas: expectHasMountsStep,
   /** Asserts that the pending Mounts match the given source and instance matchers exactly, regardless of order. */
   expectExact: expectExactMountsStep,
   /** Asserts that there are no pending Mounts. */
   expectNone: expectNoMountsStep,
-  /** Acknowledges Mounts that disappeared from the rendered tree. Required for
-   *  every Mount that fires and then unmounts during a scene. */
+  /** Acknowledges Mounts ended by element removal/replacement or retirement
+   *  of their acquiring Block occurrence. Required for every ended Mount. */
   expectEnded: expectEndedMountsStep,
 } as const
 
 /** Steps that model Messages arriving from a Subscription.
  *  Destructure as `const { Subscription } = Scene` for concise call sites. */
 export const Subscription = {
+  /** Selects one exact occurrence of a keyed child Subscription. */
+  at: selectKeyedSubscriptionOccurrence,
   /**
    * Feeds a Message declared by the Scene's registered Subscriptions through
    *  update, then re-renders. Pass the raw child Message for a lifted
@@ -1885,6 +2616,10 @@ export const Subscription = {
    *  interact with the rendered DOM for DOM Messages.
    */
   emit: emitSubscriptionMessage,
+  /** Asserts that the registered Subscription's current Model dependencies are active. */
+  expectActive: expectSubscriptionActivity('Active'),
+  /** Asserts that the registered Subscription is inactive for the current Model. */
+  expectInactive: expectSubscriptionActivity('Inactive'),
 } as const
 
 /** Explicit Program routing events. No navigation Effect or browser history
@@ -1912,6 +2647,8 @@ export const Navigation = {
  *  transition has no step yet. Destructure as
  *  `const { ManagedResource } = Scene` for concise call sites. */
 export const ManagedResource = {
+  /** Selects one keyed child ManagedResource occurrence for lifecycle steps. */
+  at: selectKeyedManagedResourceOccurrence,
   /** Declares a successful acquire, feeding the entry's `onAcquired` Message
    *  through update. Takes exactly the arguments `onAcquired` declares. The
    *  current Model must request the resource. */
@@ -2115,9 +2852,23 @@ export const tap =
     return simulation
   }
 
-const applySceneStep = <Model, Message, OutMessage, Subscriptions, Routing>(
+const applySceneStep = <
+  Model,
+  Message,
+  OutMessage,
+  Subscriptions,
+  Routing,
+  InMessage,
+>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-  step: SceneStep<Model, Message, OutMessage, Subscriptions, Routing>,
+  step: SceneStep<
+    Model,
+    Message,
+    OutMessage,
+    Subscriptions,
+    Routing,
+    InMessage
+  >,
 ): SceneSimulation<Model, Message, OutMessage> => {
   if (Predicate.isTagged(step, 'InsideStep')) {
     return applyInsideStep(simulation, step)
@@ -2127,8 +2878,16 @@ const applySceneStep = <Model, Message, OutMessage, Subscriptions, Routing>(
     return applyChangedUrl(simulation, step)
   }
 
+  if (Predicate.isTagged(step, 'BlockInMessageStep')) {
+    return applyInMessage(simulation, step)
+  }
+
   if (Predicate.isTagged(step, 'SubscriptionMessageStep')) {
     return applySubscriptionMessage(simulation, step)
+  }
+
+  if (Predicate.isTagged(step, 'SubscriptionActivityStep')) {
+    return applySubscriptionActivity(simulation, step)
   }
 
   if (Predicate.isTagged(step, 'OutMessageStep')) {
@@ -2148,10 +2907,17 @@ const applySceneStep = <Model, Message, OutMessage, Subscriptions, Routing>(
   return simulation
 }
 
-const runSteps = <Model, Message, OutMessage, Subscriptions, Routing>(
+const runSteps = <
+  Model,
+  Message,
+  OutMessage,
+  Subscriptions,
+  Routing,
+  InMessage,
+>(
   seed: SceneSimulation<Model, Message, OutMessage>,
   steps: ReadonlyArray<
-    SceneStep<Model, Message, OutMessage, Subscriptions, Routing>
+    SceneStep<Model, Message, OutMessage, Subscriptions, Routing, InMessage>
   >,
 ): SceneSimulation<Model, Message, OutMessage> =>
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
@@ -2181,12 +2947,20 @@ const runSteps = <Model, Message, OutMessage, Subscriptions, Routing>(
     const internal = toInternal(next)
 
     if ((internal.model as unknown) !== (UNINITIALIZED as unknown)) {
+      internal.host?.synchronize(internal.model)
       const html = renderView(
         internal.viewFn,
         internal.model,
         internal.capturingDispatch.dispatch,
+        internal.html,
+        internal.host,
+        internal.boundaryRegistry,
       )
-      const mountSlots = reconcileMountSlots(internal.mountSlots, html)
+      const mountSlots = reconcileMountSlots(
+        internal.mountSlots,
+        internal.html,
+        html,
+      )
       const mounts = pendingMountsOf(mountSlots)
       return { ...internal, html, mountSlots, mounts } as SceneSimulation<
         Model,
@@ -2199,10 +2973,19 @@ const runSteps = <Model, Message, OutMessage, Subscriptions, Routing>(
   })
 /* eslint-enable @typescript-eslint/consistent-type-assertions */
 
-const applyInsideStep = <Model, Message, OutMessage, Subscriptions, Routing>(
+const applyInsideStep = <
+  Model,
+  Message,
+  OutMessage,
+  Subscriptions,
+  Routing,
+  InMessage,
+>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
   step: InsideStep<
-    ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions, Routing>>
+    ReadonlyArray<
+      SceneStep<Model, Message, OutMessage, Subscriptions, Routing, InMessage>
+    >
   >,
 ): SceneSimulation<Model, Message, OutMessage> => {
   const internal = toInternal(simulation)
@@ -2221,7 +3004,8 @@ const applyInsideStep = <Model, Message, OutMessage, Subscriptions, Routing>(
     Message,
     OutMessage,
     Subscriptions,
-    Routing
+    Routing,
+    InMessage
   >(scopedEntry, step.steps)
   const afterInternal = toInternal(afterSteps)
   return {
@@ -2237,7 +3021,9 @@ const applyInsideStep = <Model, Message, OutMessage, Subscriptions, Routing>(
  *  prefer `within(parent, child)` directly. Nested `inside` calls compose scopes
  *  via `within(outer, inner)`. */
 export const inside = <
-  const Steps extends ReadonlyArray<SceneStep<any, any, any, any, any>>,
+  const Steps extends ReadonlyArray<
+    SceneStep<any, any, any, any, any, unknown>
+  >,
 >(
   parent: Locator,
   ...steps: Steps
@@ -2732,6 +3518,28 @@ export const hover =
       onNone: () => 'mouseenter',
       onSome: element =>
         element.data?.on?.['mouseenter'] ? 'mouseenter' : 'mouseover',
+    })
+    return invokeAndCapture(simulation, target, eventName, handler => {
+      handler()
+    })
+  }
+
+/** Simulates the pointer leaving the element matching the target.
+ *  Dispatches the `mouseleave` handler, falling back to `mouseout`. */
+export const unhover =
+  (target: string | Locator) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    const internal = toInternal(simulation)
+    const scopedTarget = applyScopeToTarget(internal.scope, target)
+    const { maybeElement } = resolveTarget(internal.html, scopedTarget)
+    const eventName = Option.match(maybeElement, {
+      onNone: () => 'mouseleave',
+      onSome: element =>
+        element.data?.on?.['mouseleave'] || !element.data?.on?.['mouseout']
+          ? 'mouseleave'
+          : 'mouseout',
     })
     return invokeAndCapture(simulation, target, eventName, handler => {
       handler()
@@ -3448,7 +4256,8 @@ export const withViewInputs =
 // SCENE
 
 /** Configuration for a deterministic Scene. Routing and Subscription entries
- * declare the external causes the Scene may deliver; no Effects are executed. */
+ * declare the external causes the Scene may deliver; no Effects are executed.
+ * The `block` selector belongs to the separate scoped Block configuration. */
 export type SceneConfig<
   Model,
   Message,
@@ -3456,6 +4265,7 @@ export type SceneConfig<
   Subscriptions = undefined,
   Routing = undefined,
 > = Readonly<{
+  block?: never
   update: (
     model: Model,
     message: Message,
@@ -3466,6 +4276,7 @@ export type SceneConfig<
   }>
   view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
   subscriptions?: Subscriptions
+  managedResources?: Readonly<Record<string, unknown>>
   routing?: Routing
 }>
 
@@ -3636,12 +4447,14 @@ export const scene: {
   Routing extends SceneRouting<Message> | undefined = undefined,
 >(
   config: Readonly<{
+    [SceneHostTypeId]?: SceneHost
     update: (
       model: Model,
       message: Message,
     ) => SimulationUpdateReturn<Model, OutMessage>
     view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
     subscriptions?: Subscriptions
+    managedResources?: Readonly<Record<string, unknown>>
     routing?: Routing
   }>,
   ...steps: ReadonlyArray<
@@ -3660,7 +4473,16 @@ export const scene: {
     outMessage: undefined,
     outMessages: [],
     outMessageRevision: 0,
-    updateFn: config.update,
+    host: config[SceneHostTypeId],
+    boundaryRegistry:
+      config[SceneHostTypeId] === undefined
+        ? undefined
+        : createHtmlBoundaryRegistry(),
+    updateFn: (model: Model, message: Message) => {
+      const messageUpdate = config.update(model, message)
+      config[SceneHostTypeId]?.synchronize(messageUpdate.model)
+      return messageUpdate
+    },
     resolvers: [],
     html: undefined as unknown,
     viewFn: config.view,
@@ -3670,6 +4492,10 @@ export const scene: {
     maybeUnacknowledgedIgnored: Option.none(),
     subscriptionDeclarations: subscriptionMessageDeclarations(
       config.subscriptions ?? {},
+    ),
+    managedResourceEntries: Array.filter(
+      Object.values(config.managedResources ?? {}),
+      Predicate.isObject,
     ),
     keptPendingCommands: [],
     routing: normalizeSceneRouting(config.routing),

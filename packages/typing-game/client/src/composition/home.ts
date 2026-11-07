@@ -1,61 +1,57 @@
 import { Effect, Option, Schema } from 'effect'
 import { Update } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 import { pushUrl } from 'foldkit/navigation'
 
 import * as Shared from '@typing-game/shared'
 
 import {
-  ApplicationDefinition,
+  makeCommand,
   makeCommandsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
   makeStep,
-} from '../definition'
+} from '../block'
+import { HomeBlock } from '../blocks'
 import { Message } from '../message'
-import { HomeBlock } from '../page'
 import { ApplicationRoute, roomRouter } from '../route'
-import { RoomBinding } from './room'
+import { MaybeRoomInstanceBinding } from './room'
 
-export const NavigateToRoom = ApplicationDefinition.makeCommand(
-  'NavigateToRoom',
-  {
-    args: { roomId: Schema.String },
-    messages: [Message.CompletedNavigateToRoom],
-    handler: function* () {
-      return ({ roomId }) =>
-        pushUrl(roomRouter({ roomId })).pipe(
-          Effect.as(Message.CompletedNavigateToRoom()),
-        )
-    },
+export const NavigateToRoom = makeCommand('NavigateToRoom', {
+  args: { roomId: Schema.String },
+  messages: [Message.CompletedNavigateToRoom],
+  handler: function* () {
+    return ({ roomId }) =>
+      pushUrl(roomRouter({ roomId })).pipe(
+        Effect.as(Message.CompletedNavigateToRoom()),
+      )
   },
-)
+})
 
-const navigateToRoomStep = (roomId: string) =>
+const navigateToRoom = (roomId: string) =>
   makeCommandsStep(() => [NavigateToRoom({ roomId })])
 
-const initRoomInstanceStep = (roomId: string) =>
+const initRoomInstance = (roomId: string) =>
   makeStep(model =>
-    initAndSet(RoomBinding, model, {
+    initAndSet(MaybeRoomInstanceBinding, model, {
       key: roomId,
       args: [Option.none()],
     }),
   )
 
-const enterJoinedRoomStep = (
-  roomId: string,
-  player: typeof Shared.Player.Type,
-) =>
+const enterJoinedRoom = (roomId: string, player: Shared.Player) =>
   Update.combineSteps([
-    initRoomInstanceStep(roomId),
-    RoomBinding.informJoined(roomId, { player }, { roomId }),
-    navigateToRoomStep(roomId),
+    initRoomInstance(roomId),
+    MaybeRoomInstanceBinding.informOfJoin(roomId, { player }, { roomId }),
+    navigateToRoom(roomId),
   ])
 
-const foldHomeOutMessage = ApplicationDefinition.makeOutMessageFold(HomeBlock, {
-  CreatedRoom: ({ roomId, player }) => enterJoinedRoomStep(roomId, player),
-  JoinedRoom: ({ roomId, player }) => enterJoinedRoomStep(roomId, player),
-})
-
-export const HomeBinding = ApplicationDefinition.makeBinding(HomeBlock, {
+export const HomeBinding = makeRequiredFieldBinding(HomeBlock, {
   field: 'home',
-  presentWhen: model => ApplicationRoute.guards.Home(model.route),
-}).withOutMessagePolicy({ fold: foldHomeOutMessage })
+  activeWhen: model => ApplicationRoute.guards.Home(model.route),
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(HomeBlock, {
+    CreatedRoom: ({ roomId, player }) => enterJoinedRoom(roomId, player),
+    JoinedRoom: ({ roomId, player }) => enterJoinedRoom(roomId, player),
+  }),
+})

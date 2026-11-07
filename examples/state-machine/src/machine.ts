@@ -5,27 +5,25 @@ import { modifyFields } from 'foldkit/struct'
 import { PlaceOrder } from './command'
 import { Message } from './message'
 import { CheckoutState, Discount, Promo } from './model'
+import type { ReviewState } from './model'
 
-const PROMO_DISCOUNTS: ReadonlyArray<typeof Discount.Type> = [
+const PROMO_DISCOUNTS: ReadonlyArray<Discount> = [
   { code: 'READER10', percentOff: 10 },
   { code: 'SIGNAL20', percentOff: 20 },
 ]
 
-export const promoToMaybeDiscount = (
-  promo: typeof Promo.Type,
-): Option.Option<typeof Discount.Type> =>
+export const promoToMaybeDiscount = (promo: Promo): Option.Option<Discount> =>
   Match.value(promo).pipe(
     Match.tags({ AppliedPromo: appliedPromo => appliedPromo.discount }),
     Match.option,
   )
 
-export const isReviewReady = (
-  review: typeof CheckoutState.Review.Type,
-): boolean => review.isPaymentMethodSelected && review.isTermsAccepted
+export const isReviewReady = (review: ReviewState): boolean =>
+  review.isPaymentMethodSelected && review.isTermsAccepted
 
 export const reviewToMaybeDiscount = (
-  review: typeof CheckoutState.Review.Type,
-): Option.Option<typeof Discount.Type> => {
+  review: ReviewState,
+): Option.Option<Discount> => {
   const normalizedCode = pipe(
     review.promoCodeInput,
     String.trim,

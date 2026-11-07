@@ -1,7 +1,9 @@
-import { Command, click, expect, given, role, scene, text } from 'foldkit/scene'
-import { describe, test } from 'vitest'
+import { Scene } from 'foldkit'
+import { describe } from 'vitest'
 
-import { Message, Model, PersistCount, update, view } from './application'
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, Message, Model, PersistCount, layer } from './block'
 
 const initialModel = Model.make({
   count: 3,
@@ -10,31 +12,31 @@ const initialModel = Model.make({
 })
 
 describe('view', () => {
-  test('renders the count and provenance line', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(text('3')).toExist(),
-      expect(
-        text('Rendered on the Server at 2026-07-26T00:00:00.000Z'),
+  it.effect('renders the count and provenance line', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.expect(Scene.text('3')).toExist(),
+      Scene.expect(
+        Scene.text('Rendered on the Server at 2026-07-26T00:00:00.000Z'),
       ).toExist(),
-      expect(role('button', { name: '+' })).toExist(),
-      expect(role('button', { name: '-' })).toExist(),
-    )
-  })
+      Scene.expect(Scene.role('button', { name: '+' })).toExist(),
+      Scene.expect(Scene.role('button', { name: '-' })).toExist(),
+    ),
+  )
 
-  test('clicking + increments and persists the count', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      click(role('button', { name: '+' })),
-      expect(text('4')).toExist(),
-      Command.expectHas(PersistCount({ count: 4 })),
-      Command.resolve(
+  it.effect('clicking + increments and persists the count', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.click(Scene.role('button', { name: '+' })),
+      Scene.expect(Scene.text('4')).toExist(),
+      Scene.Command.expectHas(PersistCount({ count: 4 })),
+      Scene.Command.resolve(
         PersistCount({ count: 4 }),
         Message.CompletedPersistCount(),
       ),
-      Command.expectNone(),
-    )
-  })
+      Scene.Command.expectNone(),
+    ),
+  )
 })

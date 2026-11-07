@@ -1,6 +1,7 @@
 import { Number, Schema } from 'effect'
 import { Block, Command, Update } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import {
   CounterDefinition,
@@ -23,14 +24,14 @@ import {
 export { Message, Model, OutMessage, Save } from './message-steps.definition.js'
 export { ParentMessage } from './record-update.accepted.js'
 
-export const toIncrementAndSaveStep = ({
+export const toIncrementAndSave = ({
   amount,
 }: typeof Message.RequestedIncrement.Type) =>
   Update.combineSteps([
     makeFieldsStep(() => ({ count: Number.sum(amount) })),
     makeCommandsStep(({ count }) => [Save({ count })]),
   ])
-export const incrementAndSaveStep = makeStep.fromMessage(toIncrementAndSaveStep)
+export const incrementAndSave = makeStep.fromMessage(toIncrementAndSave)
 export const CounterComposition = CounterDefinition.makeComposition()
 export const update = CounterComposition.makeUpdate({
   RequestedIncrement: makeStep.fromMessage(({ amount }) =>
@@ -70,7 +71,79 @@ export const contextualUpdate = CounterComposition.makeUpdate.withContext(
   }),
 )
 
-export const reportChildStep = ParentDefinition.makeStep.fromMessage(
+export const modelAwareUpdate = CounterComposition.makeUpdate({
+  RequestedIncrement: makeStep((model, { amount }) =>
+    Update.combineSteps([
+      makeFieldsStep(() => ({ count: () => model.count + amount })),
+      makeCommandsStep(({ count }) => [Save({ count })]),
+    ]),
+  ),
+  RequestedReport: makeStep((model, { label }) => ({
+    model,
+    outMessage: OutMessage.ReportedCount({ count: model.count, label }),
+  })),
+  CompletedSave: makeNoopStep(),
+})
+
+export const modelAwareContextualUpdate =
+  CounterComposition.makeUpdate.withContext(
+    (multiplier: number = 2, ...offsets: ReadonlyArray<number>) => ({
+      RequestedIncrement: makeStep((model, { amount }) => ({
+        model: { count: model.count + amount * multiplier + offsets.length },
+        commands: [Save({ count: model.count })],
+      })),
+      RequestedReport: makeStep((model, { label }) => ({
+        model,
+        outMessage: OutMessage.ReportedCount({ count: model.count, label }),
+      })),
+      CompletedSave: makeNoopStep(),
+    }),
+  )
+
+export const modelAwareIncrement = modelAwareUpdate(
+  Message.RequestedIncrement({ amount: 1 }),
+)
+
+export const modelAwareReport = modelAwareUpdate(
+  Message.RequestedReport({ label: 'current' }),
+)
+export const modelAwareContextualIncrement = modelAwareContextualUpdate(
+  Message.RequestedIncrement({ amount: 1 }),
+)
+export const modelAwareContextualReport = modelAwareContextualUpdate(
+  Message.RequestedReport({ label: 'current' }),
+)
+
+const prepareModelAware = () =>
+  CounterComposition.prepareBlock({
+    init,
+    update: modelAwareUpdate,
+    operations: {
+      increment: Message.RequestedIncrement,
+      report: Message.RequestedReport,
+    },
+    EffectsLayer: Save.layer,
+  })
+export const ModelAwareCounterBlock: Block.FromAssemblyWithOutMessage<
+  typeof Model,
+  typeof prepareModelAware
+> = Block.assemble(prepareModelAware)
+const prepareModelAwareContextual = () =>
+  CounterComposition.prepareBlock({
+    init,
+    update: modelAwareContextualUpdate,
+    operations: {
+      increment: Message.RequestedIncrement,
+      report: Message.RequestedReport,
+    },
+    EffectsLayer: Save.layer,
+  })
+export const ModelAwareContextualCounterBlock: Block.FromAssemblyWithOutMessage<
+  typeof Model,
+  typeof prepareModelAwareContextual
+> = Block.assemble(prepareModelAwareContextual)
+
+export const reportChild = ParentDefinition.makeStep.fromMessage(
   (_message: typeof ParentMessage.RequestedReport.Type) =>
     ChildBinding.report({ amount: 1 }),
 )
@@ -78,14 +151,43 @@ export const connectedUpdate = ParentComposition.makeUpdate({
   RequestedQuiet: ParentDefinition.makeStep.fromMessage(() =>
     ChildBinding.quiet(),
   ),
-  RequestedReport: reportChildStep,
+  RequestedReport: reportChild,
   RequestedSave: ParentDefinition.makeStep.fromMessage(() =>
     ChildBinding.save(),
   ),
   CompletedSave: ParentDefinition.makeNoopStep(),
 })
 
-export const makeGenericCounter = <Value>(Value: Schema.Schema<Value>) => {
+export const modelAwareConnectedUpdate = ParentComposition.makeUpdate({
+  RequestedQuiet: ParentDefinition.makeStep((_model, _message) =>
+    ChildBinding.quiet(),
+  ),
+  RequestedReport: ParentDefinition.makeStep((model, _message) =>
+    ChildBinding.report({ amount: model.count }),
+  ),
+  RequestedSave: ParentDefinition.makeStep((_model, _message) =>
+    ChildBinding.save(),
+  ),
+  CompletedSave: ParentDefinition.makeNoopStep(),
+})
+export const modelAwareChildReport = modelAwareConnectedUpdate(
+  ParentMessage.RequestedReport(),
+)
+export const modelAwareContextualConnectedUpdate =
+  ParentComposition.makeUpdate.withContext((offset: number = 1) => ({
+    RequestedQuiet: ParentDefinition.makeNoopStep(),
+    RequestedReport: ParentDefinition.makeStep((model, _message) =>
+      ChildBinding.report({ amount: model.count + offset }),
+    ),
+    RequestedSave: ChildBinding.save(),
+    CompletedSave: ParentDefinition.makeNoopStep(),
+  }))
+export const modelAwareContextualChildReport =
+  modelAwareContextualConnectedUpdate(ParentMessage.RequestedReport())
+
+export const makeGenericCounter = <Value, Encoded>(
+  Value: Schema.Codec<Value, Encoded, never, never>,
+) => {
   const Model = Schema.Struct({ value: Value })
   const Message = defineMessageUnion({ RequestedSet: { value: Value } })
   const Definition = Block.makeDefinition('MessageOnlyGeneric', {
@@ -102,6 +204,25 @@ export const makeGenericCounter = <Value>(Value: Schema.Schema<Value>) => {
 }
 export const setString = makeGenericCounter(Schema.String)
 
+export const makeModelAwareCounter = <Value, Encoded>(
+  Value: Schema.Codec<Value, Encoded, never, never>,
+) => {
+  const Model = Schema.Struct({ value: Value })
+  const Message = defineMessageUnion({ RequestedSet: { value: Value } })
+  const Definition = Block.makeDefinition('ModelAwareGeneric', {
+    Model,
+    Message,
+  })
+  const Composition = Definition.makeComposition()
+
+  return Composition.makeUpdate({
+    RequestedSet: Definition.makeStep((model, { value }) => ({
+      model: modifyFields(model, { value: () => value }),
+    })),
+  })
+}
+export const setModelAwareString = makeModelAwareCounter(Schema.String)
+
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
     Value,
@@ -111,25 +232,23 @@ type Equal<Left, Right> =
 type Expect<Value extends true> = Value
 export type ExactArguments = Expect<
   Equal<
-    Parameters<typeof incrementAndSaveStep>,
+    Parameters<typeof incrementAndSave>,
     [model: typeof Model.Type, message: typeof Message.RequestedIncrement.Type]
   >
 >
-export const ordinaryIncrementAndSaveStep = makeStep(
+export const ordinaryIncrementAndSave = makeStep(
   (_model, message: typeof Message.RequestedIncrement.Type) =>
-    toIncrementAndSaveStep(message),
+    toIncrementAndSave(message),
 )
 export type ExactCommands = Expect<
   Equal<
-    NonNullable<ReturnType<typeof incrementAndSaveStep>['commands']>[number],
-    NonNullable<
-      ReturnType<typeof ordinaryIncrementAndSaveStep>['commands']
-    >[number]
+    NonNullable<ReturnType<typeof incrementAndSave>['commands']>[number],
+    NonNullable<ReturnType<typeof ordinaryIncrementAndSave>['commands']>[number]
   >
 >
 export type ExactRequirements = Expect<
   Equal<
-    Update.RequirementsOf<typeof incrementAndSaveStep>,
+    Update.RequirementsOf<typeof incrementAndSave>,
     Command.HandlerOf<typeof Save>
   >
 >
@@ -141,7 +260,83 @@ export type ExactOutMessage = Expect<
 >
 export type ExactRegistration = Expect<
   Equal<
-    Update.RegistrationEvidenceOf<ReturnType<typeof reportChildStep>>,
+    Update.RegistrationEvidenceOf<ReturnType<typeof reportChild>>,
     Block.RequirementOfBinding<typeof ChildBinding>
   >
+>
+
+export type ExactModelAwareRequirements = Expect<
+  Equal<
+    Update.RequirementsOf<typeof modelAwareIncrement>,
+    Command.HandlerOf<typeof Save>
+  >
+>
+export type ExactModelAwareSilentRequirements = Expect<
+  Equal<
+    Update.RequirementsOf<typeof ModelAwareCounterBlock.operations.report>,
+    never
+  >
+>
+export type ExactModelAwareOutMessage = Expect<
+  Equal<
+    Exclude<ReturnType<typeof modelAwareReport>['outMessage'], undefined>,
+    typeof OutMessage.Type
+  >
+>
+export type ExactModelAwareRegistration = Expect<
+  Equal<
+    Update.RegistrationEvidenceOf<ReturnType<typeof modelAwareChildReport>>,
+    Block.RequirementOfBinding<typeof ChildBinding>
+  >
+>
+export type ExactContextualRequirements = Expect<
+  Equal<
+    Update.RequirementsOf<typeof modelAwareContextualIncrement>,
+    Command.HandlerOf<typeof Save>
+  >
+>
+export type ExactContextualOutMessage = Expect<
+  Equal<
+    Exclude<
+      ReturnType<typeof modelAwareContextualReport>['outMessage'],
+      undefined
+    >,
+    typeof OutMessage.Type
+  >
+>
+
+export type ExactContextualSilentRequirements = Expect<
+  Equal<
+    Update.RequirementsOf<
+      typeof ModelAwareContextualCounterBlock.operations.report
+    >,
+    never
+  >
+>
+export type ExactContextualRegistration = Expect<
+  Equal<
+    Update.RegistrationEvidenceOf<
+      ReturnType<typeof modelAwareContextualChildReport>
+    >,
+    Block.RequirementOfBinding<typeof ChildBinding>
+  >
+>
+
+export const MessageFreeModel = Schema.Struct({ count: Schema.Number })
+export type MessageFreeModel = typeof MessageFreeModel.Type
+const MessageFreeMessage = defineMessageUnion({})
+export const MessageFreeFieldsKey = Symbol('MessageFreeFields')
+export const MessageFreeFieldsBlock = Block.make('MessageFreeFields', {
+  key: MessageFreeFieldsKey,
+  Model: MessageFreeModel,
+  Message: MessageFreeMessage,
+  InitArgs: Schema.Tuple([]),
+})
+export const { makeFieldsStep: makeMessageFreeFieldsStep } =
+  MessageFreeFieldsBlock
+export const incrementWithoutMessages = makeMessageFreeFieldsStep(() => ({
+  count: Number.increment,
+}))
+export type ExactMessageFreeRequirements = Expect<
+  Equal<Update.RequirementsOf<typeof incrementWithoutMessages>, never>
 >

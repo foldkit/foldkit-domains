@@ -1,25 +1,18 @@
 import { Option } from 'effect'
-import {
-  Command,
-  ManagedResource,
-  click,
-  expect,
-  given,
-  role,
-  scene,
-  text,
-} from 'foldkit/scene'
-import { describe, test } from 'vitest'
+import { Scene } from 'foldkit'
+import { describe } from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import {
+  ApplicationBlock,
   Compute,
   EngineState,
   Message,
   Model,
+  layer,
   managedResources,
-  update,
-  view,
-} from './application'
+} from './block'
 
 const offModel = Model.make({
   engine: EngineState.Off(),
@@ -34,83 +27,95 @@ const readyModel = Model.make({
 })
 
 describe('view', () => {
-  test('initial view shows the engine off with a Start button', () => {
-    scene(
-      { update, view },
-      given(offModel),
-      expect(text('Engine is off.')).toExist(),
-      expect(role('button', { name: 'Start engine' })).toExist(),
-      expect(role('button', { name: 'Stop engine' })).toBeAbsent(),
-      expect(role('button', { name: 'Compute next square' })).toBeDisabled(),
-      expect(text('No result yet.')).toExist(),
-    )
-  })
+  it.effect('initial view shows the engine off with a Start button', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(offModel),
+      Scene.expect(Scene.text('Engine is off.')).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Start engine' })).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Stop engine' })).toBeAbsent(),
+      Scene.expect(
+        Scene.role('button', { name: 'Compute next square' }),
+      ).toBeDisabled(),
+      Scene.expect(Scene.text('No result yet.')).toExist(),
+    ),
+  )
 
-  test('clicking Start engine enters the booting state and shows Stop', () => {
-    scene(
-      { update, view },
-      given(offModel),
-      click(role('button', { name: 'Start engine' })),
-      expect(text('Booting engine...')).toExist(),
-      expect(role('button', { name: 'Stop engine' })).toExist(),
-      expect(role('button', { name: 'Start engine' })).toBeAbsent(),
-    )
-  })
+  it.effect(
+    'clicking Start engine enters the booting state and shows Stop',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(offModel),
+        Scene.click(Scene.role('button', { name: 'Start engine' })),
+        Scene.expect(Scene.text('Booting engine...')).toExist(),
+        Scene.expect(Scene.role('button', { name: 'Stop engine' })).toExist(),
+        Scene.expect(
+          Scene.role('button', { name: 'Start engine' }),
+        ).toBeAbsent(),
+      ),
+  )
 
-  test('a ready engine shows its id and the Stop button', () => {
-    scene(
-      { update, view },
-      given(readyModel),
-      expect(text('Engine ready: engine-1')).toExist(),
-      expect(role('button', { name: 'Stop engine' })).toExist(),
-      expect(
-        role('button', { name: 'Compute next square' }),
+  it.effect('a ready engine shows its id and the Stop button', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(readyModel),
+      Scene.expect(Scene.text('Engine ready: engine-1')).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Stop engine' })).toExist(),
+      Scene.expect(
+        Scene.role('button', { name: 'Compute next square' }),
       ).not.toBeDisabled(),
-    )
-  })
+    ),
+  )
 
-  test('clicking Compute fires the Compute command and renders the result', () => {
-    scene(
-      { update, view },
-      given(readyModel),
-      click(role('button', { name: 'Compute next square' })),
-      Command.expectExact(Compute({ value: 3 })),
-      Command.resolve(Compute, Message.SucceededCompute({ result: 9 })),
-      expect(text('Square result: 9')).toExist(),
-    )
-  })
+  it.effect(
+    'clicking Compute fires the Compute command and renders the result',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(readyModel),
+        Scene.click(Scene.role('button', { name: 'Compute next square' })),
+        Scene.Command.expectExact(Compute({ value: 3 })),
+        Scene.Command.resolve(Compute, Message.SucceededCompute({ result: 9 })),
+        Scene.expect(Scene.text('Square result: 9')).toExist(),
+      ),
+  )
 
-  test('the engine lifecycle drives boot, ready, and stop through the resource steps', () => {
-    scene(
-      { update, view },
-      given(offModel),
-      click(role('button', { name: 'Start engine' })),
-      expect(text('Booting engine...')).toExist(),
-      ManagedResource.acquire(managedResources.engine, {
-        engineId: 'engine-1',
-        square: value => value * value,
-      }),
-      expect(text('Engine ready: engine-1')).toExist(),
-      expect(
-        role('button', { name: 'Compute next square' }),
-      ).not.toBeDisabled(),
-      click(role('button', { name: 'Stop engine' })),
-      ManagedResource.release(managedResources.engine),
-      expect(text('Engine is off.')).toExist(),
-    )
-  })
+  it.effect(
+    'the engine lifecycle drives boot, ready, and stop through the resource steps',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(offModel),
+        Scene.click(Scene.role('button', { name: 'Start engine' })),
+        Scene.expect(Scene.text('Booting engine...')).toExist(),
+        Scene.ManagedResource.acquire(managedResources.engine, {
+          engineId: 'engine-1',
+          square: value => value * value,
+        }),
+        Scene.expect(Scene.text('Engine ready: engine-1')).toExist(),
+        Scene.expect(
+          Scene.role('button', { name: 'Compute next square' }),
+        ).not.toBeDisabled(),
+        Scene.click(Scene.role('button', { name: 'Stop engine' })),
+        Scene.ManagedResource.release(managedResources.engine),
+        Scene.expect(Scene.text('Engine is off.')).toExist(),
+      ),
+  )
 
-  test('a failed engine boot shows the failure reason', () => {
-    scene(
-      { update, view },
-      given(offModel),
-      click(role('button', { name: 'Start engine' })),
-      ManagedResource.failAcquire(
+  it.effect('a failed engine boot shows the failure reason', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(offModel),
+      Scene.click(Scene.role('button', { name: 'Start engine' })),
+      Scene.ManagedResource.failAcquire(
         managedResources.engine,
         'Error: crypto unavailable',
       ),
-      expect(text('Engine failed: Error: crypto unavailable')).toExist(),
-      expect(role('button', { name: 'Start engine' })).toExist(),
-    )
-  })
+      Scene.expect(
+        Scene.text('Engine failed: Error: crypto unavailable'),
+      ).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Start engine' })).toExist(),
+    ),
+  )
 })

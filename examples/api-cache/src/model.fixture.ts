@@ -1,11 +1,16 @@
-import { HashMap, Option } from 'effect'
-import { modifyFields } from 'foldkit/struct'
+import { Effect, HashMap, Option, Result } from 'effect'
+import { Story } from 'foldkit'
 
+import { Tabs } from '@foldkit/ui'
+
+import { FetchPostDetail, FetchPosts, FetchStats } from './command'
+import { TabsBinding } from './composition'
 import type { Post, PostDetail, Stats } from './data'
+import { ApplicationBlock, layer } from './index'
+import { Message } from './message'
 import {
   ApplicationTabsBlock,
   type Model,
-  PostDetailData,
   PostsData,
   StatsData,
   TABS_ID,
@@ -13,7 +18,7 @@ import {
 
 export const FETCHED_AT = 1_750_000_000_000
 
-export const fixturePosts: ReadonlyArray<typeof Post.Type> = [
+export const fixturePosts: ReadonlyArray<Post> = [
   {
     id: 'first-post',
     title: 'First Post',
@@ -26,59 +31,98 @@ export const fixturePosts: ReadonlyArray<typeof Post.Type> = [
   },
 ]
 
-export const firstPostDetail: typeof PostDetail.Type = {
+export const firstPostDetail: PostDetail = {
   id: 'first-post',
   title: 'First Post',
   author: 'Grace Hopper',
   body: 'The whole body of the first fixture post.',
 }
 
-export const fixtureStats: typeof Stats.Type = {
+export const fixtureStats: Stats = {
   activeUsers: 120,
   requestsPerSecond: 1234,
   cacheHitRatePercent: 97,
 }
 
-export const loadingPostsModel: typeof Model.Type = {
-  tabs: ApplicationTabsBlock.init({ id: TABS_ID }).model,
-  activeTab: 'Posts',
-  posts: PostsData.Loading(),
-  postDetailById: HashMap.empty(),
-  maybeSelectedPostId: Option.none(),
-  stats: StatsData.Idle(),
-}
+const loadingPostsModel = Story.withBlock(
+  { block: ApplicationTabsBlock, layer: Tabs.layer },
+  tabs => {
+    const model: Model = {
+      tabs: tabs.init({ id: TABS_ID }).model,
+      activeTab: 'Posts',
+      posts: PostsData.Loading(),
+      postDetailById: HashMap.empty(),
+      maybeSelectedPostId: Option.none(),
+      stats: StatsData.Idle(),
+    }
 
-export const loadedPostsModel: typeof Model.Type = modifyFields(
-  loadingPostsModel,
-  {
-    posts: () =>
-      PostsData.Success({
-        data: { posts: fixturePosts, fetchedAt: FETCHED_AT },
-      }),
+    return model
   },
 )
 
-export const cachedFirstPostModel: typeof Model.Type = modifyFields(
-  loadedPostsModel,
-  {
-    postDetailById: () =>
-      HashMap.set(
-        HashMap.empty(),
-        'first-post',
-        PostDetailData.Success({
-          data: { detail: firstPostDetail, fetchedAt: FETCHED_AT },
+const application = { block: ApplicationBlock, layer }
+
+const loadedPostsModel = Story.story(
+  application,
+  Story.init(),
+  Story.Command.resolve(
+    FetchPosts,
+    Message.CompletedFetchPosts({
+      result: Result.succeed({ posts: fixturePosts, fetchedAt: FETCHED_AT }),
+    }),
+  ),
+)
+
+const cachedFirstPostModel = Effect.gen(function* () {
+  const loadedPosts = yield* loadedPostsModel
+
+  return yield* Story.story(
+    application,
+    Story.given(loadedPosts),
+    Story.message(Message.ClickedPost({ postId: 'first-post' })),
+    Story.Command.resolve(
+      FetchPostDetail,
+      Message.CompletedFetchPostDetail({
+        postId: 'first-post',
+        result: Result.succeed({
+          detail: firstPostDetail,
+          fetchedAt: FETCHED_AT,
         }),
-      ),
-  },
-)
-
-export const loadedStatsModel: typeof Model.Type = modifyFields(
-  loadedPostsModel,
-  {
-    activeTab: () => 'Stats',
-    stats: () =>
-      StatsData.Success({
-        data: { stats: fixtureStats, fetchedAt: FETCHED_AT },
       }),
-  },
-)
+    ),
+    Story.message(Message.ClickedBackToPosts()),
+  )
+})
+
+const loadedStatsModel = Effect.gen(function* () {
+  const loadedPosts = yield* loadedPostsModel
+
+  return yield* Story.story(
+    application,
+    Story.given(loadedPosts),
+    Story.messageIn(
+      TabsBinding,
+      ApplicationTabsBlock.Message.SelectedTab({ index: 1, value: 'Stats' }),
+    ),
+    Story.Command.resolve(
+      Tabs.test.FocusTab,
+      ApplicationTabsBlock.Message.CompletedFocusTab(),
+    ),
+    Story.Command.resolve(
+      FetchStats,
+      Message.CompletedFetchStats({
+        result: Result.succeed({
+          stats: fixtureStats,
+          fetchedAt: FETCHED_AT,
+        }),
+      }),
+    ),
+  )
+})
+
+export const fixtureEffects = {
+  loadingPostsModel,
+  loadedPostsModel,
+  cachedFirstPostModel,
+  loadedStatsModel,
+}

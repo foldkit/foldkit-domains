@@ -1,41 +1,31 @@
-import { ApplicationDefinition } from './definition'
+import {
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} from './block'
 import * as Home from './home'
 import * as Room from './room'
 
-export const HomeBinding = ApplicationDefinition.makeBinding(Home.HomeBlock, {
+const BaseHomeBinding = makeRequiredFieldBinding(Home.HomeBlock, {
   field: 'home',
 })
 
-export const RoomBinding = ApplicationDefinition.makeBinding(Room.RoomBlock, {
+const BaseRoomBinding = makeRequiredFieldBinding(Room.RoomBlock, {
   field: 'room',
 })
 
-const foldHomeOutMessage = ApplicationDefinition.makeOutMessageFold(
-  Home.HomeBlock,
-  {
-    SelectedRoom: ({ roomId }) => RoomBinding.requestOpen(roomId),
-  },
-)
+export const HomeBinding = BaseHomeBinding.withOutMessagePolicy({
+  fold: makeOutMessageFold(Home.HomeBlock, {
+    SelectedRoom: ({ roomId }) => BaseRoomBinding.requestOpen(roomId),
+  }),
+})
 
-const foldRoomOutMessage = ApplicationDefinition.makeOutMessageFold(
-  Room.RoomBlock,
-  {
-    SavedRoom: ({ roomId }) => HomeBinding.informRoomSaved(roomId),
-  },
-)
+export const RoomBinding = BaseRoomBinding.withOutMessagePolicy({
+  fold: makeOutMessageFold(Room.RoomBlock, {
+    SavedRoom: ({ roomId }) => BaseHomeBinding.informOfRoomSaved(roomId),
+  }),
+})
 
-export const HomeBindingWithOutMessagePolicy = HomeBinding.withOutMessagePolicy(
-  {
-    fold: foldHomeOutMessage,
-  },
-)
-
-export const RoomBindingWithOutMessagePolicy = RoomBinding.withOutMessagePolicy(
-  {
-    fold: foldRoomOutMessage,
-  },
-)
-
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
-  bindings: [HomeBindingWithOutMessagePolicy, RoomBindingWithOutMessagePolicy],
+export const ApplicationComposition = makeComposition({
+  bindings: [HomeBinding, RoomBinding],
 })

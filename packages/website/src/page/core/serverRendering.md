@@ -10,7 +10,7 @@ Pin the exact version you deploy and test upgrades against your own SSR or SSG h
 The lowest-risk use today is statically generated public content, which is how this site uses it. Please try it and report what breaks.
 :::
 
-Foldkit renders on the server from the same completed root Block the browser Program uses. `renderToString` resolves `init`, runs the pure view, and returns HTML. `Runtime.hydrate` then adopts matching HTML in place and rebuilds mismatches. The same init, view, update, and Model work whether the HTML was rendered during a build (SSG) or while handling a request (SSR).
+Foldkit renders on the server from the same root Block declaration and construction Layer the browser Program uses. `renderToString` resolves `init`, runs the pure view, and returns HTML. `Runtime.hydrate` then adopts matching HTML in place and rebuilds mismatches. The same init, view, update, and Model work whether the HTML was rendered during a build (SSG) or while handling a request (SSR).
 
 ### SSG and SSR
 
@@ -88,9 +88,9 @@ A delivery host runs the built `fetch` handler. It does not import the applicati
 
 #### Application config on the server
 
-`renderToString` takes three arguments: `ApplicationBlock`, server host configuration, and render options. The server host configuration contains only `Flags` and routing declarations when the Block's init requires them. Render options contain request startup inputs such as `flags` and `url`. The browser entry gives that same `ApplicationBlock` to `Program.make` with its DOM container and browser host options.
+`renderToString` takes three arguments: `{ block: ApplicationBlock, layer }`, server host configuration, and render options. The first selects the public Block contract and its construction Layer. The server host configuration contains only `Flags` and routing declarations when init requires them. Render options contain request startup inputs such as `flags` and `url`. The browser entry selects the same Block and Layer in `Program.make`, alongside its DOM container and browser host options.
 
-The server renderer has no container. It runs the checked root Block's `init` and view once over the resulting Model. It does not start update, Commands, Subscriptions, ManagedResources, Mount handlers, or the handler graph. There is no DOM to attach to and no Message to dispatch.
+The server renderer has no container. It builds the selected construction Layer, acquires the executable graph, then runs init and view once over the resulting Model. It does not dispatch updates, execute Commands, start Subscriptions or ManagedResources, run Mount handlers, or build the handler graph. There is no DOM to attach to and no Message to dispatch.
 
 #### Request URL
 
@@ -207,6 +207,8 @@ The root also has `data-foldkit-build`. Its value identifies the deployment that
 
 An application with Flags emits a `<script type="application/json" data-foldkit-flags="...">`. It carries the Schema-encoded Flags that produced the server Model. The attribute value matches the root's `runtimeId`.
 
+The handoff transfers Flags, not the server's Model or Messages. The server encodes Flags and the hydrating browser decodes them through the same JSON Codec. Both directions must complete synchronously without Effect Services. A synchronous transformation backed by `Effect.succeed` is supported; an Effect requirement of `never` does not make a Promise-backed transformation synchronous.
+
 #### Key and view identity markers
 
 Keyed elements carry `data-foldkit-key`. Elements with build-assigned view identity carry `data-foldkit-identity`. Both values are deterministic, non-cryptographic fingerprints. Neither marker contains the original key, which may hold an account id or email address, or the build's source path. Hydration compares each fingerprint and removes the marker as it adopts the element. A render with `isHydratable: false` emits neither marker.
@@ -248,6 +250,8 @@ Calling `hydrate` declares that a complete server handoff exists. If the handoff
 #### Static markup without hydration
 
 `isHydratable` defaults to `true` for SSR and SSG. Set `isHydratable: false` only for static markup that no client will hydrate. The output then carries no application stamp, build id, Flags payload, key marker, or identity marker. `Runtime.hydrate` refuses it.
+
+A non-hydratable render uses Flags to run server init but does not encode a browser handoff or decode one later. A Flags Codec used only by that static render therefore never crosses the serialization boundary.
 
 ### Flags and what only the browser knows
 
@@ -316,6 +320,26 @@ In development, enable the Vite host in `vite.config.ts`:
 ::Snippet{name="serverRenderingViteSsr" label="Vite SSR configuration"}
 
 Vite continues to serve the client entry, HMR, and assets. Requests that reach Foldkit become Web `Request` values and pass to `renderPage`. The returned Web `Response` provides the status, headers, and body.
+
+#### Releasing resources when the server entry reloads
+
+When you save the server entry or any module it imports, the dev server evaluates a new copy. A `ManagedRuntime` created by the previous copy can keep fibers, connections, and timers alive unless that copy releases it.
+
+Release those resources in an `import.meta.hot.dispose` callback in the server entry. Vite runs the callback on the old copy before it evaluates the new one:
+
+::Snippet{name="serverRenderingHotDispose" label="Disposing a runtime when the server entry reloads"}
+
+The dev server reevaluates the server module graph after an edit so Block declarations are created with their implementation Layers. The server entry accepts the update and releases resources it owns before Vite evaluates its replacement. Create each resource the callback releases in the server entry itself; imported modules should not start resources that rely on the entry's callback for cleanup.
+
+Requests arriving during an edit wait for Vite to apply the server update. If Vite does not report completion, the wait ends after one second and the request proceeds with the module version Vite has loaded.
+
+Some reloads skip the callback, and the old copy keeps running until the dev server process exits:
+
+- Vite reloads the server modules in full, instead of hot updating the entry, when an update cannot be applied in place.
+- A dev server restart, such as after an edit to `vite.config.ts`, discards the module runner.
+- With `server.hmr` set to `false`, `import.meta.hot` is `undefined`, so the callback is never registered.
+
+If you disable HMR, stop and restart the dev-server process after editing server modules that own long-lived resources. Module reevaluation and an in-process Vite restart cannot invoke the missing callback.
 
 #### Testing hydration during development
 

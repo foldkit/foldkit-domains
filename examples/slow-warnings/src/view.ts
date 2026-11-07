@@ -6,12 +6,7 @@ import {
   type ApplicationViewBuilder,
 } from './composition'
 import { Message } from './message'
-import {
-  type Model,
-  type SlowPhase,
-  type SlowWarning,
-  type Workload,
-} from './model'
+import { type SlowPhase, type SlowWarning, type Workload } from './model'
 import { VIEW_WORK_MS, burnCpu } from './workload'
 
 const phaseLabel = (phase: SlowPhase): string =>
@@ -45,7 +40,7 @@ const phaseAccentClass = (phase: SlowPhase): string =>
     Match.exhaustive,
   )
 
-const burnCpuDuringView = (workload: typeof Workload.Type): void => {
+const burnCpuDuringView = (workload: Workload): void => {
   if (workload === 'View') {
     burnCpu(VIEW_WORK_MS)
   }
@@ -65,7 +60,7 @@ const scenarioCard = (
     title: string
     body: string
     buttonText: string
-    message: typeof Message.Type
+    message: Message
   }>,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -95,10 +90,7 @@ const scenarioCard = (
     ],
   )
 
-const warningView = (
-  warning: typeof SlowWarning.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const warningView = (warning: SlowWarning, h: ApplicationViewBuilder): Html =>
   h.keyed('li')(
     warning.id.toString(),
     [
@@ -128,7 +120,7 @@ const warningView = (
   )
 
 const warningsView = (
-  warnings: ReadonlyArray<typeof SlowWarning.Type>,
+  warnings: ReadonlyArray<SlowWarning>,
   h: ApplicationViewBuilder,
 ): Html =>
   h.section(
@@ -216,7 +208,8 @@ const patchRowsView = (
 }
 
 const patchSurfaceView = (
-  model: typeof Model.Type,
+  patchRows: number,
+  patchRun: number,
   h: ApplicationViewBuilder,
 ): Html =>
   h.section(
@@ -234,13 +227,13 @@ const patchSurfaceView = (
               ),
               h.p(
                 [h.Class('text-sm text-zinc-600')],
-                [`${model.patchRows.toLocaleString()} keyed rows mounted`],
+                [`${patchRows.toLocaleString()} keyed rows mounted`],
               ),
             ],
           ),
         ],
       ),
-      lazyPatchRows(patchRowsView, [model.patchRows, model.patchRun, h]),
+      lazyPatchRows(patchRowsView, [patchRows, patchRun, h]),
     ],
   )
 
@@ -325,7 +318,7 @@ export const view = ApplicationComposition.makeView((model, h) => {
               ],
             ),
             warningsView(model.warnings, h),
-            patchSurfaceView(model, h),
+            patchSurfaceView(model.patchRows, model.patchRun, h),
           ],
         ),
       ],

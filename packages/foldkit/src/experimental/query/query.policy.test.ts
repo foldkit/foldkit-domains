@@ -8,7 +8,7 @@ import * as AsyncData from '../../asyncData/index.js'
 import * as Block from '../../block/public.js'
 import { defineMessageUnion } from '../../message/index.js'
 import * as Story from '../../test/story.js'
-import * as Query from './index.js'
+import * as Query from './native.js'
 
 const finiteQuery = Query.define({
   name: 'FinitePolicy',
@@ -33,14 +33,16 @@ const notifyingQuery = Query.define({
 describe('Query freshness and cancellation', () => {
   it('runs stale loading through the ordinary Query update story', () => {
     const Model = Schema.Struct({ query: finiteQuery.Model })
+    type Model = typeof Model.Type
     const Message = defineMessageUnion({
       RequestedLoad: { nowMillis: Schema.Number },
     })
+    type Message = typeof Message.Type
     const Definition = Block.makeDefinition('FinitePolicyParent', {
       Model,
       Message,
     })
-    const Binding = Definition.makeBinding(finiteQuery, {
+    const Binding = Definition.makeRequiredFieldBinding(finiteQuery, {
       field: 'query',
       init: false,
     })

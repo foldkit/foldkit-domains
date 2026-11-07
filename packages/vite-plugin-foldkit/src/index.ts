@@ -3,7 +3,6 @@ import {
   Clock,
   ConfigProvider,
   Console,
-  Crypto,
   Data,
   Duration,
   Effect,
@@ -23,6 +22,7 @@ import {
   Stream,
   pipe,
 } from 'effect'
+import { SecureRandom } from 'effect/crypto'
 import {
   Event as DevToolsEvent,
   EventFrame,
@@ -64,10 +64,14 @@ import { type FoldkitBuildOptions, foldkitBuild } from './build.js'
 import { foldkitBuildToken } from './buildToken.js'
 import { devToolsOverlayPlugin } from './devToolsOverlay.js'
 import { crawlFoldkitPackages } from './foldkitPackages.js'
+import { readProcessNamespaces } from './relayLiveness.js'
 import { publishRelayRecord, retireRelayRecord } from './relayRegistry.js'
 import { relayRegistryTrust } from './relayRegistryTrust.js'
 import { type FoldkitSsrOptions, foldkitSsr } from './ssr.js'
 import { foldkitViewIdentity } from './viewIdentity.js'
+
+type EventConnected = typeof DevToolsEvent.EventConnected.Type
+type EventDisconnected = typeof DevToolsEvent.EventDisconnected.Type
 
 export { type BrandDistResult, brandDistDirectory } from './brandDist.js'
 export {
@@ -166,6 +170,7 @@ const FORCE_INCLUDED_EFFECT_ENTRIES: ReadonlyArray<string> = [
   'effect/Array',
   'effect/Boolean',
   'effect/Cause',
+  'effect/Chunk',
   'effect/Clock',
   'effect/Context',
   'effect/Data',
@@ -250,7 +255,7 @@ type PreservedEntry = Readonly<{
 }>
 
 type ConnectedRuntime = Readonly<{
-  runtime: typeof RuntimeInfo.Type
+  runtime: RuntimeInfo
   sequence: number
   client: WebSocketClient
 }>
@@ -398,7 +403,7 @@ const handleBrowserEventFrameReceived = (
 
 const handleConnectedEvent = (
   state: State,
-  event: typeof DevToolsEvent.EventConnected.Type,
+  event: EventConnected,
   client: WebSocketClient,
 ) =>
   Effect.gen(function* () {
@@ -420,10 +425,7 @@ const handleConnectedEvent = (
     )
   })
 
-const handleDisconnectedEvent = (
-  state: State,
-  event: typeof DevToolsEvent.EventDisconnected.Type,
-) =>
+const handleDisconnectedEvent = (state: State, event: EventDisconnected) =>
   Effect.gen(function* () {
     yield* Ref.update(
       state.connectedRuntimes,
@@ -473,10 +475,7 @@ const handleBrowserResponseFrameReceived = (state: State, data: unknown) =>
     onSuccess: frame => broadcastResponseToMcpClients(state, frame),
   })
 
-const broadcastResponseToMcpClients = (
-  state: State,
-  frame: typeof ResponseFrame.Type,
-) =>
+const broadcastResponseToMcpClients = (state: State, frame: ResponseFrame) =>
   Effect.gen(function* () {
     const payload = encodeResponseFrameJson(frame)
     yield* Effect.sync(() => {
@@ -528,10 +527,7 @@ const handleMcpRequestReceived = (
       ),
   })
 
-const sendToRequester = (
-  client: WebSocket,
-  responseFrame: typeof ResponseFrame.Type,
-) =>
+const sendToRequester = (client: WebSocket, responseFrame: ResponseFrame) =>
   Effect.sync(() => {
     if (client.readyState === client.OPEN) {
       client.send(encodeResponseFrameJson(responseFrame))
@@ -561,7 +557,7 @@ const routeRequestToRuntime = (
   server: ViteDevServer,
   state: State,
   client: WebSocket,
-  frame: typeof RequestFrame.Type,
+  frame: RequestFrame,
 ) =>
   Effect.gen(function* () {
     const connectedRuntimes = yield* Ref.get(state.connectedRuntimes)
@@ -582,10 +578,7 @@ const routeRequestToRuntime = (
     }
   })
 
-const forwardRequestToBrowsers = (
-  server: ViteDevServer,
-  frame: typeof RequestFrame.Type,
-) =>
+const forwardRequestToBrowsers = (server: ViteDevServer, frame: RequestFrame) =>
   Effect.gen(function* () {
     const encoded = yield* Schema.encodeEffect(RequestFrame)(frame)
     yield* Effect.try({
@@ -712,8 +705,8 @@ type Relay = Readonly<{
 }>
 
 const relayId = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto
-  return yield* crypto.randomUUIDv4.pipe(Effect.orDie)
+  const secureRandom = yield* SecureRandom.SecureRandom
+  return yield* secureRandom.uuidV4()
 })
 
 const attachRelayHandlers = (
@@ -747,8 +740,8 @@ const relayHasNoBoundPort = () =>
   new Error('[foldkit:devTools] the MCP relay listener has no bound port')
 
 const relayToken = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto
-  const bytes = yield* crypto.randomBytes(RELAY_TOKEN_BYTES).pipe(Effect.orDie)
+  const secureRandom = yield* SecureRandom.SecureRandom
+  const bytes = yield* secureRandom.randomBytes(RELAY_TOKEN_BYTES)
   return Buffer.from(bytes).toString('hex')
 })
 
@@ -1008,6 +1001,7 @@ const unpublishedRelayMessage = (reason: string): string =>
 const publishRelay = (root: string, relay: Relay) =>
   Effect.gen(function* () {
     const startedAt = yield* Clock.currentTimeMillis
+    const maybeNamespaces = yield* readProcessNamespaces
     const directory = yield* publishRelayRecord(
       {
         version: RELAY_RECORD_VERSION,
@@ -1016,6 +1010,10 @@ const publishRelay = (root: string, relay: Relay) =>
         url: relay.url,
         pid: process.pid,
         startedAt,
+        ...Option.match(maybeNamespaces, {
+          onNone: () => ({}),
+          onSome: namespaces => ({ namespaces }),
+        }),
       },
       relayRegistryTrust,
     )
@@ -1055,17 +1053,20 @@ const startMcpRelay = (
     )
     // NOTE: A configured port accepts unauthenticated connections on every
     // interface. An assigned port binds to loopback and requires discovery.
-    const acquire: Effect.Effect<Relay, RelayBindFailed, Crypto.Crypto> =
-      Effect.gen(function* () {
-        const id = yield* relayId
-        if (devToolsMcpPort !== undefined) {
-          return yield* bindStandaloneRelay(devToolsMcpPort, id, enqueue)
-        }
+    const acquire: Effect.Effect<
+      Relay,
+      RelayBindFailed,
+      SecureRandom.SecureRandom
+    > = Effect.gen(function* () {
+      const id = yield* relayId
+      if (devToolsMcpPort !== undefined) {
+        return yield* bindStandaloneRelay(devToolsMcpPort, id, enqueue)
+      }
 
-        const token = yield* relayToken
+      const token = yield* relayToken
 
-        return yield* bindLoopbackRelay(id, token, enqueue)
-      })
+      return yield* bindLoopbackRelay(id, token, enqueue)
+    })
 
     return yield* Effect.acquireRelease(acquire, relay =>
       Effect.gen(function* () {
@@ -1166,7 +1167,11 @@ const main = (
  */
 const relayRegistryLayer = Layer.provideMerge(
   NodeChildProcessSpawner.layer,
-  Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, NodeCrypto.layer),
+  Layer.mergeAll(
+    NodeFileSystem.layer,
+    NodePath.layer,
+    NodeCrypto.layerSecureRandom,
+  ),
 )
 
 type MainRun = Readonly<{
@@ -1223,16 +1228,25 @@ export const foldkit = (options: FoldkitPluginOptions = {}): Array<Plugin> => {
     closeBundle() {
       return Effect.runPromise(stopMain(this.environment.getTopLevelConfig()))
     },
-    handleHotUpdate: ({
-      server,
-      modules,
-    }: {
-      server: ViteDevServer
-      modules: ReadonlyArray<unknown>
-    }) => {
-      if (modules.length === 0) {
-        return
+    // NOTE: An edit to a client or `ssr` module reloads the whole page, so
+    // Vite's client HMR is suppressed. This hook runs only for the client
+    // environment, so the `ssr` module runner receives Vite's updates, which
+    // run the server entry's `import.meta.hot.dispose` callback.
+    hotUpdate({ type, file, modules, server }) {
+      if (type !== 'update' || this.environment.name !== 'client') {
+        return undefined
       }
+
+      const serverModules =
+        server.environments.ssr?.moduleGraph.getModulesByFile(file)
+
+      if (
+        Array.isArrayEmpty(modules) &&
+        (serverModules === undefined || serverModules.size === 0)
+      ) {
+        return undefined
+      }
+
       server.ws.send({ type: 'full-reload' })
       const run = mainRuns.get(server.config)
       if (run !== undefined) {

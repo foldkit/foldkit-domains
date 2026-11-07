@@ -52,6 +52,7 @@ const buildGraph = (
   const ChildNamespace = makeNamespace('LifecycleChild')
 
   const ChildModel = Schema.Struct({ id: Schema.String })
+  type ChildModel = typeof ChildModel.Type
 
   const ChildMessage = defineMessageUnion({
     AcquiredSession: {},
@@ -59,6 +60,7 @@ const buildGraph = (
     FailedAcquireSession: {},
     ReleasedSession: {},
   })
+  type ChildMessage = typeof ChildMessage.Type
 
   const Session = ChildNamespace.makeResource<string>()('Session')
 
@@ -195,6 +197,7 @@ const buildGraph = (
   const ParentMessage = defineMessageUnion({
     RemovedChild: {},
   })
+  type ParentMessage = typeof ParentMessage.Type
 
   const ParentBaseDefinition = Block.makeDefinition('Application', {
     Model: ParentModel,
@@ -202,15 +205,15 @@ const buildGraph = (
   })
   const ChildBinding = (() => {
     if (mode === 'Route') {
-      return ParentBaseDefinition.makeBinding(Child, {
+      return ParentBaseDefinition.makeOptionalFieldBinding(Child, {
         placement: 'child',
         field: 'maybeChild',
-        presentWhen: (model: ParentModel) => model.route === 'Home',
+        activeWhen: (model: ParentModel) => model.route === 'Home',
       })
     }
 
     if (mode === 'Subscriptions') {
-      return ParentBaseDefinition.makeBinding(Child, {
+      return ParentBaseDefinition.makeOptionalFieldBinding(Child, {
         placement: 'child',
         field: 'maybeChild',
         subscriptions: {
@@ -219,7 +222,7 @@ const buildGraph = (
       })
     }
 
-    return ParentBaseDefinition.makeBinding(Child, {
+    return ParentBaseDefinition.makeOptionalFieldBinding(Child, {
       placement: 'child',
       field: 'maybeChild',
     })

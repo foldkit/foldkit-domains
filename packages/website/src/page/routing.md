@@ -184,7 +184,7 @@ Both code paths resolve a URL into a route, and both should produce the same rou
 
 ### Preserve the Block Boundary
 
-When the route-driven state lives in a Block, the same factoring follows the Block boundary instead of a shared helper: the Block Composition's `init(route)` seeds its state and returns the startup Commands for the cold load, and its public `informRouteChanged` operation produces `InformedOfRouteChange` for later transitions. The child update owns both the Model change and any Commands. [Informing Blocks](/patterns/informing-blocks) shows that shape, and the [Routing example](/example-apps/routing) runs on it.
+When the route-driven state lives in a Block, the same factoring follows the Block boundary instead of a shared helper: the Block Composition's `init(route)` seeds its state and returns the startup Commands for the cold load, and its generated `informOfRouteChange` method applies `InMessage.InformedOfRouteChange` through `inMessageUpdate` for later transitions. The child owns both the Model change and any Commands. [Informing Blocks](/patterns/informing-blocks) shows that shape, and the [Routing example](/example-apps/routing) runs on it.
 
 ## Route Transitions
 
@@ -214,7 +214,7 @@ Every helper that takes a tag answers for one named route. When several routes h
 
 `Transition.match` requires handlers for `Entered`, `Exited`, `Stayed`, and `Unrelated`; use it when each case has its own policy. `Transition.matchOrElse` accepts selected handlers and uses one fallback for the omitted cases. Both narrow handler payloads to the selected Route tag. Their `<RouteStep>()(...)` form requires every handler and fallback to return the same Step type while inferring the Route and tag:
 
-`Transition` uses parsed Route values; it does not inspect the raw URL. The `People.searchText` field below comes from `Route.query`, so changing it produces `Stayed`. The handler compares both values and fetches only when they differ. Query parameters omitted from the Route Schema are unavailable to a Transition. The snippet reuses `ApplicationRoute` and `FetchPeople` from the cold-load policy above. `ApplicationDefinition` supplies the Model and Message types for its Steps.
+`Transition` uses parsed Route values; it does not inspect the raw URL. The `People.searchText` field below comes from `Route.query`, so changing it produces `Stayed`. The handler compares both values and fetches only when they differ. Query parameters omitted from the Route Schema are unavailable to a Transition. The snippet reuses `ApplicationRoute` and `FetchPeople` from the cold-load policy above. `ApplicationBlock` supplies the Model and Message types for its Steps.
 
 ::Snippet{name="routingTransitionMatch" label="Route transition policy"}
 

@@ -1,15 +1,15 @@
 import type { Block } from 'foldkit'
 
-import { ApplicationDefinition } from './definition'
-import { UiBlock } from './ui'
+import { makeComposition, makeRequiredFieldBinding } from './block'
+import { UiBlock } from './blocks'
 
-export const UiBinding = ApplicationDefinition.makeBinding(UiBlock, {
+export const UiModelBinding = makeRequiredFieldBinding(UiBlock, {
   field: 'uiModel',
   init: { contextToArgs: ({ today }) => [today] },
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
-  bindings: [UiBinding],
+export const ApplicationComposition = makeComposition({
+  bindings: [UiModelBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition

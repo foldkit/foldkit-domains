@@ -1,34 +1,32 @@
 import { Array, Number } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeStep } from './block'
+import { makeKeyedArrayBinding, makeComposition } from './block'
 import * as Counter from './counter'
-import { makeStep } from './definition'
 import { CounterInstance } from './model'
 
 const INITIAL_COUNTER_COUNT = 3
 
-const CountersBinding = ApplicationDefinition.makeBinding(
-  Counter.CounterBlock,
-  {
-    field: 'counters',
-    key: 'id',
-    childField: 'counter',
-    init: {
-      instances: () =>
-        Array.makeBy(INITIAL_COUNTER_COUNT, counterId => ({
-          key: `counter-${counterId}`,
-          args: [],
-        })),
-      toItem: ({ key }, counter) => ({ id: key, counter }),
-    },
+const CountersBinding = makeKeyedArrayBinding(Counter.CounterBlock, {
+  field: 'counters',
+  key: 'id',
+  childField: 'counter',
+  init: {
+    instances: () =>
+      Array.makeBy(INITIAL_COUNTER_COUNT, counterId => ({
+        key: `counter-${counterId}`,
+        args: [],
+      })),
+    toItem: ({ key }, counter) => ({ id: key, counter }),
   },
-)
+})
 
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [CountersBinding],
 })
 
-const addCounterStep = makeStep((model, id: string) =>
+const addCounter = makeStep((model, id: string) =>
   CountersBinding.init({
     key: id,
     args: [],

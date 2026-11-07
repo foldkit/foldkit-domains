@@ -1,4 +1,4 @@
-import { Context, Effect, Option, Result, Schema } from 'effect'
+import { Context, Effect, Layer, Option, Result, Schema } from 'effect'
 import * as Block from 'foldkit/block'
 import * as Query from 'foldkit/experimental/query'
 import { defineMessageUnion } from 'foldkit/message'
@@ -77,13 +77,23 @@ export const ParentMessage = defineMessageUnion({
   RequestedWindow: { args: WindowArgs, nowMillis: Schema.Number },
   CanceledWindow: { args: WindowArgs },
 })
+export const ParentKey = Symbol('QueryPolicyParent')
 export const ParentDefinition = Block.makeDefinition('QueryPolicyParent', {
+  key: ParentKey,
+  InitArgs: Schema.Tuple([]),
+  effects: {
+    Error: Schema.instanceOf(MissingCredentials),
+    services: [QuoteCredentials, QuoteProvider],
+  },
   Model: ParentModel,
   Message: ParentMessage,
 })
-export const QuotesBinding = ParentDefinition.makeBinding(QuoteWindows, {
-  field: 'quotes',
-}).withOutMessagePolicy({
+export const QuotesBinding = ParentDefinition.makeRequiredFieldBinding(
+  QuoteWindows,
+  {
+    field: 'quotes',
+  },
+).withOutMessagePolicy({
   fold: ParentDefinition.makeOutMessageFold(QuoteWindows, {
     CompletedFetch: ({ args, result }) =>
       ParentDefinition.makeFieldsStep(() => ({
@@ -113,13 +123,29 @@ export const parentUpdate = ParentComposition.makeUpdate({
   CanceledWindow: (model, { args }) => QuotesBinding.requestCancel(args)(model),
 })
 
+const PlainParentKey = Symbol('PlainQueryPolicyParent')
 const PlainParent = Block.makeDefinition('PlainQueryPolicyParent', {
+  key: PlainParentKey,
+  InitArgs: Schema.Tuple([]),
   Model: Schema.Struct({ quotes: PlainWindows.Model }),
   Message: Schema.Never,
 })
-export const PlainBinding = PlainParent.makeBinding(PlainWindows, {
+export const PlainBinding = PlainParent.makeRequiredFieldBinding(PlainWindows, {
   field: 'quotes',
 })
 export const PlainComposition = PlainParent.makeComposition({
   bindings: [PlainBinding],
 })
+
+export const ParentBlock = ParentDefinition.makeBlock(
+  Effect.gen(function* () {
+    const quotes = yield* QuotesBinding
+
+    return {
+      children: [quotes],
+      init: parentInit,
+      update: parentUpdate,
+      EffectsLayer: Layer.empty,
+    }
+  }),
+)

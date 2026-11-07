@@ -1,18 +1,9 @@
-import {
-  CustomElement,
-  click,
-  expect,
-  given,
-  label,
-  role,
-  scene,
-  selector,
-  text,
-  type,
-} from 'foldkit/scene'
-import { describe, test } from 'vitest'
+import { Scene } from 'foldkit'
+import { describe } from 'vitest'
 
-import { Model, hexColorPicker, update, view } from './application'
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, Model, hexColorPicker, layer } from './block'
 
 const initialModel = Model.make({
   content: 'https://foldkit.dev',
@@ -21,70 +12,80 @@ const initialModel = Model.make({
 })
 
 describe('view', () => {
-  test('initial view shows the page heading and field labels', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(role('heading', { name: 'QR Designer' })).toExist(),
-      expect(label('Encoded value')).toExist(),
-      expect(text('Fill color')).toExist(),
-      expect(text('Background color')).toExist(),
-    )
-  })
+  it.effect('initial view shows the page heading and field labels', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.expect(Scene.role('heading', { name: 'QR Designer' })).toExist(),
+      Scene.expect(Scene.label('Encoded value')).toExist(),
+      Scene.expect(Scene.text('Fill color')).toExist(),
+      Scene.expect(Scene.text('Background color')).toExist(),
+    ),
+  )
 
-  test('the encoded-value input reflects the Model content', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(label('Encoded value')).toHaveValue('https://foldkit.dev'),
-    )
-  })
-
-  test('typing into the input updates the rendered value', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      type(label('Encoded value'), 'WIFI:S:Net;P:secret;;'),
-      expect(label('Encoded value')).toHaveValue('WIFI:S:Net;P:secret;;'),
-    )
-  })
-
-  test('clicking the first preset swatch updates the fill color hex readout', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(text('#1E1B4B')).toExist(),
-      click(role('button', { name: 'Use #0f766e' })),
-      expect(text('#0F766E')).toExist(),
-    )
-  })
-
-  test('a color-changed CustomEvent from the fill picker updates the hex readout', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      CustomElement.emit(
-        hexColorPicker,
-        selector('#fill-color'),
-        'color-changed',
-        { value: '#ff8800' },
+  it.effect('the encoded-value input reflects the Model content', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.expect(Scene.label('Encoded value')).toHaveValue(
+        'https://foldkit.dev',
       ),
-      expect(text('#FF8800')).toExist(),
-    )
-  })
+    ),
+  )
 
-  test('a color-changed CustomEvent from the background picker leaves the fill readout alone', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      CustomElement.emit(
-        hexColorPicker,
-        selector('#background-color'),
-        'color-changed',
-        { value: '#222222' },
+  it.effect('typing into the input updates the rendered value', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.type(Scene.label('Encoded value'), 'WIFI:S:Net;P:secret;;'),
+      Scene.expect(Scene.label('Encoded value')).toHaveValue(
+        'WIFI:S:Net;P:secret;;',
       ),
-      expect(text('#222222')).toExist(),
-      expect(text('#1E1B4B')).toExist(),
-    )
-  })
+    ),
+  )
+
+  it.effect(
+    'clicking the first preset swatch updates the fill color hex readout',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.expect(Scene.text('#1E1B4B')).toExist(),
+        Scene.click(Scene.role('button', { name: 'Use #0f766e' })),
+        Scene.expect(Scene.text('#0F766E')).toExist(),
+      ),
+  )
+
+  it.effect(
+    'a color-changed CustomEvent from the fill picker updates the hex readout',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.CustomElement.emit(
+          hexColorPicker,
+          Scene.selector('#fill-color'),
+          'color-changed',
+          { value: '#ff8800' },
+        ),
+        Scene.expect(Scene.text('#FF8800')).toExist(),
+      ),
+  )
+
+  it.effect(
+    'a color-changed CustomEvent from the background picker leaves the fill readout alone',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.CustomElement.emit(
+          hexColorPicker,
+          Scene.selector('#background-color'),
+          'color-changed',
+          { value: '#222222' },
+        ),
+        Scene.expect(Scene.text('#222222')).toExist(),
+        Scene.expect(Scene.text('#1E1B4B')).toExist(),
+      ),
+  )
 })

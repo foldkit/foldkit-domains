@@ -2,7 +2,15 @@ import { clsx } from 'clsx'
 import { Match, Option, String } from 'effect'
 import { Html, createLazy, inertHtml as ih } from 'foldkit/html'
 
-import { type CodeBlock, Shared } from '../component'
+import {
+  ApiReferenceBlock,
+  SnippetCopyBlock,
+  SnippetDisclosureBlock,
+} from '../blocks'
+import * as ApiReference from '../blocks/apiReference/domain'
+import * as CoreBlockMetadata from '../blocks/blockPage/domain'
+import * as ComingFromReact from '../blocks/comingFromReact/domain'
+import * as UiDocumentation from '../blocks/ui/domain'
 import type { ApplicationViewBuilder } from '../composition'
 import {
   ApiReferenceBinding,
@@ -16,6 +24,7 @@ import {
 import { pageNeighbors } from '../docsNav'
 import { Icon } from '../icon'
 import { Link } from '../link'
+import type * as CodeBlock from '../markdown/codeBlock'
 import { Message } from '../message'
 import { type Model } from '../model'
 import {
@@ -23,7 +32,6 @@ import {
   AiMcp,
   AiOverview,
   AiSkills,
-  ApiReferenceBlock,
   AsyncData as AsyncDataPage,
   BestPractices,
   ComingFromTanStackQuery,
@@ -52,35 +60,28 @@ import {
   TypingTerminal,
   WhyFoldkit,
 } from '../page'
-import * as ApiReference from '../page/apiReference/domain'
-import * as ComingFromReact from '../page/comingFromReact/domain'
-import * as CoreBlockMetadata from '../page/core/blockPage/domain'
-import * as UiDocumentation from '../page/ui/domain'
+import * as Newsletter from '../page/newsletter'
 import * as Prose from '../prose'
 import { ApplicationRoute, type DocsRoute, homeRouter } from '../route'
-import { SnippetCopyBlock } from '../snippetCopy'
 import * as SnippetCopyRenderer from '../snippetCopyRenderer'
-import { SnippetDisclosureBlock } from '../snippetDisclosure'
 import * as SnippetDisclosureRenderer from '../snippetDisclosureRenderer'
 import { type TableOfContentsEntry } from '../tableOfContentsEntry'
-import {
-  HeaderNav,
-  Search,
-  Sidebar,
-  TableOfContents,
-  ThemeSelector,
-} from '../view'
+import * as HeaderNav from '../view/headerNav'
+import * as Search from '../view/search'
+import * as Sidebar from '../view/sidebar'
+import * as TableOfContents from '../view/tableOfContents'
+import * as ThemeSelector from '../view/themeSelector'
+import * as Site from './site'
+
+type ApiReferenceBlockModel = typeof ApiReferenceBlock.Model.Type
+type SnippetCopyBlockModel = typeof SnippetCopyBlock.Model.Type
+type SnippetDisclosureBlockModel = typeof SnippetDisclosureBlock.Model.Type
 
 const PagefindBody = ih.DataAttribute('pagefind-body', '')
 const PagefindIgnore = ih.DataAttribute('pagefind-ignore', '')
 const LlmIgnore = ih.DataAttribute('llm-ignore', '')
 
-// DOCS HEADER
-
-export const headerView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+export const headerView = (model: Model, h: ApplicationViewBuilder) =>
   h.header(
     [
       h.Class(
@@ -108,7 +109,7 @@ export const headerView = (
                     h.Height('200'),
                     h.Class('h-6 md:h-8 w-auto dark:invert'),
                   ]),
-                  Shared.betaTag,
+                  Site.betaTag,
                 ],
               ),
               HeaderNav.view(
@@ -122,32 +123,28 @@ export const headerView = (
             [h.Class('flex items-center gap-1')],
             [
               Search.triggerView('hidden md:flex', h),
-              Shared.headerGroupDivider('hidden md:block mx-3'),
+              Site.headerGroupDivider('hidden md:block mx-3'),
               h.div(
                 [h.Class('hidden md:flex items-center gap-3')],
                 [
-                  Shared.iconLink(
-                    Link.github,
-                    'GitHub',
-                    Icon.github('w-5 h-5'),
-                  ),
-                  Shared.iconLink(
+                  Site.iconLink(Link.github, 'GitHub', Icon.github('w-5 h-5')),
+                  Site.iconLink(
                     Link.discord,
                     'Discord',
                     Icon.discord('w-5 h-5'),
                   ),
-                  Shared.iconLink(Link.xSocial, 'X', Icon.xSocial('w-5 h-5')),
-                  Shared.iconLink(Link.npm, 'npm', Icon.npm('w-6 h-6')),
+                  Site.iconLink(Link.xSocial, 'X', Icon.xSocial('w-5 h-5')),
+                  Site.iconLink(Link.npm, 'npm', Icon.npm('w-6 h-6')),
                 ],
               ),
-              Shared.headerGroupDivider('hidden md:block mx-3'),
+              Site.headerGroupDivider('hidden md:block mx-3'),
               Search.compactTriggerView('inline-flex md:hidden', h),
               ThemeSelector.view(
                 model.themeMenu,
                 model.maybeThemePreference,
                 h,
               ),
-              Shared.headerGroupDivider('mx-2 md:hidden'),
+              Site.headerGroupDivider('mx-2 md:hidden'),
               h.button(
                 [
                   h.Class(
@@ -166,12 +163,7 @@ export const headerView = (
     ],
   )
 
-// DOCS FOOTER
-
-export const footerView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+export const footerView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.footer(
     [
       h.Class(
@@ -187,7 +179,7 @@ export const footerView = (
         [h.Class('text-sm text-gray-700 dark:text-gray-300 mb-4')],
         ['New releases, patterns, and the occasional deep dive.'],
       ),
-      Shared.emailForm(
+      Newsletter.formView(
         model.newsletterEmail,
         value => Message.UpdatedNewsletterEmail({ value }),
         h,
@@ -217,13 +209,11 @@ export const footerView = (
             ],
           ),
           h.p([h.Class('mt-1')], [`© ${model.currentYear} Devin Jameson`]),
-          Shared.siteLinks,
+          Site.siteLinks,
         ],
       ),
     ],
   )
-
-// PAGE NAVIGATION
 
 type NavPage = Readonly<{ href: string; label: string }>
 
@@ -299,8 +289,6 @@ const pageNavigationView = (tag: string, h: ApplicationViewBuilder) => {
   )
 }
 
-// SEARCH WEIGHT
-
 export const searchWeight = (tag: string): string =>
   Match.value(tag).pipe(
     Match.when(String.startsWith('Core'), () => '10'),
@@ -331,14 +319,10 @@ export const searchWeight = (tag: string): string =>
     Match.orElse(() => '4'),
   )
 
-// CONTENT WIDTH
-
 const isWideContentRoute = ApplicationRoute.isAnyOf([
   'Examples',
   'ExampleDetail',
 ])
-
-// CONTENT ROUTING
 
 type DocsPageView = Readonly<{
   content: Html
@@ -359,7 +343,7 @@ const withoutTableOfContents = (content: Html): DocsPageView => ({
 })
 
 const renderApiReference = (
-  apiReferenceModel: typeof ApiReferenceBlock.Model.Type,
+  apiReferenceModel: ApiReferenceBlockModel,
   moduleSlug: string,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -387,8 +371,8 @@ type ProseDocPageView = (renderHeadingLink: Prose.RenderHeadingLink) => Html
 
 const renderDocContent = (
   pageView: DocPageView,
-  snippetCopy: typeof SnippetCopyBlock.Model.Type,
-  snippetDisclosure: typeof SnippetDisclosureBlock.Model.Type,
+  snippetCopy: SnippetCopyBlockModel,
+  snippetDisclosure: SnippetDisclosureBlockModel,
   h: ApplicationViewBuilder,
 ): Html => {
   const renderCopyButton = SnippetCopyRenderer.renderer(snippetCopy, config =>
@@ -418,8 +402,8 @@ const memoizedDocContent = createLazy()
 const memoizedProseContent = createLazy()
 
 type DocContentArgs = readonly [
-  typeof SnippetCopyBlock.Model.Type,
-  typeof SnippetDisclosureBlock.Model.Type,
+  SnippetCopyBlockModel,
+  SnippetDisclosureBlockModel,
   ApplicationViewBuilder,
 ]
 
@@ -434,8 +418,8 @@ const lazyProseContent = (
 const lazyApiReference = createLazy()
 
 export const view = (
-  model: typeof Model.Type,
-  docsRoute: typeof DocsRoute.Type,
+  model: Model,
+  docsRoute: DocsRoute,
   h: ApplicationViewBuilder,
 ) => {
   const renderCopyButton = SnippetCopyRenderer.renderer(
@@ -1379,7 +1363,7 @@ export const view = (
         : []),
     ],
     [
-      Shared.skipNavLink,
+      Site.skipNavLink,
       headerView(model, h),
       Search.dialogView(model, h),
       h.div(

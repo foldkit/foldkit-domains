@@ -6,6 +6,7 @@ import {
   HostSaveLayer,
   Model,
   PageDraft,
+  ParentModel,
   Viewed,
   ViewedDraft,
   prepareViewed,
@@ -22,13 +23,15 @@ const DraftModel = Schema.Struct({
   // @ts-expect-error A draft Model cannot enter a nested Array Schema.
   children: Schema.Array(ViewedDraft.Model),
 })
+void DraftModel
+
 const DraftParentDefinition = Block.makeDefinition(
   'MandatoryCompletionDraftParent',
-  { Model: DraftModel, Message: Schema.Never },
+  { Model: ParentModel, Message: Schema.Never },
 )
 
 // @ts-expect-error Bindings accept completed Blocks, not assembly drafts.
-DraftParentDefinition.makeBinding(ViewedDraft, { field: 'child' })
+DraftParentDefinition.makeRequiredFieldBinding(ViewedDraft, { field: 'child' })
 
 // @ts-expect-error Element Programs accept completed Blocks, not assembly drafts.
 Program.makeElement({ block: ViewedDraft, container: null })
@@ -64,6 +67,23 @@ ViewedDraft.provideHandlers(HostSaveLayer)
 
 // @ts-expect-error Block.assemble requires the adjacent FromAssembly header.
 export const MissingHeader = Block.assemble(prepareViewed)
+
+declare const anyProducer: any
+declare const neverProducer: never
+declare const anyResultProducer: () => any
+declare const neverResultProducer: () => never
+
+// @ts-expect-error An any producer cannot bypass the checked annotation.
+Block.assemble(anyProducer)
+
+// @ts-expect-error A never producer cannot bypass the checked annotation.
+Block.assemble(neverProducer)
+
+// @ts-expect-error An any result cannot bypass the checked annotation.
+Block.assemble(anyResultProducer)
+
+// @ts-expect-error A never result cannot bypass the checked annotation.
+Block.assemble(neverResultProducer)
 
 // @ts-expect-error Supplying only Model cannot infer the required producer header.
 Block.assemble<typeof Model>(prepareViewed)

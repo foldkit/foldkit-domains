@@ -1,21 +1,15 @@
-import { ApplicationDefinition } from './definition'
+import { makeRequiredFieldBinding } from './block'
 import * as Settings from './settings'
 
 // ❌ Bad: this forwarder can never forward an OutMessage.
-const BadSettingsBinding = ApplicationDefinition.makeBinding(
-  Settings.SettingsBlock,
-  {
-    field: 'settings',
-  },
-).withOutMessagePolicy({
+const BadSettingsBinding = makeRequiredFieldBinding(Settings.SettingsBlock, {
+  field: 'settings',
+}).withOutMessagePolicy({
   fold: foldSettingsOutMessage,
   forward: () => undefined,
 })
 
 // ✅ Good: omit `forward` when every child OutMessage stops here.
-const SettingsBinding = ApplicationDefinition.makeBinding(
-  Settings.SettingsBlock,
-  {
-    field: 'settings',
-  },
-).withOutMessagePolicy({ fold: foldSettingsOutMessage })
+const SettingsBinding = makeRequiredFieldBinding(Settings.SettingsBlock, {
+  field: 'settings',
+}).withOutMessagePolicy({ fold: foldSettingsOutMessage })

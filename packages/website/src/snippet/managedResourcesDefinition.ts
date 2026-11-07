@@ -1,13 +1,4 @@
 // resource.ts
-import { Block } from 'foldkit'
+import { makeResource } from './block'
 
-import { Message } from './message'
-import { Model } from './model'
-
-export const CameraDefinition = Block.makeDefinition('Camera', {
-  Model,
-  Message,
-})
-export const CameraComposition = CameraDefinition.makeComposition()
-export const CameraStream =
-  CameraDefinition.makeResource<MediaStream>()('CameraStream')
+export const CameraStream = makeResource<MediaStream>()('CameraStream')

@@ -1,11 +1,13 @@
-import { expect, given, role, scene, text } from 'foldkit/scene'
+import { Scene } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
-import { describe, test } from 'vitest'
+import { describe } from 'vitest'
 
-import { type Model, update, view } from './application'
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, type Model, layer } from './block'
 import { Snake } from './domain'
 
-const baseModel: typeof Model.Type = {
+const baseModel: Model = {
   snake: Snake.create({ x: 10, y: 10 }),
   apple: { x: 15, y: 15 },
   direction: 'Right',
@@ -16,69 +18,69 @@ const baseModel: typeof Model.Type = {
 }
 
 describe('view', () => {
-  test('initial view shows the heading, score, and start prompt', () => {
-    scene(
-      { update, view },
-      given(baseModel),
-      expect(role('heading', { name: 'Snake Game' })).toExist(),
-      expect(text('Score: 0')).toExist(),
-      expect(text('High Score: 0')).toExist(),
-      expect(text('Press SPACE to start')).toExist(),
-    )
-  })
+  it.effect('initial view shows the heading, score, and start prompt', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(baseModel),
+      Scene.expect(Scene.role('heading', { name: 'Snake Game' })).toExist(),
+      Scene.expect(Scene.text('Score: 0')).toExist(),
+      Scene.expect(Scene.text('High Score: 0')).toExist(),
+      Scene.expect(Scene.text('Press SPACE to start')).toExist(),
+    ),
+  )
 
-  test('renders the keyboard instructions', () => {
-    scene(
-      { update, view },
-      given(baseModel),
-      expect(text('Use ARROW KEYS or WASD to move')).toExist(),
-      expect(text('SPACE to pause/start')).toExist(),
-      expect(text('R to restart')).toExist(),
-    )
-  })
+  it.effect('renders the keyboard instructions', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(baseModel),
+      Scene.expect(Scene.text('Use ARROW KEYS or WASD to move')).toExist(),
+      Scene.expect(Scene.text('SPACE to pause/start')).toExist(),
+      Scene.expect(Scene.text('R to restart')).toExist(),
+    ),
+  )
 
-  test('shows the playing prompt while the game is active', () => {
-    scene(
-      { update, view },
-      given(modifyFields(baseModel, { gameState: () => 'Playing' })),
-      expect(text('Playing - SPACE to pause')).toExist(),
-    )
-  })
+  it.effect('shows the playing prompt while the game is active', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(modifyFields(baseModel, { gameState: () => 'Playing' })),
+      Scene.expect(Scene.text('Playing - SPACE to pause')).toExist(),
+    ),
+  )
 
-  test('shows the paused prompt while the game is paused', () => {
-    scene(
-      { update, view },
-      given(modifyFields(baseModel, { gameState: () => 'Paused' })),
-      expect(text('Paused - SPACE to continue')).toExist(),
-    )
-  })
+  it.effect('shows the paused prompt while the game is paused', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(modifyFields(baseModel, { gameState: () => 'Paused' })),
+      Scene.expect(Scene.text('Paused - SPACE to continue')).toExist(),
+    ),
+  )
 
-  test('shows the game-over prompt at the end of a run', () => {
-    scene(
-      { update, view },
-      given(
+  it.effect('shows the game-over prompt at the end of a run', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(
         modifyFields(baseModel, {
           gameState: () => 'GameOver',
           points: () => 50,
         }),
       ),
-      expect(text('Game Over - Press R to restart')).toExist(),
-      expect(text('Score: 50')).toExist(),
-    )
-  })
+      Scene.expect(Scene.text('Game Over - Press R to restart')).toExist(),
+      Scene.expect(Scene.text('Score: 50')).toExist(),
+    ),
+  )
 
-  test('the current and high scores reflect the Model', () => {
-    scene(
-      { update, view },
-      given(
+  it.effect('the current and high scores reflect the Model', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(
         modifyFields(baseModel, {
           gameState: () => 'Playing',
           points: () => 120,
           highScore: () => 200,
         }),
       ),
-      expect(text('Score: 120')).toExist(),
-      expect(text('High Score: 200')).toExist(),
-    )
-  })
+      Scene.expect(Scene.text('Score: 120')).toExist(),
+      Scene.expect(Scene.text('High Score: 200')).toExist(),
+    ),
+  )
 })

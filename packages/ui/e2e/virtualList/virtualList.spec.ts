@@ -3,7 +3,7 @@ import { type Page, expect, test } from '@playwright/test'
 import type { FixtureConfig } from './fixture/config'
 import { ROW_COUNT, ROW_HEIGHT_PX, SHORT_ROW_COUNT } from './fixture/config'
 
-type Scenario = Pick<typeof FixtureConfig.Type, 'scrollMode' | 'layout'>
+type Scenario = Pick<FixtureConfig, 'scrollMode' | 'layout'>
 
 const scenarios: ReadonlyArray<Scenario> = [
   { scrollMode: 'Self', layout: 'Absolute' },
@@ -473,10 +473,22 @@ for (const scenario of [
     }
 
     await page.setViewportSize({ width: 360, height: 640 })
+
+    if (scenario.scrollMode === 'Window') {
+      await expect(page.locator('#status')).toHaveAttribute(
+        'data-measured-height',
+        '640',
+      )
+    }
+
     await expect
       .poll(async () => (await anchoredRow.boundingBox())?.height)
       .toBe(60)
     await expectRowAlignment(page, scenario, 120, 'Start')
+    await expect(page.locator('#status')).toHaveAttribute(
+      'data-scroll-state',
+      'Idle',
+    )
     await page.getByRole('button', { name: 'List end', exact: true }).click()
     await expectRowAlignment(page, scenario, ROW_COUNT - 1, 'End')
   })
@@ -521,6 +533,67 @@ const externalScrollModes: ReadonlyArray<Scenario['scrollMode']> = [
   'Ancestor',
   'Window',
 ]
+
+for (const scrollMode of externalScrollModes) {
+  test(`${scrollMode} preserves page position when visible rows reorder below the viewport top`, async ({
+    page,
+  }) => {
+    const scenario: Scenario = { scrollMode, layout: 'Absolute' }
+    await openFixture(page, scenario)
+    const initial = await geometry(page, scenario)
+    await scrollToLogical(page, scenario, -initial.viewportHeight / 2)
+    const before = await geometry(page, scenario)
+    await expect(
+      page.getByRole('button', { name: 'Expand item 0', exact: true }),
+    ).toBeInViewport()
+
+    await page
+      .getByRole('button', { name: 'Reverse items', exact: true })
+      .click()
+    await expect(page.locator(rows).first()).toHaveAttribute(
+      'data-virtual-list-item-key',
+      `item-${ROW_COUNT - 1}`,
+    )
+    await expect(page.locator('#status')).toHaveAttribute(
+      'data-scroll-state',
+      'Idle',
+    )
+    const after = await geometry(page, scenario)
+    expect(
+      Math.abs(after.physicalScrollTop - before.physicalScrollTop),
+    ).toBeLessThan(2)
+    expect(
+      Math.abs(after.logicalScrollTop - before.logicalScrollTop),
+    ).toBeLessThan(2)
+
+    const anchoredIndex = 10
+    await scrollToLogical(page, scenario, ROW_HEIGHT_PX * anchoredIndex)
+    const anchoredKey = `item-${ROW_COUNT - 1 - anchoredIndex}`
+    const anchored = page.locator(
+      `[data-virtual-list-item-key="${anchoredKey}"]`,
+    )
+    const anchoredBox = await anchored.boundingBox()
+    expect(anchoredBox).not.toBeNull()
+    await page
+      .getByRole('button', { name: 'Reverse items', exact: true })
+      .click()
+    await expect(page.locator('#status')).toHaveAttribute(
+      'data-scroll-state',
+      'Idle',
+    )
+    await expect
+      .poll(async () => {
+        const box = await anchored.boundingBox()
+
+        return (
+          box !== null &&
+          anchoredBox !== null &&
+          Math.abs(box.y - anchoredBox.y) < 2
+        )
+      })
+      .toBe(true)
+  })
+}
 
 test('Ancestor absolute rows retain the visible anchor after preceding content moves and items change', async ({
   page,

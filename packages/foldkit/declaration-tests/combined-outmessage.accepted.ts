@@ -91,21 +91,24 @@ export const EditorDefinition = Block.makeDefinition(
     OutMessage,
   },
 )
-export const DialogBinding = EditorDefinition.makeBinding(DialogBlock, {
-  field: 'dialog',
-})
+export const DialogBinding = EditorDefinition.makeRequiredFieldBinding(
+  DialogBlock,
+  {
+    field: 'dialog',
+  },
+)
 export const EditorComposition = EditorDefinition.makeComposition({
   bindings: [DialogBinding],
 })
-export const closeDialogStep = DialogBinding.requestClose()
-export const steps: ReadonlyArray<typeof closeDialogStep> = [
-  closeDialogStep,
-  closeDialogStep,
+export const closeDialog = DialogBinding.requestClose()
+export const steps: ReadonlyArray<typeof closeDialog> = [
+  closeDialog,
+  closeDialog,
 ]
-const leaveStep = EditorDefinition.makeFieldsStep(() => ({
+const leave = EditorDefinition.makeFieldsStep(() => ({
   count: Number.increment,
 }))
-type ConnectedModel = Parameters<typeof closeDialogStep>[0]
+type ConnectedModel = Parameters<typeof closeDialog>[0]
 
 export const saveArray = (model: ConnectedModel) =>
   pipe(
@@ -114,7 +117,7 @@ export const saveArray = (model: ConnectedModel) =>
   )
 export const saveTuple = (model: ConnectedModel) =>
   Update.withOutMessage(
-    Update.combineSteps(model, [leaveStep, closeDialogStep]),
+    Update.combineSteps(model, [leave, closeDialog]),
     OutMessage.Saved(),
   )
 export const saveCurriedArray = (model: ConnectedModel) =>
@@ -124,23 +127,23 @@ export const saveCurriedArray = (model: ConnectedModel) =>
   )
 export const saveCurriedTuple = (model: ConnectedModel) =>
   Update.withOutMessage(
-    Update.combineSteps([leaveStep, closeDialogStep])(model),
+    Update.combineSteps([leave, closeDialog])(model),
     OutMessage.Saved(),
   )
 export const saveNestedArray = (model: ConnectedModel) =>
   pipe(
-    Update.combineSteps(model, [leaveStep, Update.combineSteps(steps)]),
+    Update.combineSteps(model, [leave, Update.combineSteps(steps)]),
     Update.withOutMessage(OutMessage.Saved()),
   )
 export const saveNestedTuple = (model: ConnectedModel) =>
   pipe(
     Update.combineSteps(model, [
-      leaveStep,
-      Update.combineSteps([leaveStep, closeDialogStep]),
+      leave,
+      Update.combineSteps([leave, closeDialog]),
     ]),
     Update.withOutMessage(OutMessage.Saved()),
   )
-export const plainStep = EditorDefinition.makeOutMessageStep(() =>
+export const emitPlainOutMessage = EditorDefinition.makeOutMessageStep(() =>
   OutMessage.Plain(),
 )
 
@@ -152,7 +155,7 @@ export const inlineRecordUpdate = EditorComposition.makeUpdate({
     ),
   SavedTuple: model =>
     Update.withOutMessage(
-      Update.combineSteps(model, [leaveStep, closeDialogStep]),
+      Update.combineSteps(model, [leave, closeDialog]),
       OutMessage.SavedTuple(),
     ),
   SavedCurriedArray: model =>
@@ -162,23 +165,23 @@ export const inlineRecordUpdate = EditorComposition.makeUpdate({
     ),
   SavedCurriedTuple: model =>
     Update.withOutMessage(
-      Update.combineSteps([leaveStep, closeDialogStep])(model),
+      Update.combineSteps([leave, closeDialog])(model),
       OutMessage.SavedCurriedTuple(),
     ),
   SavedNestedArray: model =>
     pipe(
-      Update.combineSteps(model, [leaveStep, Update.combineSteps(steps)]),
+      Update.combineSteps(model, [leave, Update.combineSteps(steps)]),
       Update.withOutMessage(OutMessage.SavedNestedArray()),
     ),
   SavedNestedTuple: model =>
     pipe(
       Update.combineSteps(model, [
-        leaveStep,
-        Update.combineSteps([leaveStep, closeDialogStep]),
+        leave,
+        Update.combineSteps([leave, closeDialog]),
       ]),
       Update.withOutMessage(OutMessage.SavedNestedTuple()),
     ),
-  Plain: model => plainStep(model),
+  Plain: model => emitPlainOutMessage(model),
 })
 export const recordUpdate = EditorComposition.makeUpdate({
   SavedArray: model =>
@@ -188,7 +191,7 @@ export const recordUpdate = EditorComposition.makeUpdate({
     ),
   SavedTuple: model =>
     Update.withOutMessage(
-      Update.combineSteps(model, [leaveStep, closeDialogStep]),
+      Update.combineSteps(model, [leave, closeDialog]),
       OutMessage.SavedTuple(),
     ),
   SavedCurriedArray: model =>
@@ -198,23 +201,23 @@ export const recordUpdate = EditorComposition.makeUpdate({
     ),
   SavedCurriedTuple: model =>
     Update.withOutMessage(
-      Update.combineSteps([leaveStep, closeDialogStep])(model),
+      Update.combineSteps([leave, closeDialog])(model),
       OutMessage.SavedCurriedTuple(),
     ),
   SavedNestedArray: model =>
     pipe(
-      Update.combineSteps(model, [leaveStep, Update.combineSteps(steps)]),
+      Update.combineSteps(model, [leave, Update.combineSteps(steps)]),
       Update.withOutMessage(OutMessage.SavedNestedArray()),
     ),
   SavedNestedTuple: model =>
     pipe(
       Update.combineSteps(model, [
-        leaveStep,
-        Update.combineSteps([leaveStep, closeDialogStep]),
+        leave,
+        Update.combineSteps([leave, closeDialog]),
       ]),
       Update.withOutMessage(OutMessage.SavedNestedTuple()),
     ),
-  Plain: plainStep,
+  Plain: emitPlainOutMessage,
 })
 export const initialModel = Model.make({
   dialog: DialogModel.make({ count: 0 }),
@@ -343,15 +346,18 @@ export const ReportDefinition = Block.makeDefinition(
     OutMessage: ReportOutMessage,
   },
 )
-export const ReportDialogBinding = ReportDefinition.makeBinding(DialogBlock, {
-  field: 'dialog',
-})
+export const ReportDialogBinding = ReportDefinition.makeRequiredFieldBinding(
+  DialogBlock,
+  {
+    field: 'dialog',
+  },
+)
 export const ReportComposition = ReportDefinition.makeComposition({
   bindings: [ReportDialogBinding],
 })
-const reportCloseDialogStep = ReportDialogBinding.requestClose()
-export const reportSteps: ReadonlyArray<typeof reportCloseDialogStep> = [
-  reportCloseDialogStep,
+const reportCloseDialog = ReportDialogBinding.requestClose()
+export const reportSteps: ReadonlyArray<typeof reportCloseDialog> = [
+  reportCloseDialog,
 ]
 export const reportUpdate = ReportComposition.makeUpdate({
   Saved: model =>
@@ -400,29 +406,32 @@ export const foldEditorOutMessage = ParentDefinition.makeOutMessageFold(
     Plain: ParentDefinition.makeNoopStep,
   },
 )
-export const EditorBinding = ParentDefinition.makeBinding(EditorBlock, {
-  field: 'editor',
-}).withOutMessagePolicy({ fold: foldEditorOutMessage })
+export const EditorBinding = ParentDefinition.makeRequiredFieldBinding(
+  EditorBlock,
+  {
+    field: 'editor',
+  },
+).withOutMessagePolicy({ fold: foldEditorOutMessage })
 export const ParentComposition = ParentDefinition.makeComposition({
   bindings: [EditorBinding],
 })
 export const parentUpdate = ParentComposition.makeUpdate({
   RequestedSave: model => EditorBinding.save()(model),
 })
-export const ForwardingEditorBinding = ParentDefinition.makeBinding(
-  EditorBlock,
-  { field: 'editor' },
-).withOutMessagePolicy({
-  forward: ParentDefinition.makeOutMessageForward(EditorBlock, {
-    Saved: () => ParentOutMessage.ObservedSave(),
-    SavedTuple: () => undefined,
-    SavedCurriedArray: () => undefined,
-    SavedCurriedTuple: () => undefined,
-    SavedNestedArray: () => undefined,
-    SavedNestedTuple: () => undefined,
-    Plain: () => undefined,
-  }),
-})
+export const ForwardingEditorBinding =
+  ParentDefinition.makeRequiredFieldBinding(EditorBlock, {
+    field: 'editor',
+  }).withOutMessagePolicy({
+    forward: ParentDefinition.makeOutMessageForward(EditorBlock, {
+      Saved: () => ParentOutMessage.ObservedSave(),
+      SavedTuple: () => undefined,
+      SavedCurriedArray: () => undefined,
+      SavedCurriedTuple: () => undefined,
+      SavedNestedArray: () => undefined,
+      SavedNestedTuple: () => undefined,
+      Plain: () => undefined,
+    }),
+  })
 export const ForwardingComposition = ParentDefinition.makeComposition({
   bindings: [ForwardingEditorBinding],
 })

@@ -1,7 +1,7 @@
 import { Clock, Effect, Option, Schema } from 'effect'
 
+import { makeCommand } from './block'
 import { ChartRegistry } from './chartRegistry'
-import { ApplicationDefinition } from './definition'
 import { ChartMode, PackageId, Period, Telemetry } from './domain'
 import { makeChartOption } from './echarts'
 import { GitHubApi } from './githubApi'
@@ -9,35 +9,32 @@ import { Message } from './message'
 import { NpmApi } from './npmApi'
 import { fetchRawTelemetry, transformTelemetry } from './telemetry'
 
-export const FetchTelemetry = ApplicationDefinition.makeCommand(
-  'FetchTelemetry',
-  {
-    messages: [Message.SucceededFetchTelemetry, Message.FailedFetchTelemetry],
-    handler: function* () {
-      const github = yield* GitHubApi
-      const npm = yield* NpmApi
-      const clock = yield* Clock.Clock
+export const FetchTelemetry = makeCommand('FetchTelemetry', {
+  messages: [Message.SucceededFetchTelemetry, Message.FailedFetchTelemetry],
+  handler: function* () {
+    const github = yield* GitHubApi
+    const npm = yield* NpmApi
+    const clock = yield* Clock.Clock
 
-      return () =>
-        Effect.gen(function* () {
-          const rawTelemetry = yield* fetchRawTelemetry({ github, npm, clock })
-          const telemetry = transformTelemetry(rawTelemetry)
+    return () =>
+      Effect.gen(function* () {
+        const rawTelemetry = yield* fetchRawTelemetry({ github, npm, clock })
+        const telemetry = transformTelemetry(rawTelemetry)
 
-          return Message.SucceededFetchTelemetry({ telemetry })
-        }).pipe(
-          Effect.catch(error =>
-            Effect.succeed(
-              Message.FailedFetchTelemetry({
-                error: error instanceof Error ? error.message : `${error}`,
-              }),
-            ),
+        return Message.SucceededFetchTelemetry({ telemetry })
+      }).pipe(
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedFetchTelemetry({
+              error: error instanceof Error ? error.message : `${error}`,
+            }),
           ),
-        )
-    },
+        ),
+      )
   },
-)
+})
 
-export const SyncChart = ApplicationDefinition.makeCommand('SyncChart', {
+export const SyncChart = makeCommand('SyncChart', {
   args: {
     hostId: Schema.String,
     telemetry: Telemetry,

@@ -1,8 +1,8 @@
 import { Effect } from 'effect'
 import { Server } from 'foldkit/experimental'
 
-import { ApplicationBlock } from './block'
 import { Flags } from './flags'
+import { ApplicationBlock, layer } from './index'
 import { loadFlagsForRequest } from './server/flags'
 
 export const renderPage = async (
@@ -11,7 +11,7 @@ export const renderPage = async (
   const flags = await loadFlagsForRequest(request)
   const application = await Effect.runPromise(
     Server.renderToString(
-      ApplicationBlock,
+      { block: ApplicationBlock, layer },
       { Flags, routing: {} },
       { url: request.url, flags },
     ),

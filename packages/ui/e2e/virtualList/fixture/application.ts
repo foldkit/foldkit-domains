@@ -1,11 +1,11 @@
-import { Array, Option, Schema, Tuple } from 'effect'
+import { Array, Effect, Layer, Option, Schema } from 'effect'
 import { Block, Update } from 'foldkit'
 import { childAttributes } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import * as VirtualList from '@foldkit/ui/virtualList'
+import { VirtualList } from '@foldkit/ui'
 
 import {
   FixtureConfig,
@@ -15,12 +15,14 @@ import {
 } from './config'
 
 const RowContent = defineTaggedUnion({ Compact: {}, Expanded: {} })
+type RowContent = typeof RowContent.Type
 const Item = Schema.Struct({
   id: Schema.String,
   index: Schema.Number,
   content: RowContent,
 })
-const ItemVirtualListBlock = VirtualList.create<typeof Item.Type>()
+type Item = typeof Item.Type
+const ItemVirtualListBlock = VirtualList.makeBlock<Item>()
 const Model = Schema.Struct({
   config: FixtureConfig,
   maybeList: Schema.Option(ItemVirtualListBlock.Model),
@@ -28,6 +30,7 @@ const Model = Schema.Struct({
   precedingHeight: Schema.Number,
   containerHeight: Schema.Number,
 })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   ClickedJumpToIndex: {},
   ClickedJumpToKey: {},
@@ -41,16 +44,22 @@ const Message = defineMessageUnion({
   ClickedExpandRow: { index: Schema.Number },
   ClickedExpandPrecedingRow: {},
   ClickedAppendItem: {},
+  ClickedReverseItems: {},
   ClickedUnmountList: {},
 })
-const ApplicationDefinition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([FixtureConfig]),
+  view: { kind: 'Document' },
   Model,
   Message,
   ChildInitContext: FixtureConfig,
 })
-const { makeFieldsStep, makeNoopStep, makeStep } = ApplicationDefinition
+const { makeFieldsStep, makeNoopStep, makeStep } = ApplicationBlock
 
-const scrollContainerFor = (config: typeof FixtureConfig.Type) => {
+const scrollContainerFor = (config: FixtureConfig) => {
   if (config.scrollMode === 'Self') {
     return VirtualList.ScrollContainer.Self()
   } else if (config.scrollMode === 'Ancestor') {
@@ -60,65 +69,66 @@ const scrollContainerFor = (config: typeof FixtureConfig.Type) => {
   }
 }
 
-const ListBinding = ApplicationDefinition.makeBinding(ItemVirtualListBlock, {
-  field: 'maybeList',
-  init: {
-    contextToArgs: config =>
-      Option.some(
-        Tuple.make({
-          id: 'virtual-list',
-          rowHeightPx: ROW_HEIGHT_PX,
-          scrollContainer: scrollContainerFor(config),
-        }),
-      ),
+const MaybeListBinding = ApplicationBlock.makeOptionalFieldBinding(
+  ItemVirtualListBlock,
+  {
+    field: 'maybeList',
+    init: {
+      contextToArgs: config =>
+        Option.some([
+          {
+            id: 'virtual-list',
+            rowHeightPx: ROW_HEIGHT_PX,
+            scrollContainer: scrollContainerFor(config),
+          },
+        ]),
+    },
   },
-}).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ItemVirtualListBlock, {
+).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(ItemVirtualListBlock, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
   }),
 })
-const ApplicationComposition = ApplicationDefinition.makeComposition({
-  bindings: [ListBinding],
+const ApplicationComposition = ApplicationBlock.makeComposition({
+  bindings: [MaybeListBinding],
 })
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
 
-const init = ApplicationComposition.makeInit(
-  (config: typeof FixtureConfig.Type) => ({
-    model: {
-      config,
-      items: Array.makeBy(
-        config.isShort ? SHORT_ROW_COUNT : ROW_COUNT,
-        index => ({
-          id: `item-${index}`,
-          index,
-          content: RowContent.Compact(),
-        }),
-      ),
-      precedingHeight: 800,
-      containerHeight: 420,
-    },
-    childInitContext: config,
-  }),
-)
+const init = ApplicationComposition.makeInit(config => ({
+  model: {
+    config,
+    items: Array.makeBy(
+      config.isShort ? SHORT_ROW_COUNT : ROW_COUNT,
+      index => ({
+        id: `item-${index}`,
+        index,
+        content: RowContent.Compact(),
+      }),
+    ),
+    precedingHeight: 800,
+    containerHeight: 420,
+  },
+  childInitContext: config,
+}))
 
 const update = ApplicationComposition.makeUpdate({
-  ClickedJumpToIndex: ListBinding.requestScrollToIndex(120, {
+  ClickedJumpToIndex: MaybeListBinding.requestScrollToIndex(120, {
     alignment: 'Start',
   }),
-  ClickedJumpToKey: ListBinding.requestScrollToKey('item-180', {
+  ClickedJumpToKey: MaybeListBinding.requestScrollToKey('item-180', {
     alignment: 'Center',
   }),
-  ClickedJumpToOffset: ListBinding.requestScrollToOffset(2_025),
-  ClickedJumpToNegativeOffset: ListBinding.requestScrollToOffset(-100),
-  ClickedJumpToHugeOffset: ListBinding.requestScrollToOffset(1_000_000),
-  ClickedJumpToNearestFirst: ListBinding.requestScrollToIndex(0, {
+  ClickedJumpToOffset: MaybeListBinding.requestScrollToOffset(2_025),
+  ClickedJumpToNegativeOffset: MaybeListBinding.requestScrollToOffset(-100),
+  ClickedJumpToHugeOffset: MaybeListBinding.requestScrollToOffset(1_000_000),
+  ClickedJumpToNearestFirst: MaybeListBinding.requestScrollToIndex(0, {
     alignment: 'Nearest',
   }),
-  ClickedJumpToEnd: ListBinding.requestScrollToEnd(),
+  ClickedJumpToEnd: MaybeListBinding.requestScrollToEnd(),
   ClickedExpandPreceding: makeFieldsStep(() => ({
     precedingHeight: height => height + 160,
   })),
@@ -160,7 +170,19 @@ const update = ApplicationComposition.makeUpdate({
 
     return Update.combineSteps([
       makeFieldsStep(() => ({ items: () => nextItems })),
-      ListBinding.informItemsChanged(Array.map(nextItems, item => item.id)),
+      MaybeListBinding.informOfItemsChanged(
+        Array.map(nextItems, item => item.id),
+      ),
+    ])
+  }),
+  ClickedReverseItems: makeStep(model => {
+    const nextItems = Array.reverse(model.items)
+
+    return Update.combineSteps([
+      makeFieldsStep(() => ({ items: () => nextItems })),
+      MaybeListBinding.informOfItemsChanged(
+        Array.map(nextItems, item => item.id),
+      ),
     ])
   }),
   ClickedUnmountList: makeFieldsStep(() => ({
@@ -169,7 +191,7 @@ const update = ApplicationComposition.makeUpdate({
 })
 
 const rowContent = (
-  item: typeof Item.Type,
+  item: Item,
   isDynamic: boolean,
   h: ApplicationViewBuilder,
 ) => {
@@ -187,12 +209,12 @@ const rowContent = (
   )
 }
 
-const virtualListView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
+const virtualListView = (model: Model, h: ApplicationViewBuilder) =>
   Option.match(model.maybeList, {
     onNone: () => h.p([h.Id('unmounted')], ['List unmounted']),
     onSome: list => {
-      const rowInputs: VirtualList.RowHeightInputs<typeof Item.Type> = model
-        .config.isDynamic
+      const rowInputs: VirtualList.RowHeightInputs<Item> = model.config
+        .isDynamic
         ? {
             dynamicRowHeights: true,
             itemToEstimatedRowHeightPx: () => ROW_HEIGHT_PX,
@@ -201,7 +223,7 @@ const virtualListView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
       const commonInputs = {
         ...rowInputs,
         items: model.items,
-        itemToKey: (item: typeof Item.Type) => item.id,
+        itemToKey: (item: Item) => item.id,
         overscan: 3,
         containerClassName:
           model.config.scrollMode === 'Self' ? 'self-list' : 'external-list',
@@ -228,7 +250,7 @@ const virtualListView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
               ],
             ),
             h.block(
-              ListBinding.embedView({
+              MaybeListBinding.embedView({
                 slotId: list.id,
                 model: list,
                 viewInputs: {
@@ -249,7 +271,7 @@ const virtualListView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
         )
       } else {
         return h.block(
-          ListBinding.embedView({
+          MaybeListBinding.embedView({
             slotId: list.id,
             model: list,
             viewInputs: {
@@ -302,6 +324,10 @@ const view = ApplicationComposition.makeView((model, h) => ({
             ['Expand preceding row'],
           ),
           h.button([h.OnClick(Message.ClickedAppendItem())], ['Append item']),
+          h.button(
+            [h.OnClick(Message.ClickedReverseItems())],
+            ['Reverse items'],
+          ),
           h.button([h.OnClick(Message.ClickedUnmountList())], ['Unmount list']),
         ],
       ),
@@ -377,9 +403,15 @@ const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({ init, update, view })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const list = yield* MaybeListBinding
+
+    return {
+      children: [list],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(VirtualList.layer))

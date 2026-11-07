@@ -1,18 +1,20 @@
 import type { Block } from 'foldkit'
 
+import {
+  makeComposition,
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from './block'
+import { ProductsBlock } from './blocks'
 import { products } from './data/products'
-import { ApplicationDefinition, makeFieldsStep } from './definition'
 import { Cart } from './domain'
-import { ProductsBlock } from './page'
 
-export const ProductsPageBinding = ApplicationDefinition.makeBinding(
-  ProductsBlock,
-  {
-    field: 'productsPage',
-    init: { contextToArgs: () => [products] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ProductsBlock, {
+export const ProductsPageBinding = makeRequiredFieldBinding(ProductsBlock, {
+  field: 'productsPage',
+  init: { contextToArgs: () => [products] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ProductsBlock, {
     AddedToCart: ({ item }) =>
       makeFieldsStep(() => ({
         cart: Cart.addItem(item),
@@ -28,7 +30,7 @@ export const ProductsPageBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [ProductsPageBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

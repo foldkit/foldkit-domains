@@ -24,18 +24,18 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message,
 })
-const ChildBinding = ApplicationDefinition.makeBinding(Child.block, {
+const ChildBinding = ApplicationDefinition.makeRequiredFieldBinding(Child.block, {
   field: 'child',
   parentMessage: Message.GotChildMessage,
 })
-const AliasedChildBinding = ApplicationDefinition.makeBinding(
+const AliasedChildBinding = ApplicationDefinition.makeRequiredFieldBinding(
   ImportedChildBlock,
   {
     field: 'aliasedChild',
     parentMessage: Message.GotAliasedChildMessage,
   },
 )
-const EntriesBinding = ApplicationDefinition.makeBinding(Child.block, {
+const EntriesBinding = ApplicationDefinition.makeKeyedArrayBinding(Child.block, {
   field: 'entries',
   key: 'id',
   toParentMessage: (id, message) => Message.GotEntryMessage({ id, message }),
@@ -54,7 +54,7 @@ const revealLocalErrors = (child: Child.Model): Child.Model =>
 const revealErrorsThroughParentHelper = (model: Model): Model =>
   modifyFields(model, { child: revealLocalErrors })
 
-const revealChildFieldsStep = ApplicationDefinition.makeFieldsStep(() => ({
+const revealChildFields = ApplicationDefinition.makeFieldsStep(() => ({
   child: Child.revealErrors,
 }))
 
@@ -68,10 +68,10 @@ export const update = ApplicationComposition.makeUpdate({
       entries: Array.map(Child.revealErrors),
     })
     void Update.combineSteps(model, [
-      revealChildFieldsStep,
-      ChildBinding.informThemeChanged({ theme: 'Light' }),
+      revealChildFields,
+      ChildBinding.informOfThemeChanged({ theme: 'Light' }),
     ])
 
-    return ChildBinding.informThemeChanged({ theme: 'Light' })(model)
+    return ChildBinding.informOfThemeChanged({ theme: 'Light' })(model)
   },
 })

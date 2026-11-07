@@ -10,6 +10,7 @@ import * as Block from './public.js'
 const Model = Schema.Struct({ count: Schema.Number })
 type Model = typeof Model.Type
 const Message = defineMessageUnion({ ClickedIncrement: {} })
+type Message = typeof Message.Type
 
 const ConnectionViewsChildComposition = makeDefinition('ConnectionViewsChild', {
   Model,
@@ -38,6 +39,7 @@ const block: Block.FromAssemblyWithView<typeof Model, typeof prepareBlock> =
   Block.assemble(prepareBlock)
 
 const Entry = Schema.Struct({ id: Schema.String, child: Model })
+type Entry = typeof Entry.Type
 const ParentModel = Schema.Struct({
   child: Model,
   entries: Schema.Array(Entry),
@@ -48,15 +50,15 @@ const ConnectionViewsParent = makeDefinition('ConnectionViewsParent', {
   Message: Schema.Never,
 })
 
-const ConnectedBinding = ConnectionViewsParent.makeBinding(block, {
+const ConnectedBinding = ConnectionViewsParent.makeRequiredFieldBinding(block, {
   field: 'child',
 })
-const entryKey = (entry: typeof Entry.Type): string => entry.id
-const KeyedBinding = ConnectionViewsParent.makeBinding(block, {
+const entryKey = (entry: Entry): string => entry.id
+const KeyedBinding = ConnectionViewsParent.makeCustomKeyedBinding(block, {
   placement: 'entries',
   readAll: (model: ParentModel) => model.entries,
   key: entryKey,
-  read: (entry: typeof Entry.Type) => entry.child,
+  read: (entry: Entry) => entry.child,
   writeAt: (model: ParentModel, id: string, nextChild: Model) =>
     modifyFields(model, {
       entries: Array.map(entry =>
@@ -68,6 +70,7 @@ const KeyedBinding = ConnectionViewsParent.makeBinding(block, {
   keySchema: Schema.String,
 })
 const ForeignMessage = defineMessageUnion({ ClickedForeignButton: {} })
+type ForeignMessage = typeof ForeignMessage.Type
 
 const ConnectionViewsForeignComposition = makeDefinition(
   'ConnectionViewsForeign',
@@ -84,14 +87,16 @@ const foreignView = ConnectionViewsForeignComposition.makeView((model, h) =>
 )
 
 const ActiveParent = Schema.TaggedStruct('Active', { child: Model })
+type ActiveParent = typeof ActiveParent.Type
 const InactiveParent = Schema.TaggedStruct('Inactive', {})
+type InactiveParent = typeof InactiveParent.Type
 const TaggedParentModel = Schema.Union([ActiveParent, InactiveParent])
 type TaggedParentModel = typeof TaggedParentModel.Type
 const TaggedParent = makeDefinition('ConnectionViewsTaggedParent', {
   Model: TaggedParentModel,
   Message: Schema.Never,
 })
-const TaggedBinding = TaggedParent.makeBinding(block, {
+const TaggedBinding = TaggedParent.makeCustomBinding(block, {
   read: model =>
     model._tag === 'Active' ? Option.some(model.child) : Option.none(),
   write: (model, nextChild) =>
@@ -183,8 +188,7 @@ it('supports explicit tagged-union readers and writers', () => {
   expect(update(inactive, message).model).toEqual(inactive)
 
   if (false) {
-    TaggedParent.makeBinding(block, {
-      // @ts-expect-error The invalid tagged writer prevents accessor overload selection.
+    TaggedParent.makeCustomBinding(block, {
       read: (model: TaggedParentModel) =>
         model._tag === 'Active' ? Option.some(model.child) : Option.none(),
       // @ts-expect-error A tagged Binding writer must return the parent Model union.
@@ -219,11 +223,12 @@ it('lowers required-field shorthand through the shared pure Binding adapter', ()
   expectTypeOf(result.model).toEqualTypeOf<ParentModel>()
 
   const optionalModel = Schema.Struct({ maybeChild: Schema.Option(Model) })
+  type optionalModel = typeof optionalModel.Type
   const OptionalParent = makeDefinition('ConnectionViewsOptionalParent', {
     Model: optionalModel,
     Message: Schema.Never,
   })
-  const OptionalBinding = OptionalParent.makeBinding(block, {
+  const OptionalBinding = OptionalParent.makeCustomBinding(block, {
     read: model => model.maybeChild,
     write: (model, nextChild) =>
       modifyFields(model, { maybeChild: () => Option.some(nextChild) }),
@@ -245,15 +250,18 @@ it('lowers required-field shorthand through the shared pure Binding adapter', ()
   const widerModel = Schema.Struct({
     child: Schema.Union([Model, Schema.String]),
   })
+  type widerModel = typeof widerModel.Type
   const narrowerModel = Schema.Struct({
     child: Schema.Struct({ count: Schema.Literal(0) }),
   })
+  type narrowerModel = typeof narrowerModel.Type
   const extendedModel = Schema.Struct({
     child: Schema.Struct({
       count: Schema.Number,
       label: Schema.optionalKey(Schema.String),
     }),
   })
+  type extendedModel = typeof extendedModel.Type
   const WiderParent = makeDefinition('ConnectionViewsWiderParent', {
     Model: widerModel,
     Message: Schema.Never,
@@ -268,29 +276,28 @@ it('lowers required-field shorthand through the shared pure Binding adapter', ()
   })
 
   if (false) {
-    WiderParent.makeBinding(block, {
-      // @ts-expect-error A wider field cannot be replaced by this child's Model.
+    // @ts-expect-error A wider field cannot be replaced by this child's Model.
+    WiderParent.makeRequiredFieldBinding(block, {
       field: 'child',
     })
-    NarrowerParent.makeBinding(block, {
-      // @ts-expect-error A narrower field cannot accept every child Model update.
+    // @ts-expect-error A narrower field cannot accept every child Model update.
+    NarrowerParent.makeRequiredFieldBinding(block, {
       field: 'child',
     })
-    ExtendedParent.makeBinding(block, {
-      // @ts-expect-error The Binding cannot discard additional optional child fields.
+    // @ts-expect-error The Binding cannot discard additional optional child fields.
+    ExtendedParent.makeRequiredFieldBinding(block, {
       field: 'child',
     })
-    OptionalParent.makeBinding(block, {
+    OptionalParent.makeOptionalFieldBinding(block, {
       field: 'maybeChild',
     })
-    ConnectionViewsParent.makeBinding(block, {
-      // @ts-expect-error Required-field shorthand rejects undeclared fields.
+    // @ts-expect-error Required-field shorthand rejects undeclared fields.
+    ConnectionViewsParent.makeRequiredFieldBinding(block, {
       field: 'missing',
     })
-    ConnectionViewsParent.makeBinding(block, {
-      // @ts-expect-error Required-field shorthand cannot mix explicit readers.
+    // @ts-expect-error Required-field shorthand cannot mix explicit readers.
+    ConnectionViewsParent.makeRequiredFieldBinding(block, {
       field: 'child',
-      // @ts-expect-error The direct shorthand cannot mix explicit readers.
       read: (model: ParentModel) => Option.some(model.child),
     })
   }

@@ -1,4 +1,6 @@
-const LoadAllNotes = ApplicationDefinition.makeCommand('LoadAllNotes', {
+import { makeCommand, makeFieldsStep } from './block'
+
+const LoadAllNotes = makeCommand('LoadAllNotes', {
   messages: [SettledLoadAllNotes],
   handler: function* () {
     return () =>
@@ -11,9 +13,7 @@ const LoadAllNotes = ApplicationDefinition.makeCommand('LoadAllNotes', {
 })
 
 const update = ApplicationComposition.makeUpdate({
-  SettledLoadAllNotes: ApplicationDefinition.makeFieldsStep.fromMessage(
-    ({ result }) => ({
-      allNotes: previous => AsyncData.settle(previous, result),
-    }),
-  ),
+  SettledLoadAllNotes: makeFieldsStep.fromMessage(({ result }) => ({
+    allNotes: previous => AsyncData.settle(previous, result),
+  })),
 })

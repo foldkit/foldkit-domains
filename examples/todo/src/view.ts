@@ -9,16 +9,10 @@ import {
   type ApplicationViewBuilder,
 } from './composition'
 import { Message } from './message'
-import {
-  EditingState,
-  type Filter,
-  type Model,
-  type Todo,
-  type Todos,
-} from './model'
+import { EditingState, type Filter, type Todo, type Todos } from './model'
 
 const editingTextFor = (
-  editing: typeof EditingState.Type,
+  editing: EditingState,
   todoId: string,
 ): Option.Option<string> =>
   EditingState.match(editing, {
@@ -27,7 +21,7 @@ const editingTextFor = (
   })
 
 const todoItemView = (
-  todo: typeof Todo.Type,
+  todo: Todo,
   maybeEditingText: Option.Option<string>,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -37,7 +31,7 @@ const todoItemView = (
   })
 
 const editingTodoView = (
-  todo: typeof Todo.Type,
+  todo: Todo,
   text: string,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -102,10 +96,7 @@ const checkboxBoxClassName = (isChecked: boolean): string =>
     isChecked ? 'border-blue-600 bg-blue-600' : 'border-gray-300',
   )
 
-const nonEditingTodoView = (
-  todo: typeof Todo.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const nonEditingTodoView = (todo: Todo, h: ApplicationViewBuilder): Html =>
   h.keyed('li')(
     todo.id,
     [h.Class('flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg group')],
@@ -164,12 +155,8 @@ const nonEditingTodoView = (
   )
 
 const filterButtonView =
-  (model: typeof Model.Type) =>
-  (
-    filter: typeof Filter.Type,
-    label: string,
-    h: ApplicationViewBuilder,
-  ): Html =>
+  (selectedFilter: Filter) =>
+  (filter: Filter, label: string, h: ApplicationViewBuilder): Html =>
     Button.view(
       {
         onClick: Message.SelectedFilter({ filter }),
@@ -179,7 +166,7 @@ const filterButtonView =
               ...attributes.button,
               h.Class(
                 `px-3 py-1 rounded ${
-                  model.filter === filter
+                  selectedFilter === filter
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`,
@@ -192,12 +179,13 @@ const filterButtonView =
     )
 
 const footerView = (
-  model: typeof Model.Type,
+  todos: Todos,
+  selectedFilter: Filter,
   activeCount: number,
   completedCount: number,
   h: ApplicationViewBuilder,
 ): Html =>
-  Array.match(model.todos, {
+  Array.match(todos, {
     onEmpty: () => h.empty,
     onNonEmpty: () =>
       h.div(
@@ -211,16 +199,16 @@ const footerView = (
           h.div(
             [h.Class('flex justify-center gap-2')],
             [
-              filterButtonView(model)('All', 'All', h),
-              filterButtonView(model)('Active', 'Active', h),
-              filterButtonView(model)('Completed', 'Completed', h),
+              filterButtonView(selectedFilter)('All', 'All', h),
+              filterButtonView(selectedFilter)('Active', 'Active', h),
+              filterButtonView(selectedFilter)('Completed', 'Completed', h),
             ],
           ),
 
           h.div(
             [h.Class('flex justify-center gap-2')],
             [
-              Array.match(model.todos, {
+              Array.match(todos, {
                 onEmpty: () => h.empty,
                 onNonEmpty: todos =>
                   Button.view(
@@ -269,10 +257,7 @@ const footerView = (
       ),
   })
 
-const filterTodos = (
-  todos: typeof Todos.Type,
-  filter: typeof Filter.Type,
-): typeof Todos.Type =>
+const filterTodos = (todos: Todos, filter: Filter): Todos =>
   Match.value(filter).pipe(
     Match.when('All', () => todos),
     Match.when('Active', () => Array.filter(todos, todo => !todo.completed)),
@@ -364,7 +349,7 @@ export const view = ApplicationComposition.makeView((model, h) => {
               ),
           }),
 
-          footerView(model, activeCount, completedCount, h),
+          footerView(model.todos, model.filter, activeCount, completedCount, h),
         ],
       ),
     ],

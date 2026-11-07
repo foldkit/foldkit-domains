@@ -1,9 +1,10 @@
 import { Effect, Option, Schema } from 'effect'
 import * as Dom from 'foldkit/dom'
 
-import { ApplicationDefinition } from './definition'
+import { makeCommand } from './block'
 import { MapRegistry } from './mapRegistry'
 import { Message } from './message'
+import type { FailedFlyTo, SucceededFlyTo } from './message'
 
 export const SELECTED_LOCATION_ZOOM = 12
 export const USER_LOCATION_ZOOM = 13
@@ -16,9 +17,7 @@ const flyToMap = (
   lng: number,
   lat: number,
   zoom: number,
-): Effect.Effect<
-  typeof Message.SucceededFlyTo.Type | typeof Message.FailedFlyTo.Type
-> =>
+): Effect.Effect<SucceededFlyTo | FailedFlyTo> =>
   Effect.gen(function* () {
     const maybeMap = yield* maps.get(hostId)
 
@@ -37,7 +36,7 @@ const flyToMap = (
     })
   })
 
-export const FlyTo = ApplicationDefinition.makeCommand('FlyTo', {
+export const FlyTo = makeCommand('FlyTo', {
   args: {
     maybeHostId: Schema.Option(Schema.String),
     lng: Schema.Number,
@@ -61,7 +60,7 @@ export const FlyTo = ApplicationDefinition.makeCommand('FlyTo', {
   },
 })
 
-export const Geolocate = ApplicationDefinition.makeCommand('Geolocate', {
+export const Geolocate = makeCommand('Geolocate', {
   messages: [Message.SucceededGeolocate, Message.FailedGeolocate],
   handler: function* () {
     return () =>
@@ -104,44 +103,35 @@ export const Geolocate = ApplicationDefinition.makeCommand('Geolocate', {
   },
 })
 
-export const FocusSearchInput = ApplicationDefinition.makeCommand(
-  'FocusSearchInput',
-  {
-    messages: [Message.CompletedFocusSearchInput],
-    handler: function* () {
-      return () =>
-        Dom.focus(`#${SEARCH_INPUT_ID}`).pipe(
-          Effect.ignore,
-          Effect.as(Message.CompletedFocusSearchInput()),
-        )
-    },
+export const FocusSearchInput = makeCommand('FocusSearchInput', {
+  messages: [Message.CompletedFocusSearchInput],
+  handler: function* () {
+    return () =>
+      Dom.focus(`#${SEARCH_INPUT_ID}`).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusSearchInput()),
+      )
   },
-)
+})
 
-export const LockBodyScroll = ApplicationDefinition.makeCommand(
-  'LockBodyScroll',
-  {
-    messages: [Message.CompletedLockBodyScroll],
-    handler: function* () {
-      return () =>
-        Effect.sync(() => {
-          document.body.classList.add('overflow-hidden')
-          return Message.CompletedLockBodyScroll()
-        })
-    },
+export const LockBodyScroll = makeCommand('LockBodyScroll', {
+  messages: [Message.CompletedLockBodyScroll],
+  handler: function* () {
+    return () =>
+      Effect.sync(() => {
+        document.body.classList.add('overflow-hidden')
+        return Message.CompletedLockBodyScroll()
+      })
   },
-)
+})
 
-export const UnlockBodyScroll = ApplicationDefinition.makeCommand(
-  'UnlockBodyScroll',
-  {
-    messages: [Message.CompletedUnlockBodyScroll],
-    handler: function* () {
-      return () =>
-        Effect.sync(() => {
-          document.body.classList.remove('overflow-hidden')
-          return Message.CompletedUnlockBodyScroll()
-        })
-    },
+export const UnlockBodyScroll = makeCommand('UnlockBodyScroll', {
+  messages: [Message.CompletedUnlockBodyScroll],
+  handler: function* () {
+    return () =>
+      Effect.sync(() => {
+        document.body.classList.remove('overflow-hidden')
+        return Message.CompletedUnlockBodyScroll()
+      })
   },
-)
+})

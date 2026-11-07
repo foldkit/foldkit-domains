@@ -9,10 +9,19 @@ export const Model = Schema.Struct({
   checkout: CheckoutState,
   isHelpOpen: Schema.Boolean,
 })
-const ApplicationComposition = Block.makeDefinition('Application', {
+export type Model = typeof Model.Type
+
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = ApplicationBlock
+
+const ApplicationComposition = makeComposition()
 
 export const initialModel = Model.make({
   checkout: checkoutMachine.initial,
@@ -21,7 +30,7 @@ export const initialModel = Model.make({
 
 export const foldCheckout = Machine.fold({
   machine: checkoutMachine,
-  read: (model: typeof Model.Type) => Option.some(model.checkout),
+  read: (model: Model) => Option.some(model.checkout),
   write: (model, nextCheckout) =>
     modifyFields(model, { checkout: () => nextCheckout }),
 })

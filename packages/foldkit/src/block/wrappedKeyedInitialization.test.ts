@@ -15,6 +15,7 @@ const ChildMessage = defineMessageUnion({
   CompletedInitialization: { count: Schema.Number },
   CompletedIncrement: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const Child = makeDefinition('WrappedInitializationChild', {
   Model: ChildModel,
@@ -34,7 +35,7 @@ const FinishIncrement = Child.makeCommand('FinishIncrement', {
     return () => Effect.succeed(ChildMessage.CompletedIncrement())
   },
 })
-const incrementStep = Child.makeStep(model => ({
+const increment = Child.makeStep(model => ({
   model: modifyFields(model, { count: count => count + 100 }),
   commands: [FinishIncrement()],
 }))
@@ -52,7 +53,7 @@ const prepareChildBlock = () =>
       }
     }),
     update: ChildComposition.makeUpdate({
-      RequestedIncrement: model => incrementStep(model),
+      RequestedIncrement: model => increment(model),
       CompletedInitialization: (model, { count }) => ({
         model: modifyFields(model, { count: () => count }),
       }),
@@ -76,6 +77,7 @@ const Entry = Schema.Struct({
   child: ChildModel,
   label: Schema.String,
 })
+type Entry = typeof Entry.Type
 
 const ParentModel = Schema.Struct({
   entries: Schema.Array(Entry),
@@ -86,6 +88,7 @@ type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({
   CompletedParentInitialization: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('WrappedInitializationParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -102,7 +105,7 @@ type ChildInitContext = Readonly<{
   secondCount: number
 }>
 
-const EntriesBinding = Parent.makeBinding(ChildBlock, {
+const EntriesBinding = Parent.makeKeyedArrayBinding(ChildBlock, {
   field: 'entries',
   key: 'id',
   childField: 'child',
@@ -123,7 +126,7 @@ const ParentComposition = Parent.makeComposition({
 })
 
 it('initializes occurrences in order and orders own, child, then Step Commands', () => {
-  const markSteppedStep = Parent.makeStep(model => ({
+  const markStepped = Parent.makeStep(model => ({
     model: modifyFields(model, { status: () => 'Stepped' }),
   }))
   const init = ParentComposition.makeInit(
@@ -131,7 +134,7 @@ it('initializes occurrences in order and orders own, child, then Step Commands',
       childInitContext,
       model: { status: 'Ready' },
       commands: [FinishParentInitialization()],
-      steps: [EntriesBinding.increment('first'), markSteppedStep],
+      steps: [EntriesBinding.increment('first'), markStepped],
     }),
   )
 
@@ -184,6 +187,7 @@ const KeyedParentModel = Schema.Struct({
   entries: Schema.Array(KeyedChildModel),
   status: Schema.Literal('Ready'),
 })
+type KeyedParentModel = typeof KeyedParentModel.Type
 const KeyedParent = makeDefinition('KeyedInitializationParent', {
   Model: KeyedParentModel,
   Message: ParentMessage,
@@ -195,7 +199,7 @@ const initKeyedParent = (
     child: KeyedChildModel,
   ) => KeyedChildModel,
 ) => {
-  const binding = KeyedParent.makeBinding(KeyedChildBlock, {
+  const binding = KeyedParent.makeKeyedArrayBinding(KeyedChildBlock, {
     field: 'entries',
     key: 'id',
     init: {
@@ -240,12 +244,12 @@ it('rejects an unwrapped keyed child that replaces the initialized Model', () =>
 })
 
 it('drops an original init Command when a Step removes its key before another Step readds it', () => {
-  const removeFirstStep = Parent.makeStep(model => ({
+  const removeFirst = Parent.makeStep(model => ({
     model: modifyFields(model, {
       entries: Array.filter(({ id }) => id !== 'first'),
     }),
   }))
-  const readdFirstStep = Parent.makeStep(model => ({
+  const readdFirst = Parent.makeStep(model => ({
     model: modifyFields(model, {
       entries: entries => [
         ...entries,
@@ -260,7 +264,7 @@ it('drops an original init Command when a Step removes its key before another St
   const init = ParentComposition.makeInit(() => ({
     childInitContext: { firstCount: 1, secondCount: 2 },
     model: { status: 'Ready' },
-    steps: [removeFirstStep, readdFirstStep],
+    steps: [removeFirst, readdFirst],
   }))
 
   const initialized = init()
@@ -279,15 +283,19 @@ const makeRuntimeComposition = (init: object) => {
     Model: ParentModel,
     Message: ParentMessage,
   })
-  const binding = Reflect.apply(RuntimeParent.makeBinding, undefined, [
-    ChildBlock,
-    {
-      field: 'entries',
-      key: 'id',
-      childField: 'child',
-      init,
-    },
-  ])
+  const binding = Reflect.apply(
+    RuntimeParent.makeKeyedArrayBinding,
+    undefined,
+    [
+      ChildBlock,
+      {
+        field: 'entries',
+        key: 'id',
+        childField: 'child',
+        init,
+      },
+    ],
+  )
 
   return Reflect.apply(RuntimeParent.makeComposition, undefined, [
     { bindings: [binding] },
@@ -342,30 +350,39 @@ it('preflights every Binding selector before calling any child init', () => {
     entries: Schema.Array(Entry),
     status: Schema.Literal('Ready'),
   })
+  type AllPlansModel = typeof AllPlansModel.Type
   const AllPlansParent = makeDefinition('WrappedInitializationAllPlansParent', {
     Model: AllPlansModel,
     Message: Schema.Never,
   })
-  const directBinding = Reflect.apply(AllPlansParent.makeBinding, undefined, [
-    ChildBlock,
-    {
-      field: 'direct',
-      init: { contextToArgs: () => single(9) },
-    },
-  ])
-  const keyedBinding = Reflect.apply(AllPlansParent.makeBinding, undefined, [
-    ChildBlock,
-    {
-      field: 'entries',
-      key: 'id',
-      childField: 'child',
-      init: {
-        instances: () => [{ key: 'invalid' }],
-        toItem: ({ key }: { key: string }, child: ChildModel) =>
-          Entry.make({ id: key, child, label: key }),
+  const directBinding = Reflect.apply(
+    AllPlansParent.makeRequiredFieldBinding,
+    undefined,
+    [
+      ChildBlock,
+      {
+        field: 'direct',
+        init: { contextToArgs: () => single(9) },
       },
-    },
-  ])
+    ],
+  )
+  const keyedBinding = Reflect.apply(
+    AllPlansParent.makeKeyedArrayBinding,
+    undefined,
+    [
+      ChildBlock,
+      {
+        field: 'entries',
+        key: 'id',
+        childField: 'child',
+        init: {
+          instances: () => [{ key: 'invalid' }],
+          toItem: ({ key }: { key: string }, child: ChildModel) =>
+            Entry.make({ id: key, child, label: key }),
+        },
+      },
+    ],
+  )
   const composition = Reflect.apply(AllPlansParent.makeComposition, undefined, [
     { bindings: [directBinding, keyedBinding] },
   ])
@@ -421,7 +438,7 @@ it('rejects wrappers that replace the initialized child', () => {
 
 it('remains passive and creates fresh wrappers on every invocation', () => {
   const occurrenceCalls = { count: 0 }
-  const FreshBinding = Parent.makeBinding(ChildBlock, {
+  const FreshBinding = Parent.makeKeyedArrayBinding(ChildBlock, {
     field: 'entries',
     key: 'id',
     childField: 'child',
@@ -455,7 +472,7 @@ it('remains passive and creates fresh wrappers on every invocation', () => {
 
 it('selects one large wrapped keyed field once in each validation and survival phase', () => {
   const occurrenceCount = 100
-  const ScalingBinding = Parent.makeBinding(ChildBlock, {
+  const ScalingBinding = Parent.makeKeyedArrayBinding(ChildBlock, {
     field: 'entries',
     key: 'id',
     childField: 'child',
@@ -481,10 +498,10 @@ it('selects one large wrapped keyed field once in each validation and survival p
   const ScalingComposition = Parent.makeComposition({
     bindings: [ScalingBinding],
   })
-  const retainEntriesStep = Parent.makeStep(model => ({ model }))
+  const retainEntries = Parent.makeStep(model => ({ model }))
   const init = ScalingComposition.makeInit(() => ({
     model: { status: 'Ready' },
-    steps: [retainEntriesStep],
+    steps: [retainEntries],
   }))
 
   const initialized = (() => {
@@ -503,15 +520,12 @@ if (false) {
   // @ts-expect-error Contextful occurrence selectors require shared startup.
   ParentComposition.makeInit(() => ({ model: { status: 'Ready' } }))
 
-  Parent.makeBinding(ChildBlock, {
-    // @ts-expect-error Wrapped occurrence args must match child init exactly.
+  Parent.makeKeyedArrayBinding(ChildBlock, {
     field: 'entries',
-    // @ts-expect-error Wrapped occurrence args must match child init exactly.
     key: 'id',
-    // @ts-expect-error Wrapped occurrence args must match child init exactly.
     childField: 'child',
-    // @ts-expect-error Wrapped occurrence args must match child init exactly.
     init: {
+      // @ts-expect-error Wrapped occurrence args must match child init exactly.
       instances: () => [{ key: 'invalid', args: ['invalid'] }],
       toItem: ({ key }: { key: string }, child: ChildModel) =>
         Entry.make({ id: key, child, label: key }),

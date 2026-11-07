@@ -20,7 +20,7 @@ import * as Command from '../../command/index.js'
 import { defineMessageUnion } from '../../message/index.js'
 import * as Story from '../../test/story.js'
 import * as Update from '../../update/index.js'
-import * as Query from './index.js'
+import * as Query from './native.js'
 
 const Note = Schema.Struct({ id: Schema.String, body: Schema.String })
 type Note = typeof Note.Type
@@ -131,6 +131,7 @@ const stringNeedingDecode = Schema.String.pipe(
     }),
   ),
 )
+type stringNeedingDecode = typeof stringNeedingDecode.Type
 
 const stringNeedingEncode = Schema.flip(stringNeedingDecode)
 
@@ -173,6 +174,7 @@ describe('Query.define Schema inputs', () => {
   it('rejects Schema.Top data and error values', () => {
     const data: Schema.Top = Schema.Array(Note)
     const error: Schema.Top = Schema.String
+    type error = typeof error.Type
     expectTypeOf(data).not.toExtend<
       Schema.Codec<unknown, unknown, never, never>
     >()
@@ -650,6 +652,7 @@ describe('Query Model encoding', () => {
       notes: notes.Model,
       noteById: noteById.Model,
     })
+    type Model = typeof Model.Type
     const notesLoad = notes.requestRevalidationOrLoad(notes.init().model)
     const notesSettle = notes.update(
       notesLoad.model,
@@ -697,17 +700,22 @@ describe('Query Model encoding', () => {
 
 describe('Query Block binding', () => {
   const Model = Schema.Struct({ notes: notes.Model })
+  type Model = typeof Model.Type
   const Message = defineMessageUnion({
     ClickedLoad: {},
   })
+  type Message = typeof Message.Type
   const QueryParentDefinition = Block.makeDefinition('QueryParent', {
     Model,
     Message,
   })
-  const NotesChildBinding = QueryParentDefinition.makeBinding(notes, {
-    field: 'notes',
-    init: false,
-  })
+  const NotesChildBinding = QueryParentDefinition.makeRequiredFieldBinding(
+    notes,
+    {
+      field: 'notes',
+      init: false,
+    },
+  )
   const Composition = QueryParentDefinition.makeComposition({
     bindings: [NotesChildBinding],
   })
@@ -767,16 +775,21 @@ describe('Query Block binding', () => {
 
   it('binds one KeyedQuery Block whose entries remain cache data', () => {
     const KeyedModel = Schema.Struct({ notes: noteById.Model })
+    type KeyedModel = typeof KeyedModel.Type
     const KeyedMessage = defineMessageUnion({
       RequestedLoad: { noteId: Schema.String },
     })
+    type KeyedMessage = typeof KeyedMessage.Type
     const KeyedDefinition = Block.makeDefinition('KeyedQueryParent', {
       Model: KeyedModel,
       Message: KeyedMessage,
     })
-    const KeyedNotesBinding = KeyedDefinition.makeBinding(noteById, {
-      field: 'notes',
-    })
+    const KeyedNotesBinding = KeyedDefinition.makeRequiredFieldBinding(
+      noteById,
+      {
+        field: 'notes',
+      },
+    )
     const KeyedComposition = KeyedDefinition.makeComposition({
       bindings: [KeyedNotesBinding],
     })
@@ -1585,13 +1598,17 @@ describe('Query handler requirements', () => {
     expect(reset.model.data).toEqual(AsyncData.Idle())
 
     const ParentModel = Schema.Struct({ notes: served.Model })
+    type ParentModel = typeof ParentModel.Type
     const ParentDefinition = Block.makeDefinition('ServedNotesParent', {
       Model: ParentModel,
       Message: Schema.Never,
     })
-    const ServedNotesBinding = ParentDefinition.makeBinding(served, {
-      field: 'notes',
-    })
+    const ServedNotesBinding = ParentDefinition.makeRequiredFieldBinding(
+      served,
+      {
+        field: 'notes',
+      },
+    )
 
     expectTypeOf(ServedNotesBinding.fold)
       .parameter(1)
@@ -1701,7 +1718,7 @@ describe('Query types', () => {
       Model: ParentModel,
       Message: Schema.Never,
     })
-    const NotesChildBinding = ParentDefinition.makeBinding(notes, {
+    const NotesChildBinding = ParentDefinition.makeRequiredFieldBinding(notes, {
       field: 'notes',
     })
 
@@ -1716,6 +1733,7 @@ describe('Query types', () => {
     ).parameters.toEqualTypeOf<[]>()
 
     const KeyedParentModel = Schema.Struct({ notes: noteById.Model })
+    type KeyedParentModel = typeof KeyedParentModel.Type
     const KeyedParentDefinition = Block.makeDefinition(
       'TypedKeyedQueryParent',
       {
@@ -1723,9 +1741,12 @@ describe('Query types', () => {
         Message: Schema.Never,
       },
     )
-    const NoteByIdChildBinding = KeyedParentDefinition.makeBinding(noteById, {
-      field: 'notes',
-    })
+    const NoteByIdChildBinding = KeyedParentDefinition.makeRequiredFieldBinding(
+      noteById,
+      {
+        field: 'notes',
+      },
+    )
 
     expectTypeOf(
       NoteByIdChildBinding.requestLoadIfMissing,

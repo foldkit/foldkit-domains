@@ -1,11 +1,12 @@
 import type { Block } from 'foldkit'
 
 import {
-  ApplicationDefinition,
+  makeComposition,
   makeFieldsStep,
   makeNoopStep,
-} from './definition'
-import { StepMenuBlock, StepTabsBlock } from './navigationComponents'
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+} from './block'
 import {
   AttachmentsBlock,
   CoverLetterBlock,
@@ -13,71 +14,54 @@ import {
   PersonalInfoBlock,
   SkillsBlock,
   WorkHistoryBlock,
-} from './step'
+} from './blocks'
+import { StepMenuBlock, StepTabsBlock } from './navigationComponents'
 
-export const PersonalInfoBinding = ApplicationDefinition.makeBinding(
-  PersonalInfoBlock,
-  {
-    field: 'personalInfo',
-    init: { contextToArgs: ({ today }) => [today] },
+export const PersonalInfoBinding = makeRequiredFieldBinding(PersonalInfoBlock, {
+  field: 'personalInfo',
+  init: { contextToArgs: ({ today }) => [today] },
+})
+
+export const WorkHistoryBinding = makeRequiredFieldBinding(WorkHistoryBlock, {
+  field: 'workHistory',
+  init: {
+    contextToArgs: ({ today, initialWorkHistoryEntryId }) => [
+      today,
+      initialWorkHistoryEntryId,
+    ],
   },
-)
+})
 
-export const WorkHistoryBinding = ApplicationDefinition.makeBinding(
-  WorkHistoryBlock,
-  {
-    field: 'workHistory',
-    init: {
-      contextToArgs: ({ today, initialWorkHistoryEntryId }) => [
-        today,
-        initialWorkHistoryEntryId,
-      ],
-    },
+export const EducationBinding = makeRequiredFieldBinding(EducationBlock, {
+  field: 'education',
+  init: {
+    contextToArgs: ({ today, initialEducationEntryId }) => [
+      today,
+      initialEducationEntryId,
+    ],
   },
-)
+})
 
-export const EducationBinding = ApplicationDefinition.makeBinding(
-  EducationBlock,
-  {
-    field: 'education',
-    init: {
-      contextToArgs: ({ today, initialEducationEntryId }) => [
-        today,
-        initialEducationEntryId,
-      ],
-    },
-  },
-)
-
-export const SkillsBinding = ApplicationDefinition.makeBinding(SkillsBlock, {
+export const SkillsBinding = makeRequiredFieldBinding(SkillsBlock, {
   field: 'skills',
   init: {
     contextToArgs: ({ initialSkillsEntryId }) => [initialSkillsEntryId],
   },
 })
 
-export const CoverLetterBinding = ApplicationDefinition.makeBinding(
-  CoverLetterBlock,
-  {
-    field: 'coverLetter',
-  },
-)
+export const CoverLetterBinding = makeRequiredFieldBinding(CoverLetterBlock, {
+  field: 'coverLetter',
+})
 
-export const AttachmentsBinding = ApplicationDefinition.makeBinding(
-  AttachmentsBlock,
-  {
-    field: 'attachments',
-  },
-)
+export const AttachmentsBinding = makeRequiredFieldBinding(AttachmentsBlock, {
+  field: 'attachments',
+})
 
-export const StepMenuBinding = ApplicationDefinition.makeBinding(
-  StepMenuBlock,
-  {
-    field: 'stepMenu',
-    init: { contextToArgs: () => [{ id: 'step-menu' }] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(StepMenuBlock, {
+export const StepMenuBinding = makeRequiredFieldBinding(StepMenuBlock, {
+  field: 'stepMenu',
+  init: { contextToArgs: () => [{ id: 'step-menu' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(StepMenuBlock, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         currentStep: () => value,
@@ -86,14 +70,11 @@ export const StepMenuBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const StepTabsBinding = ApplicationDefinition.makeBinding(
-  StepTabsBlock,
-  {
-    field: 'stepTabs',
-    init: { contextToArgs: () => [{ id: 'step-tabs' }] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(StepTabsBlock, {
+export const StepTabsBinding = makeRequiredFieldBinding(StepTabsBlock, {
+  field: 'stepTabs',
+  init: { contextToArgs: () => [{ id: 'step-tabs' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(StepTabsBlock, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         currentStep: () => value,
@@ -101,7 +82,7 @@ export const StepTabsBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [
     PersonalInfoBinding,
     WorkHistoryBinding,

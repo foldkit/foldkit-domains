@@ -13,6 +13,7 @@ import { expect, expectTypeOf, it } from 'vitest'
 import type * as Command from '../command/index.js'
 import { defineMessageUnion } from '../message/index.js'
 import { modifyFields } from '../struct/index.js'
+import * as Scene from '../test/scene.js'
 import type * as Update from '../update/index.js'
 import { aggregateChildren, inspectBinding } from './binding.js'
 import { makeDefinition } from './define.js'
@@ -27,6 +28,7 @@ class ValueSource extends Context.Service<
 >()('ConnectionShorthands/ValueSource') {}
 
 const Model = Schema.Struct({ count: Schema.Number })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedRead: {},
   RequestedReadOperation: {},
@@ -37,7 +39,9 @@ const Message = defineMessageUnion({
   ReleasedSession: {},
   FailedAcquireSession: {},
 })
+type Message = typeof Message.Type
 const OutMessage = defineMessageUnion({ ReadRequested: {} })
+type OutMessage = typeof OutMessage.Type
 const Child = makeDefinition('Child', { Model, Message, OutMessage })
 const Read = Child.makeCommand('Read', {
   messages: [Message.CompletedRead],
@@ -91,7 +95,9 @@ const childUpdate = registered.makeUpdate({
   CompletedRead: (model, { count }) => ({
     model: modifyFields(model, { count: () => count }),
   }),
-  ObservedTick: model => ({ model }),
+  ObservedTick: model => ({
+    model: modifyFields(model, { count: count => count + 1 }),
+  }),
   CompletedObserve: model => ({ model }),
   AcquiredSession: model => ({ model }),
   ReleasedSession: model => ({ model }),
@@ -119,6 +125,7 @@ const block: Block.FromAssemblyWithViewAndOutMessage<
   typeof prepareBlock
 > = Block.assemble(prepareBlock)
 const Entry = Schema.Struct({ id: Schema.String, child: Model })
+type Entry = typeof Entry.Type
 const ParentModel = Schema.Struct({
   primary: Model,
   secondary: Model,
@@ -135,6 +142,7 @@ const LegacyParentMessage = defineMessageUnion({
   GotChildMessage: { message: Message },
   GotEntryMessage: { id: Schema.String, message: Message },
 })
+type LegacyParentMessage = typeof LegacyParentMessage.Type
 const Parent = makeDefinition('ConnectionShorthandsParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -146,30 +154,30 @@ const foldChildOutMessage = OutMessage.match<
     model: modifyFields(model, { requests: requests => requests + 1 }),
   }),
 })
-const PrimaryBinding = Parent.makeBinding(block, {
+const PrimaryBinding = Parent.makeRequiredFieldBinding(block, {
   field: 'primary',
 }).withOutMessagePolicy({ fold: foldChildOutMessage })
 const primaryInspection = inspectBinding(PrimaryBinding)
-const SecondaryBinding = Parent.makeBinding(block, {
+const SecondaryBinding = Parent.makeRequiredFieldBinding(block, {
   field: 'secondary',
 }).withOutMessagePolicy({ fold: foldChildOutMessage })
-const OverriddenBinding = Parent.makeBinding(block, {
+const OverriddenBinding = Parent.makeRequiredFieldBinding(block, {
   field: 'secondary',
   placement: 'alternate',
 }).withOutMessagePolicy({ fold: foldChildOutMessage })
-const AccessorBinding = Parent.makeBinding(block, {
+const AccessorBinding = Parent.makeCustomBinding(block, {
   read: model => Option.some(model.primary),
   write: (model, nextPrimary) =>
     modifyFields(model, { primary: () => nextPrimary }),
 }).withOutMessagePolicy({ fold: foldChildOutMessage })
-const entryKey = (entry: typeof Entry.Type): string => entry.id
-const KeyedBinding = Parent.makeBinding(block, {
+const entryKey = (entry: Entry): string => entry.id
+const KeyedBinding = Parent.makeCustomKeyedBinding(block, {
   placement: 'entries',
   readAll: (model: ParentModel) => model.entries,
   key: entryKey,
   keySchema: Schema.String,
-  read: (entry: typeof Entry.Type) => entry.child,
-  writeAt: (model: ParentModel, id: string, nextChild: typeof Model.Type) =>
+  read: (entry: Entry) => entry.child,
+  writeAt: (model: ParentModel, id: string, nextChild: Model) =>
     modifyFields(model, {
       entries: Array.map(entry =>
         entry.id === id
@@ -178,7 +186,7 @@ const KeyedBinding = Parent.makeBinding(block, {
       ),
     }),
 }).withOutMessagePolicy({
-  fold: (_key: string, outMessage: typeof OutMessage.Type) =>
+  fold: (_key: string, outMessage: OutMessage) =>
     foldChildOutMessage(outMessage),
 })
 const ParentComposition = Parent.makeComposition({
@@ -190,6 +198,12 @@ const update = ParentComposition.makeUpdate({
 })
 
 const keyedUpdate = update
+const parentView = ParentComposition.makeView((model, h) =>
+  h.div(
+    [h.Role('status')],
+    model.entries.map(entry => `${entry.id}:${entry.child.count}`),
+  ),
+)
 
 const initial = ParentModel.make({
   primary: Model.make({ count: 1 }),
@@ -251,9 +265,127 @@ it('keeps exact placement literals and child operation arguments', () => {
     'embedView',
     'read',
   ])
-  expect(inspectBinding(KeyedBinding).subscriptions).toEqual({})
-  expect(inspectBinding(KeyedBinding).managedResources).toEqual({})
+  expect(Object.keys(inspectBinding(KeyedBinding).subscriptions)).toEqual([
+    'ticks',
+  ])
+  expect(Object.keys(inspectBinding(KeyedBinding).managedResources)).toEqual([
+    'session',
+  ])
   expect(Array.head(primaryInspection.mounts)).toEqual(Option.some(Observe))
+})
+
+it('selects keyed lifecycle occurrences without treating templates as local entries', () => {
+  const twoKeyInitial = ParentModel.make({
+    ...initial,
+    entries: [
+      Entry.make({ id: 'first', child: Model.make({ count: 3 }) }),
+      Entry.make({ id: 'second', child: Model.make({ count: 7 }) }),
+    ],
+  })
+  const inspected = inspectBinding(KeyedBinding)
+  const registeredSubscriptions = aggregateChildren([
+    KeyedBinding,
+  ]).subscriptions
+  const registeredManagedResources = aggregateChildren([
+    KeyedBinding,
+  ]).managedResources
+  const firstTicks = Scene.Subscription.at(
+    KeyedBinding,
+    'first',
+    subscriptions.ticks,
+  )
+  const secondTicks = Scene.Subscription.at(
+    KeyedBinding,
+    'second',
+    subscriptions.ticks,
+  )
+  const missingTicks = Scene.Subscription.at(
+    KeyedBinding,
+    'missing',
+    subscriptions.ticks,
+  )
+  const firstSession = Scene.ManagedResource.at(
+    KeyedBinding,
+    'first',
+    managedResources.session,
+  )
+  const missingSession = Scene.ManagedResource.at(
+    KeyedBinding,
+    'missing',
+    managedResources.session,
+  )
+
+  expect(() =>
+    inspected.subscriptions.ticks.modelToDependencies(twoKeyInitial),
+  ).toThrow('passive template')
+  expect(() =>
+    inspected.managedResources.session.modelToMaybeRequirements(twoKeyInitial),
+  ).toThrow('passive template')
+
+  Scene.scene(
+    {
+      update: keyedUpdate,
+      view: parentView,
+      subscriptions: registeredSubscriptions,
+      managedResources: registeredManagedResources,
+    },
+    Scene.given(twoKeyInitial),
+    Scene.Subscription.expectActive(firstTicks),
+    Scene.Subscription.expectActive(secondTicks),
+    Scene.Subscription.expectInactive(missingTicks),
+    Scene.Subscription.emit(firstTicks, Message.ObservedTick()),
+    Scene.expect(Scene.role('status')).toHaveText('first:4second:7'),
+    Scene.ManagedResource.acquire(firstSession),
+  )
+
+  expect(() =>
+    Scene.scene(
+      {
+        update: keyedUpdate,
+        view: parentView,
+        subscriptions: registeredSubscriptions,
+        managedResources: registeredManagedResources,
+      },
+      Scene.given(twoKeyInitial),
+      Scene.Subscription.emit(missingTicks, Message.ObservedTick()),
+    ),
+  ).toThrow('absent from the current Model')
+  expect(() =>
+    Scene.scene(
+      {
+        update: keyedUpdate,
+        view: parentView,
+        subscriptions: registeredSubscriptions,
+        managedResources: registeredManagedResources,
+      },
+      Scene.given(twoKeyInitial),
+      Scene.ManagedResource.acquire(missingSession),
+    ),
+  ).toThrow('absent from the current Model')
+
+  expectTypeOf(() =>
+    Scene.scene(
+      {
+        update: keyedUpdate,
+        view: parentView,
+        subscriptions: registeredSubscriptions,
+      },
+      Scene.given(twoKeyInitial),
+      // @ts-expect-error A raw child Subscription is ambiguous for a keyed Binding.
+      Scene.Subscription.emit(subscriptions.ticks, Message.ObservedTick()),
+    ),
+  ).toBeFunction()
+  expect(() =>
+    Scene.scene(
+      {
+        update: keyedUpdate,
+        view: parentView,
+        managedResources: registeredManagedResources,
+      },
+      Scene.given(twoKeyInitial),
+      Scene.ManagedResource.acquire(managedResources.session),
+    ),
+  ).toThrow('Scene.ManagedResource.at')
 })
 
 it('lifts real Command execution through the constructor and preserves OutMessage handling', async () => {
@@ -358,7 +490,7 @@ it('rejects ambiguous mappings before building a Binding', () => {
       Model: ParentModel,
       field: 'primary',
       parentMessage: LegacyParentMessage.GotChildMessage,
-      toParentMessage: (message: typeof Message.Type) =>
+      toParentMessage: (message: Message) =>
         LegacyParentMessage.GotChildMessage({ message }),
     }),
   ).toThrow('exactly one parent Message mapping')

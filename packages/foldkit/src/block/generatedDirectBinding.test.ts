@@ -8,11 +8,14 @@ import { makeDefinition } from './define.js'
 import * as Block from './public.js'
 
 const SearchModel = Schema.Struct({ count: Schema.Number })
+type SearchModel = typeof SearchModel.Type
 const SearchMessage = defineMessageUnion({
   ClickedIncrement: {},
   CompletedScheduleIncrement: {},
 })
+type SearchMessage = typeof SearchMessage.Type
 const SearchOutMessage = defineMessageUnion({ Incremented: {} })
+type SearchOutMessage = typeof SearchOutMessage.Type
 const SearchDefinition = makeDefinition('GeneratedDirectSearch', {
   Model: SearchModel,
   Message: SearchMessage,
@@ -58,7 +61,7 @@ const foldSearchOutMessage = SearchOutMessage.match<
 >({
   Incremented: () => ParentDefinition.makeNoopStep(),
 })
-const SearchBinding = ParentDefinition.makeBinding(SearchBlock, {
+const SearchBinding = ParentDefinition.makeRequiredFieldBinding(SearchBlock, {
   field: 'search',
 }).withOutMessagePolicy({ fold: foldSearchOutMessage })
 const ParentComposition = ParentDefinition.makeComposition({
@@ -94,8 +97,8 @@ const ContextualSearchBlock: Block.FromAssemblyWithView<
 > = Block.assemble(prepareContextualSearchBlock)
 
 if (false) {
-  ParentDefinition.makeBinding(ContextualSearchBlock, {
-    // @ts-expect-error Required update context needs an explicit bidirectional mapping.
+  // @ts-expect-error Required update context needs an explicit bidirectional mapping.
+  ParentDefinition.makeRequiredFieldBinding(ContextualSearchBlock, {
     field: 'search',
   })
 }

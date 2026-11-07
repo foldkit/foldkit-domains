@@ -140,7 +140,7 @@ const foldSettings = Testing.varDecl(
 
 const foldSettingsStep = Testing.varDecl(
   'const',
-  'foldSettingsStep',
+  'foldSettingsWithoutMessage',
   foldChildStep(readSettings, writeSettings),
 )
 
@@ -235,7 +235,7 @@ const foldSettingsDataLastCombine = (model: string) => ({
 
 const foldSettingsReturnedStep = Testing.varDecl(
   'const',
-  'foldSettingsStep',
+  'foldSettingsMessage',
   Testing.callOfMember('Update', 'combineSteps', [
     {
       type: 'ArrayExpression',
@@ -245,7 +245,7 @@ const foldSettingsReturnedStep = Testing.varDecl(
 )
 
 const applyFoldSettingsStep = (model: string) =>
-  Testing.callExpr('foldSettingsStep', [Testing.id(model)])
+  Testing.callExpr('foldSettingsMessage', [Testing.id(model)])
 
 const foldSettingsNestedCombine = () =>
   Testing.callOfMember('Update', 'combineSteps', [
@@ -434,9 +434,7 @@ describe('no-direct-block-state-update', () => {
 
     expect(result).toHaveLength(1)
     expect(result[0]?.diagnostic.message).toContain('`settings`')
-    expect(result[0]?.diagnostic.message).toContain(
-      "child Block's `operations` record",
-    )
+    expect(result[0]?.diagnostic.message).toContain('public child InMessage')
     expect(result[0]?.diagnostic.message).toContain('registered Binding')
   })
 
@@ -612,7 +610,7 @@ describe('no-direct-block-state-update', () => {
 
     expect(result).toHaveLength(1)
     expect(result[0]?.diagnostic.message).toContain(
-      'child update handles the transition',
+      'child inMessageUpdate handler owns the transition',
     )
   })
 
@@ -763,7 +761,7 @@ describe('no-direct-block-state-update', () => {
   it('flags a direct foldChildStep application', () => {
     const result = runRule([
       foldSettingsStep,
-      Testing.callExpr('foldSettingsStep', [Testing.id('model')]),
+      Testing.callExpr('foldSettingsWithoutMessage', [Testing.id('model')]),
       directSettingsUpdate('model'),
     ])
 
@@ -775,7 +773,10 @@ describe('no-direct-block-state-update', () => {
       foldSettingsStep,
       Testing.callOfMember('Update', 'combineSteps', [
         Testing.id('model'),
-        { type: 'ArrayExpression', elements: [Testing.id('foldSettingsStep')] },
+        {
+          type: 'ArrayExpression',
+          elements: [Testing.id('foldSettingsWithoutMessage')],
+        },
       ]),
       directSettingsUpdate('model'),
     ])
@@ -810,7 +811,7 @@ describe('completed Block bindings', () => {
     callee: {
       type: 'MemberExpression',
       object: Testing.id('Application'),
-      property: Testing.id('makeBinding'),
+      property: Testing.id('makeCustomBinding'),
       computed: false,
     },
     arguments: [
@@ -827,7 +828,7 @@ describe('completed Block bindings', () => {
     callee: {
       type: 'MemberExpression',
       object: Testing.id('Application'),
-      property: Testing.id('makeBinding'),
+      property: Testing.id('makeRequiredFieldBinding'),
       computed: false,
     },
     arguments: [
@@ -874,7 +875,7 @@ describe('completed Block bindings', () => {
       callee: {
         type: 'MemberExpression',
         object: Testing.id('Application'),
-        property: Testing.id('makeBinding'),
+        property: Testing.id('makeKeyedArrayBinding'),
         computed: false,
       },
       arguments: [
@@ -891,7 +892,7 @@ describe('completed Block bindings', () => {
     callee: {
       type: 'MemberExpression',
       object: Testing.id('Application'),
-      property: Testing.id('makeBinding'),
+      property: Testing.id('makeKeyedArrayBinding'),
       computed: false,
     },
     arguments: [
@@ -909,7 +910,7 @@ describe('completed Block bindings', () => {
     callee: {
       type: 'MemberExpression',
       object: Testing.id('Application'),
-      property: Testing.id('makeBinding'),
+      property: Testing.id('makeCustomKeyedBinding'),
       computed: false,
     },
     arguments: [
@@ -1338,9 +1339,25 @@ describe('completed Block bindings', () => {
     expect(result).toHaveLength(0)
   })
 
-  it('does not recognize keyField as direct keyed shorthand', () => {
+  it('does not infer a keyed relationship from a required constructor config', () => {
+    const requiredEntriesBinding = Testing.varDecl('const', 'entries', {
+      type: 'CallExpression',
+      callee: {
+        type: 'MemberExpression',
+        object: Testing.id('Application'),
+        property: Testing.id('makeRequiredFieldBinding'),
+        computed: false,
+      },
+      arguments: [
+        Testing.id('Entry'),
+        objectExpression([
+          property('field', Testing.strLiteral('entries')),
+          property('key', Testing.strLiteral('id')),
+        ]),
+      ],
+    })
     const result = runRule([
-      directEntriesBinding('keyField'),
+      requiredEntriesBinding,
       Testing.callOfMember('entries', 'fold', [
         Testing.id('model'),
         Testing.strLiteral('first'),
@@ -1438,7 +1455,7 @@ describe('completed Block bindings', () => {
       callee: {
         type: 'MemberExpression',
         object: namespacedApplication,
-        property: Testing.id('makeBinding'),
+        property: Testing.id('makeRequiredFieldBinding'),
         computed: false,
       },
       arguments: [
@@ -1544,7 +1561,7 @@ describe('completed Block bindings', () => {
       callee: {
         type: 'MemberExpression',
         object: Testing.id('OtherApplication'),
-        property: Testing.id('makeBinding'),
+        property: Testing.id('makeRequiredFieldBinding'),
         computed: false,
       },
       arguments: [

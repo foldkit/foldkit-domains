@@ -3,8 +3,6 @@ import { Array, DateTime, Option, Record, Schema, String, pipe } from 'effect'
 import { PostFrontmatter } from './frontmatter'
 import { byDateThenSlugDescending } from './meta'
 
-// POSTS
-
 const documentByPath = import.meta.glob<unknown>('./post/*.md', {
   eager: true,
   import: 'default',
@@ -23,7 +21,7 @@ const frontmatterByPath = import.meta.glob<unknown>('./post/*.md', {
  */
 export type BlogPost = Readonly<{
   slug: string
-  frontmatter: typeof PostFrontmatter.Type
+  frontmatter: PostFrontmatter
   document: unknown
 }>
 

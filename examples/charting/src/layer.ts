@@ -1,10 +1,24 @@
-import { Layer } from 'effect'
+import { Effect, Layer } from 'effect'
 
-import { FetchTelemetry, SyncChart } from './command'
-import { MountChart } from './mount'
+import { RadioGroup } from '@foldkit/ui'
 
-export const EffectsLayer = Layer.mergeAll(
-  FetchTelemetry.layer,
-  SyncChart.layer,
-  MountChart.layer,
-)
+import { ApplicationBlock } from './block'
+import { ApplicationComposition } from './composition'
+import { EffectsLayer } from './effectsLayer'
+import { init } from './init'
+import { update } from './update'
+import { view } from './view'
+
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ApplicationComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+      EffectsLayer,
+    }
+  }),
+).pipe(Layer.provide(Layer.mergeAll(RadioGroup.layer)))

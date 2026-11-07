@@ -6,7 +6,9 @@ import { makeDefinition } from './define.js'
 import * as Block from './public.js'
 
 const LeafModel = Schema.Struct({ count: Schema.Number })
+type LeafModel = typeof LeafModel.Type
 const LeafMessage = defineMessageUnion({ CompletedObserveLeaf: {} })
+type LeafMessage = typeof LeafMessage.Type
 const MountCapabilityLeaf = makeDefinition('MountCapabilityLeaf', {
   Model: LeafModel,
   Message: LeafMessage,
@@ -38,11 +40,12 @@ const leafBlock: Block.FromAssemblyWithView<
 > = Block.assemble(prepareLeafBlock)
 
 const MiddleModel = Schema.Struct({ leaf: LeafModel })
+type MiddleModel = typeof MiddleModel.Type
 const MountCapabilityMiddle = makeDefinition('MountCapabilityMiddle', {
   Model: MiddleModel,
   Message: Schema.Never,
 })
-const LeafBinding = MountCapabilityMiddle.makeBinding(leafBlock, {
+const LeafBinding = MountCapabilityMiddle.makeRequiredFieldBinding(leafBlock, {
   field: 'leaf',
   init: false,
 })
@@ -78,14 +81,18 @@ const middleBlock: Block.FromAssemblyWithView<
 > = Block.assemble(prepareMiddleBlock)
 
 const RootModel = Schema.Struct({ middle: MiddleModel })
+type RootModel = typeof RootModel.Type
 const MountCapabilityRoot = makeDefinition('MountCapabilityRoot', {
   Model: RootModel,
   Message: Schema.Never,
 })
-const MiddleBinding = MountCapabilityRoot.makeBinding(middleBlock, {
-  field: 'middle',
-  init: false,
-})
+const MiddleBinding = MountCapabilityRoot.makeRequiredFieldBinding(
+  middleBlock,
+  {
+    field: 'middle',
+    init: false,
+  },
+)
 const rootRegistered = MountCapabilityRoot.makeComposition({
   bindings: [MiddleBinding],
 })
@@ -118,6 +125,7 @@ const rootBlock: Block.FromAssemblyWithView<
 > = Block.assemble(prepareRootBlock)
 
 const SiblingMessage = defineMessageUnion({ CompletedObserveSibling: {} })
+type SiblingMessage = typeof SiblingMessage.Type
 const MountCapabilitySibling = makeDefinition('MountCapabilitySibling', {
   Model: MiddleModel,
   Message: SiblingMessage,

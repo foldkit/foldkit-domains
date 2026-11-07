@@ -9,6 +9,7 @@ const Message = defineMessageUnion({
   RequestedWork: {},
   CompletedWork: {},
 })
+type Message = typeof Message.Type
 const makeGenericComplete = <const Id extends string>(id: Id) => {
   const FeatureNamespace = makeNamespace(id)
   const Model = Schema.Struct({ value: Schema.String })
@@ -72,12 +73,13 @@ const makeGenericMissing = <const Id extends string>(id: Id) => {
 
 const complete = makeGenericComplete('GenericComplete')
 const CompleteParentModel = Schema.Struct({ child: complete.Model })
+type CompleteParentModel = typeof CompleteParentModel.Type
 
 const CompleteParent = makeDefinition('GenericCompleteParent', {
   Model: CompleteParentModel,
   Message: Schema.Never,
 })
-const CompleteBinding = CompleteParent.makeBinding(complete, {
+const CompleteBinding = CompleteParent.makeRequiredFieldBinding(complete, {
   placement: 'GenericComplete',
   field: 'child',
 })
@@ -89,13 +91,14 @@ it('keeps a complete generic Block connectable after literal instantiation', () 
 if (false) {
   const missing = makeGenericMissing('GenericMissing')
   const MissingParentModel = Schema.Struct({ child: missing.Model })
+  type MissingParentModel = typeof MissingParentModel.Type
   const MissingParent = makeDefinition('GenericMissingParent', {
     Model: MissingParentModel,
     Message: Schema.Never,
   })
 
   // @ts-expect-error Concrete Bindings validate deferred generic handler coverage.
-  MissingParent.makeBinding(missing, {
+  MissingParent.makeRequiredFieldBinding(missing, {
     placement: 'GenericMissing',
     field: 'child',
   })

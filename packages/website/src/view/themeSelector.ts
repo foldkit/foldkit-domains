@@ -1,7 +1,7 @@
 import { Match, Option } from 'effect'
 import { type Html, childAttributes, inertHtml as ih } from 'foldkit/html'
 
-import type { AnchorConfig as MenuAnchorConfig } from '@foldkit/ui/menu'
+import { Menu } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import { ThemeMenuBinding } from '../composition'
@@ -9,13 +9,15 @@ import { Icon } from '../icon'
 import { type ThemePreference } from '../themePreference'
 import { ThemeMenuBlock } from './themeMenu'
 
-const THEME_PREFERENCES: ReadonlyArray<typeof ThemePreference.Type> = [
+type ThemeMenuBlockModel = typeof ThemeMenuBlock.Model.Type
+
+const THEME_PREFERENCES: ReadonlyArray<ThemePreference> = [
   'Dark',
   'Light',
   'System',
 ]
 
-const THEME_MENU_ANCHOR: MenuAnchorConfig = {
+const THEME_MENU_ANCHOR: Menu.AnchorConfig = {
   placement: 'bottom-end',
   gap: 8,
   padding: 8,
@@ -23,10 +25,7 @@ const THEME_MENU_ANCHOR: MenuAnchorConfig = {
 
 export { ThemeMenuBlock } from './themeMenu'
 
-const preferenceIcon = (
-  preference: typeof ThemePreference.Type,
-  className: string,
-): Html =>
+const preferenceIcon = (preference: ThemePreference, className: string): Html =>
   Match.value(preference).pipe(
     Match.when('Light', () => Icon.sun(className)),
     Match.when('System', () => Icon.computer(className)),
@@ -35,11 +34,11 @@ const preferenceIcon = (
   )
 
 export const view = (
-  menu: typeof ThemeMenuBlock.Model.Type,
-  maybeActivePreference: Option.Option<typeof ThemePreference.Type>,
+  menu: ThemeMenuBlockModel,
+  maybeActivePreference: Option.Option<ThemePreference>,
   h: ApplicationViewBuilder,
 ): Html => {
-  const activePreference: typeof ThemePreference.Type = Option.getOrElse(
+  const activePreference: ThemePreference = Option.getOrElse(
     maybeActivePreference,
     () => 'System',
   )

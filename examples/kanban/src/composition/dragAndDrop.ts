@@ -1,15 +1,19 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DragAndDropBlock } from '@foldkit/ui'
-import { maybeDraggedItemId } from '@foldkit/ui/dragAndDrop'
+import { DragAndDrop } from '@foldkit/ui'
 
+import {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from '../block'
 import { SaveBoard } from '../command'
-import { ApplicationDefinition, makeFieldsStep, makeStep } from '../definition'
 import { Column } from '../domain'
 
 const findCardTitle = (
-  columns: ReadonlyArray<typeof Column.Column.Type>,
+  columns: ReadonlyArray<Column.Column>,
   cardId: string,
 ): string =>
   pipe(
@@ -23,7 +27,7 @@ const findCardTitle = (
   )
 
 const findColumnName = (
-  columns: ReadonlyArray<typeof Column.Column.Type>,
+  columns: ReadonlyArray<Column.Column>,
   columnId: string,
 ): string =>
   pipe(
@@ -35,8 +39,8 @@ const findColumnName = (
     }),
   )
 
-const foldDragAndDropOutMessage = ApplicationDefinition.makeOutMessageFold(
-  DragAndDropBlock,
+const foldDragAndDropOutMessage = makeOutMessageFold(
+  DragAndDrop.DragAndDropBlock,
   {
     StartedKeyboardDrag: ({ itemId }) =>
       makeFieldsStep(model => ({
@@ -74,17 +78,20 @@ const foldDragAndDropOutMessage = ApplicationDefinition.makeOutMessageFold(
     Cancelled: (_outMessage, { modelBeforeUpdate }) =>
       makeFieldsStep(() => ({
         announcement: () =>
-          Option.match(maybeDraggedItemId(modelBeforeUpdate.dragAndDrop), {
-            onNone: () => 'Drag cancelled.',
-            onSome: id =>
-              `Drag cancelled, ${findCardTitle(modelBeforeUpdate.columns, id)} returned to original position.`,
-          }),
+          Option.match(
+            DragAndDrop.maybeDraggedItemId(modelBeforeUpdate.dragAndDrop),
+            {
+              onNone: () => 'Drag cancelled.',
+              onSome: id =>
+                `Drag cancelled, ${findCardTitle(modelBeforeUpdate.columns, id)} returned to original position.`,
+            },
+          ),
       })),
   },
 )
 
-export const DragAndDropBinding = ApplicationDefinition.makeBinding(
-  DragAndDropBlock,
+export const DragAndDropBinding = makeRequiredFieldBinding(
+  DragAndDrop.DragAndDropBlock,
   {
     field: 'dragAndDrop',
     init: { contextToArgs: () => [{ id: 'kanban' }] },

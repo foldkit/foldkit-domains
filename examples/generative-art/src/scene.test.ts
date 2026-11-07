@@ -1,9 +1,10 @@
 import { Option } from 'effect'
-import { click, expect, given, label, role, scene, text } from 'foldkit/scene'
+import { Scene } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
-import { describe, test } from 'vitest'
+import { describe } from 'vitest'
 
-import { SliderBlock } from '@foldkit/ui'
+import { it } from '@effect/vitest'
+import { Slider } from '@foldkit/ui'
 
 import {
   FLOW_STRENGTH_MAX,
@@ -15,37 +16,38 @@ import {
   NOISE_SCALE_MIN_DIVISOR,
   NOISE_SCALE_STEP,
 } from './constant'
+import { ApplicationBlock, layer } from './index'
 import { type Model, type Particle } from './model'
-import { update } from './update'
-import { view } from './view'
 
-const initialModel: typeof Model.Type = {
+const initialModel: Model = {
   particles: [],
   nextId: 0,
   elapsedSeconds: 0,
   maybeMousePosition: Option.none(),
   isRunning: true,
   flowStrength: INITIAL_FLOW_STRENGTH,
-  flowStrengthSlider: SliderBlock.init({
-    id: 'flow-strength-slider',
-    min: FLOW_STRENGTH_MIN,
-    max: FLOW_STRENGTH_MAX,
-    step: FLOW_STRENGTH_STEP,
-  }).model,
+  flowStrengthSlider: Slider.SliderBlock.Model.make({
+    ...{
+      id: 'flow-strength-slider',
+      min: FLOW_STRENGTH_MIN,
+      max: FLOW_STRENGTH_MAX,
+      step: FLOW_STRENGTH_STEP,
+    },
+    dragState: Slider.SliderBlock.Model.fields.dragState.make({ _tag: 'Idle' }),
+  }),
   noiseScale: INITIAL_NOISE_SCALE,
-  noiseScaleSlider: SliderBlock.init({
-    id: 'noise-scale-slider',
-    min: NOISE_SCALE_MIN_DIVISOR,
-    max: NOISE_SCALE_MAX_DIVISOR,
-    step: NOISE_SCALE_STEP,
-  }).model,
+  noiseScaleSlider: Slider.SliderBlock.Model.make({
+    ...{
+      id: 'noise-scale-slider',
+      min: NOISE_SCALE_MIN_DIVISOR,
+      max: NOISE_SCALE_MAX_DIVISOR,
+      step: NOISE_SCALE_STEP,
+    },
+    dragState: Slider.SliderBlock.Model.fields.dragState.make({ _tag: 'Idle' }),
+  }),
 }
 
-const makeParticle = (
-  id: number,
-  x: number,
-  y: number,
-): typeof Particle.Type => ({
+const makeParticle = (id: number, x: number, y: number): Particle => ({
   id,
   trail: [{ x, y }],
   baseHue: 200,
@@ -58,7 +60,7 @@ const makeParticle = (
   initialSpeedScale: 1,
 })
 
-const modelWithParticles = (count: number): typeof Model.Type =>
+const modelWithParticles = (count: number): Model =>
   modifyFields(initialModel, {
     particles: () =>
       Array.from({ length: count }, (_, index) =>
@@ -68,42 +70,44 @@ const modelWithParticles = (count: number): typeof Model.Type =>
   })
 
 describe('view', () => {
-  test('initial view shows Pause and Reset buttons and a zero particle counter', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(role('button', { name: 'Pause' })).toExist(),
-      expect(role('button', { name: 'Reset' })).toExist(),
-      expect(text('0 particles')).toExist(),
-    )
-  })
+  it.effect(
+    'initial view shows Pause and Reset buttons and a zero particle counter',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.expect(Scene.role('button', { name: 'Pause' })).toExist(),
+        Scene.expect(Scene.role('button', { name: 'Reset' })).toExist(),
+        Scene.expect(Scene.text('0 particles')).toExist(),
+      ),
+  )
 
-  test('clicking Pause swaps the toggle to Play', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      click(role('button', { name: 'Pause' })),
-      expect(role('button', { name: 'Play' })).toExist(),
-      expect(role('button', { name: 'Pause' })).not.toExist(),
-    )
-  })
+  it.effect('clicking Pause swaps the toggle to Play', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.click(Scene.role('button', { name: 'Pause' })),
+      Scene.expect(Scene.role('button', { name: 'Play' })).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Pause' })).not.toExist(),
+    ),
+  )
 
-  test('clicking Reset empties the particles list', () => {
-    scene(
-      { update, view },
-      given(modelWithParticles(8)),
-      expect(text('8 particles')).toExist(),
-      click(role('button', { name: 'Reset' })),
-      expect(text('0 particles')).toExist(),
-    )
-  })
+  it.effect('clicking Reset empties the particles list', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(modelWithParticles(8)),
+      Scene.expect(Scene.text('8 particles')).toExist(),
+      Scene.click(Scene.role('button', { name: 'Reset' })),
+      Scene.expect(Scene.text('0 particles')).toExist(),
+    ),
+  )
 
-  test('Turbulence and Noise scale sliders are present and labeled', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(label('Turbulence')).toExist(),
-      expect(label('Noise scale')).toExist(),
-    )
-  })
+  it.effect('Turbulence and Noise scale sliders are present and labeled', () =>
+    Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(initialModel),
+      Scene.expect(Scene.label('Turbulence')).toExist(),
+      Scene.expect(Scene.label('Noise scale')).toExist(),
+    ),
+  )
 })

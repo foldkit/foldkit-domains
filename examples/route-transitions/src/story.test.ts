@@ -1,15 +1,16 @@
 import { Array, Option } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { fromString } from 'foldkit/url'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import { LoadCatalog, LoadPainting, SaveDraft } from './command'
-import { init } from './init'
+import { ApplicationBlock, layer } from './index'
 import { Message } from './message'
 import { Model, PaintingStatus } from './model'
 import { ApplicationRoute } from './route'
-import { update } from './update'
 
 const urlOrThrow = (raw: string) =>
   Option.getOrThrowWith(
@@ -17,7 +18,7 @@ const urlOrThrow = (raw: string) =>
     () => new Error(`Failed to parse url: ${raw}`),
   )
 
-const modelOn = (route: typeof ApplicationRoute.Type): typeof Model.Type =>
+const modelOn = (route: ApplicationRoute): Model =>
   Model.make({
     route,
     transitionLog: [],
@@ -28,109 +29,121 @@ const modelOn = (route: typeof ApplicationRoute.Type): typeof Model.Type =>
   })
 
 describe('init', () => {
-  test('a cold load into the gallery logs the transition and loads the catalog', () => {
-    const init_ = init(urlOrThrow('http://localhost/gallery'))
-
-    expect(init_.model.route._tag).toBe('Gallery')
-    expect(init_.model.catalogStatus).toBe('Loading')
-    expect(init_.model.transitionLog).toHaveLength(1)
-    expect(
-      Array.map(init_.model.transitionLog, entry => entry.maybePreviousRoute),
-    ).toStrictEqual([Option.none()])
-    expect(
-      Array.some(
-        init_.commands ?? [],
-        command => command.name === LoadCatalog.name,
+  it.effect(
+    'a cold load into the gallery logs the transition and loads the catalog',
+    () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.init(urlOrThrow('http://localhost/gallery')),
+        Story.model(model => {
+          expect(model.route._tag).toBe('Gallery')
+          expect(model.catalogStatus).toBe('Loading')
+          expect(model.transitionLog).toHaveLength(1)
+          expect(
+            Array.map(model.transitionLog, entry => entry.maybePreviousRoute),
+          ).toStrictEqual([Option.none()])
+        }),
+        Story.Command.expectHas(LoadCatalog),
+        Story.Command.resolve(LoadCatalog, Message.CompletedLoadCatalog()),
       ),
-    ).toBe(true)
-  })
+  )
 
-  test('a cold load into the home route loads nothing', () => {
-    const homeInit = init(urlOrThrow('http://localhost/'))
-
-    expect(homeInit.model.route._tag).toBe('Home')
-    expect(homeInit.model.catalogStatus).toBe('Idle')
-    expect(homeInit.model.transitionLog).toHaveLength(1)
-    expect(homeInit.commands ?? []).toStrictEqual([])
-  })
+  it.effect('a cold load into the home route loads nothing', () =>
+    Story.story(
+      { block: ApplicationBlock, layer },
+      Story.init(urlOrThrow('http://localhost/')),
+      Story.model(model => {
+        expect(model.route._tag).toBe('Home')
+        expect(model.catalogStatus).toBe('Idle')
+        expect(model.transitionLog).toHaveLength(1)
+      }),
+      Story.Command.expectNone(),
+    ),
+  )
 })
 
 describe('update', () => {
-  test('entering the gallery loads the catalog and logs the transition', () => {
-    story(
-      update,
-      given(modelOn(ApplicationRoute.Home())),
-      message(
-        Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery') }),
-      ),
-      model(model => {
-        expect(model.route._tag).toBe('Gallery')
-        expect(model.catalogStatus).toBe('Loading')
-        expect(model.transitionLog).toHaveLength(1)
-      }),
-      Command.expectHas(LoadCatalog),
-      Command.resolve(LoadCatalog, Message.CompletedLoadCatalog()),
-      model(model => {
-        expect(model.catalogStatus).toBe('Ready')
-      }),
-    )
-  })
-
-  test('re-entering the gallery while a catalog load is in flight does not fire another', () => {
-    story(
-      update,
-      given(
-        modifyFields(modelOn(ApplicationRoute.Home()), {
-          catalogStatus: () => 'Loading',
+  it.effect(
+    'entering the gallery loads the catalog and logs the transition',
+    () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(modelOn(ApplicationRoute.Home())),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery') }),
+        ),
+        Story.model(model => {
+          expect(model.route._tag).toBe('Gallery')
+          expect(model.catalogStatus).toBe('Loading')
+          expect(model.transitionLog).toHaveLength(1)
+        }),
+        Story.Command.expectHas(LoadCatalog),
+        Story.Command.resolve(LoadCatalog, Message.CompletedLoadCatalog()),
+        Story.model(model => {
+          expect(model.catalogStatus).toBe('Ready')
         }),
       ),
-      message(
-        Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery') }),
-      ),
-      Command.expectNone(),
-      model(model => {
-        expect(model.catalogStatus).toBe('Loading')
-      }),
-    )
-  })
+  )
 
-  test('entering a painting loads it with the payload from the route', () => {
-    story(
-      update,
-      given(modelOn(ApplicationRoute.Gallery())),
-      message(
-        Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery/3') }),
+  it.effect(
+    're-entering the gallery while a catalog load is in flight does not fire another',
+    () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(
+          modifyFields(modelOn(ApplicationRoute.Home()), {
+            catalogStatus: () => 'Loading',
+          }),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery') }),
+        ),
+        Story.Command.expectNone(),
+        Story.model(model => {
+          expect(model.catalogStatus).toBe('Loading')
+        }),
       ),
-      model(model => {
-        expect(model.paintingStatus).toStrictEqual(
-          PaintingStatus.Loading({ paintingId: 3 }),
-        )
-      }),
-      Command.expectHas(LoadPainting),
-      Command.resolve(
-        LoadPainting,
-        Message.CompletedLoadPainting({ paintingId: 3 }),
-      ),
-      model(model => {
-        expect(model.paintingStatus).toStrictEqual(
-          PaintingStatus.Ready({ paintingId: 3 }),
-        )
-      }),
-    )
-  })
+  )
 
-  test('staying on the painting route with a new id refetches', () => {
-    story(
-      update,
-      given(
+  it.effect(
+    'entering a painting loads it with the payload from the route',
+    () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(modelOn(ApplicationRoute.Gallery())),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery/3') }),
+        ),
+        Story.model(model => {
+          expect(model.paintingStatus).toStrictEqual(
+            PaintingStatus.Loading({ paintingId: 3 }),
+          )
+        }),
+        Story.Command.expectHas(LoadPainting),
+        Story.Command.resolve(
+          LoadPainting,
+          Message.CompletedLoadPainting({ paintingId: 3 }),
+        ),
+        Story.model(model => {
+          expect(model.paintingStatus).toStrictEqual(
+            PaintingStatus.Ready({ paintingId: 3 }),
+          )
+        }),
+      ),
+  )
+
+  it.effect('staying on the painting route with a new id refetches', () =>
+    Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(
         modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 1 })), {
           paintingStatus: () => PaintingStatus.Ready({ paintingId: 1 }),
         }),
       ),
-      message(
+      Story.message(
         Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery/2') }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.paintingStatus).toStrictEqual(
           PaintingStatus.Loading({ paintingId: 2 }),
         )
@@ -140,84 +153,90 @@ describe('update', () => {
           Option.some(ApplicationRoute.Painting({ paintingId: 1 })),
         ])
       }),
-      Command.expectHas(LoadPainting),
-      Command.resolve(
+      Story.Command.expectHas(LoadPainting),
+      Story.Command.resolve(
         LoadPainting,
         Message.CompletedLoadPainting({ paintingId: 2 }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.paintingStatus).toStrictEqual(
           PaintingStatus.Ready({ paintingId: 2 }),
         )
       }),
-    )
-  })
+    ),
+  )
 
-  test('staying on the painting route with the same id does not refetch', () => {
-    story(
-      update,
-      given(
-        modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 1 })), {
-          paintingStatus: () => PaintingStatus.Ready({ paintingId: 1 }),
+  it.effect(
+    'staying on the painting route with the same id does not refetch',
+    () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(
+          modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 1 })), {
+            paintingStatus: () => PaintingStatus.Ready({ paintingId: 1 }),
+          }),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery/1') }),
+        ),
+        Story.Command.expectNone(),
+        Story.model(model => {
+          expect(model.paintingStatus).toStrictEqual(
+            PaintingStatus.Ready({ paintingId: 1 }),
+          )
         }),
       ),
-      message(
-        Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery/1') }),
-      ),
-      Command.expectNone(),
-      model(model => {
-        expect(model.paintingStatus).toStrictEqual(
-          PaintingStatus.Ready({ paintingId: 1 }),
-        )
-      }),
-    )
-  })
+  )
 
-  test('a stale painting response for another id is ignored', () => {
-    story(
-      update,
-      given(
+  it.effect('a stale painting response for another id is ignored', () =>
+    Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(
         modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 2 })), {
           paintingStatus: () => PaintingStatus.Loading({ paintingId: 2 }),
         }),
       ),
-      message(Message.CompletedLoadPainting({ paintingId: 1 })),
-      model(model => {
+      Story.message(Message.CompletedLoadPainting({ paintingId: 1 })),
+      Story.model(model => {
         expect(model.paintingStatus).toStrictEqual(
           PaintingStatus.Loading({ paintingId: 2 }),
         )
       }),
-    )
-  })
+    ),
+  )
 
-  test('leaving the studio saves the draft', () => {
-    story(
-      update,
-      given(
+  it.effect('leaving the studio saves the draft', () =>
+    Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(
         modifyFields(modelOn(ApplicationRoute.Studio()), {
           studioDraft: () => 'half-finished thought',
         }),
       ),
-      message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
-      Command.expectHas(SaveDraft),
-      Command.resolve(
+      Story.message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/') }),
+      ),
+      Story.Command.expectHas(SaveDraft),
+      Story.Command.resolve(
         SaveDraft,
         Message.CompletedSaveDraft({ draft: 'half-finished thought' }),
       ),
-      model(model => {
+      Story.model(model => {
         expect(model.maybeSavedDraft).toStrictEqual(
           Option.some('half-finished thought'),
         )
       }),
-    )
-  })
+    ),
+  )
 
-  test('leaving the studio with an empty draft saves nothing', () => {
-    story(
-      update,
-      given(modelOn(ApplicationRoute.Studio())),
-      message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
-      Command.expectNone(),
-    )
-  })
+  it.effect('leaving the studio with an empty draft saves nothing', () =>
+    Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(modelOn(ApplicationRoute.Studio())),
+      Story.message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/') }),
+      ),
+      Story.Command.expectNone(),
+    ),
+  )
 })

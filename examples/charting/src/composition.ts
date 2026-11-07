@@ -2,8 +2,13 @@ import { Array, Option, pipe } from 'effect'
 import { AsyncData, type Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import {
+  makeComposition,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from './block'
 import { FetchTelemetry, SyncChart } from './command'
-import { ApplicationDefinition, makeStep } from './definition'
 import { Model } from './model'
 import { MountChart } from './mount'
 import {
@@ -16,12 +21,12 @@ import {
 } from './radioGroups'
 
 export const syncChart = (args: {
-  maybeChartHostId: (typeof Model.Type)['maybeChartHostId']
-  telemetry: (typeof Model.Type)['telemetry']
-  chartMode: (typeof Model.Type)['chartMode']
-  selectedPackageId: (typeof Model.Type)['selectedPackageId']
-  period: (typeof Model.Type)['period']
-  maybeSelectedDatumId: (typeof Model.Type)['maybeSelectedDatumId']
+  maybeChartHostId: Model['maybeChartHostId']
+  telemetry: Model['telemetry']
+  chartMode: Model['chartMode']
+  selectedPackageId: Model['selectedPackageId']
+  period: Model['period']
+  maybeSelectedDatumId: Model['maybeSelectedDatumId']
 }) =>
   pipe(
     args.maybeChartHostId,
@@ -40,7 +45,7 @@ export const syncChart = (args: {
     Array.fromOption,
   )
 
-export const refetchTelemetry = (model: typeof Model.Type) =>
+export const refetchTelemetry = (model: Model) =>
   Option.match(AsyncData.revalidateOrLoad(model.telemetry), {
     onNone: () => ({ model }),
     onSome: nextTelemetry => ({
@@ -49,9 +54,7 @@ export const refetchTelemetry = (model: typeof Model.Type) =>
     }),
   })
 
-const selectControlStep = (
-  updateModel: (model: typeof Model.Type) => typeof Model.Type,
-) =>
+const selectControl = (updateModel: (model: Model) => Model) =>
   makeStep(model => {
     const nextModel = updateModel(
       modifyFields(model, { maybeSelectedDatumId: () => Option.none() }),
@@ -70,46 +73,46 @@ const selectControlStep = (
     }
   })
 
-export const ChartModeRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const ChartModeRadioGroupBinding = makeRequiredFieldBinding(
   ChartModeRadioGroupBlock,
   {
     field: 'chartModeRadioGroup',
     init: { contextToArgs: () => [{ id: CHART_MODE_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ChartModeRadioGroupBlock, {
+  fold: makeOutMessageFold(ChartModeRadioGroupBlock, {
     Selected: ({ value }) =>
-      selectControlStep(modifyFields({ chartMode: () => value })),
+      selectControl(modifyFields({ chartMode: () => value })),
   }),
 })
 
-export const PeriodRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const PeriodRadioGroupBinding = makeRequiredFieldBinding(
   PeriodRadioGroupBlock,
   {
     field: 'periodRadioGroup',
     init: { contextToArgs: () => [{ id: PERIOD_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(PeriodRadioGroupBlock, {
+  fold: makeOutMessageFold(PeriodRadioGroupBlock, {
     Selected: ({ value }) =>
-      selectControlStep(modifyFields({ period: () => value })),
+      selectControl(modifyFields({ period: () => value })),
   }),
 })
 
-export const PackageRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const PackageRadioGroupBinding = makeRequiredFieldBinding(
   PackageRadioGroupBlock,
   {
     field: 'packageRadioGroup',
     init: { contextToArgs: () => [{ id: PACKAGE_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(PackageRadioGroupBlock, {
+  fold: makeOutMessageFold(PackageRadioGroupBlock, {
     Selected: ({ value }) =>
-      selectControlStep(modifyFields({ selectedPackageId: () => value })),
+      selectControl(modifyFields({ selectedPackageId: () => value })),
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   mounts: [MountChart],
   bindings: [
     ChartModeRadioGroupBinding,

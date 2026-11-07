@@ -6,6 +6,7 @@ import { makeDefinition } from './define.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ value: Schema.String })
+type ChildModel = typeof ChildModel.Type
 
 const ChildComposition = makeDefinition('ChildPlacementChild', {
   Model: ChildModel,
@@ -22,39 +23,41 @@ const ChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 > = Block.assemble(prepareChildBlock)
 
 const Entry = Schema.Struct({ id: Schema.String, child: ChildModel })
+type Entry = typeof Entry.Type
 const ParentModel = Schema.Struct({
   primary: ChildModel,
   secondary: ChildModel,
   maybeChild: Schema.Option(ChildModel),
   entries: Schema.Array(Entry),
 })
+type ParentModel = typeof ParentModel.Type
 
 const Parent = makeDefinition('ChildPlacementParent', {
   Model: ParentModel,
   Message: Schema.Never,
 })
 
-const PrimaryBinding = Parent.makeBinding(ChildBlock, {
+const PrimaryBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
   field: 'primary',
 })
 
-const SecondaryAtPrimaryBinding = Parent.makeBinding(ChildBlock, {
+const SecondaryAtPrimaryBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
   field: 'secondary',
   placement: 'primary',
 })
 
-const SecondaryBinding = Parent.makeBinding(ChildBlock, {
+const SecondaryBinding = Parent.makeRequiredFieldBinding(ChildBlock, {
   field: 'secondary',
 })
 
-const OptionalBinding = Parent.makeBinding(ChildBlock, {
+const OptionalBinding = Parent.makeCustomBinding(ChildBlock, {
   placement: 'optional',
   read: model => model.maybeChild,
   write: (model, nextChild) =>
     modifyFields(model, { maybeChild: () => Option.some(nextChild) }),
 })
 
-const EntriesBinding = Parent.makeBinding(ChildBlock, {
+const EntriesBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   placement: 'entries',
   readAll: model => model.entries,
   key: entry => entry.id,
@@ -62,7 +65,7 @@ const EntriesBinding = Parent.makeBinding(ChildBlock, {
   writeAt: model => model,
 })
 
-const EntriesAtOptionalBinding = Parent.makeBinding(ChildBlock, {
+const EntriesAtOptionalBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   placement: 'optional',
   readAll: model => model.entries,
   key: entry => entry.id,
@@ -70,27 +73,30 @@ const EntriesAtOptionalBinding = Parent.makeBinding(ChildBlock, {
   writeAt: model => model,
 })
 
-const DefaultAccessorBinding = Parent.makeBinding(ChildBlock, {
+const DefaultAccessorBinding = Parent.makeCustomBinding(ChildBlock, {
   read: model => model.maybeChild,
   write: (model, nextChild) =>
     modifyFields(model, { maybeChild: () => Option.some(nextChild) }),
 })
 
-const DefaultEntriesByIdBinding = Parent.makeBinding(ChildBlock, {
+const DefaultEntriesByIdBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   readAll: model => model.entries,
   key: entry => entry.id,
   read: entry => entry.child,
   writeAt: model => model,
 })
 
-const DefaultEntriesByIdLengthBinding = Parent.makeBinding(ChildBlock, {
-  readAll: model => model.entries,
-  key: entry => entry.id.length,
-  read: entry => entry.child,
-  writeAt: model => model,
-})
+const DefaultEntriesByIdLengthBinding = Parent.makeCustomKeyedBinding(
+  ChildBlock,
+  {
+    readAll: model => model.entries,
+    key: entry => entry.id.length,
+    read: entry => entry.child,
+    writeAt: model => model,
+  },
+)
 
-const EntriesByIdBinding = Parent.makeBinding(ChildBlock, {
+const EntriesByIdBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   placement: 'entriesById',
   readAll: model => model.entries,
   key: entry => entry.id,
@@ -98,7 +104,7 @@ const EntriesByIdBinding = Parent.makeBinding(ChildBlock, {
   writeAt: model => model,
 })
 
-const EntriesByIdLengthBinding = Parent.makeBinding(ChildBlock, {
+const EntriesByIdLengthBinding = Parent.makeCustomKeyedBinding(ChildBlock, {
   placement: 'entriesByIdLength',
   readAll: model => model.entries,
   key: entry => entry.id.length,
