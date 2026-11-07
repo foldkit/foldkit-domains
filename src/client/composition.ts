@@ -3,17 +3,17 @@ import { Block } from 'foldkit'
 import { DialogBlock } from '@foldkit/ui'
 
 import {
-  FocusCartButton,
-  FocusFiltersButton,
-  FocusTldFilterButton,
-} from './command'
-import {
-  makeBinding,
   makeCommandsStep,
   makeComposition,
   makeNoopStep,
   makeOutMessageFold,
-} from './definition'
+  makeRequiredFieldBinding,
+} from './block'
+import {
+  FocusCartButton,
+  FocusFiltersButton,
+  FocusTldFilterButton,
+} from './command'
 import { DomainsQuery } from './domainsQuery'
 import {
   AVAILABILITY_FILTER_ID,
@@ -34,7 +34,7 @@ import {
   updateTldFilter,
 } from './steps/filters'
 
-export const ResultsListBinding = makeBinding(ResultsListBlock, {
+export const ResultsListBinding = makeRequiredFieldBinding(ResultsListBlock, {
   field: 'resultsList',
   init: {
     contextToArgs: () => [resultsListConfig],
@@ -49,7 +49,7 @@ export const ResultsListBinding = makeBinding(ResultsListBlock, {
 
 export const CART_DIALOG_ID = 'domains-cart'
 
-export const CartDialogBinding = makeBinding(DialogBlock, {
+export const CartDialogBinding = makeRequiredFieldBinding(DialogBlock, {
   field: 'cartDialog',
   init: { contextToArgs: () => [{ id: CART_DIALOG_ID }] },
 }).withOutMessagePolicy({
@@ -62,7 +62,7 @@ export const CartDialogBinding = makeBinding(DialogBlock, {
 
 export const FILTERS_DIALOG_ID = 'domains-filters'
 
-export const FiltersDialogBinding = makeBinding(DialogBlock, {
+export const FiltersDialogBinding = makeRequiredFieldBinding(DialogBlock, {
   field: 'filtersDialog',
   init: { contextToArgs: () => [{ id: FILTERS_DIALOG_ID, isAnimated: true }] },
 }).withOutMessagePolicy({
@@ -75,7 +75,7 @@ export const FiltersDialogBinding = makeBinding(DialogBlock, {
 
 export const TLD_DIALOG_ID = 'domains-tld-filter'
 
-export const TldDialogBinding = makeBinding(DialogBlock, {
+export const TldDialogBinding = makeRequiredFieldBinding(DialogBlock, {
   field: 'tldDialog',
   init: { contextToArgs: () => [{ id: TLD_DIALOG_ID, isAnimated: true }] },
 }).withOutMessagePolicy({
@@ -86,7 +86,7 @@ export const TldDialogBinding = makeBinding(DialogBlock, {
   }),
 })
 
-export const DomainsQueryBinding = makeBinding(DomainsQuery, {
+export const DomainsQueryBinding = makeRequiredFieldBinding(DomainsQuery, {
   field: 'domainsQuery',
 }).withOutMessagePolicy({
   fold: makeOutMessageFold(DomainsQuery, {
@@ -94,7 +94,7 @@ export const DomainsQueryBinding = makeBinding(DomainsQuery, {
   }),
 })
 
-export const TldListboxBinding = makeBinding(TldListboxBlock, {
+export const TldListboxBinding = makeRequiredFieldBinding(TldListboxBlock, {
   field: 'tldListbox',
   init: { contextToArgs: () => [{ id: TLD_FILTER_ID }] },
 }).withOutMessagePolicy({
@@ -103,7 +103,7 @@ export const TldListboxBinding = makeBinding(TldListboxBlock, {
   }),
 })
 
-export const AvailabilityListboxBinding = makeBinding(
+export const AvailabilityListboxBinding = makeRequiredFieldBinding(
   AvailabilityListboxBlock,
   {
     field: 'availabilityListbox',
@@ -115,7 +115,7 @@ export const AvailabilityListboxBinding = makeBinding(
   }),
 })
 
-export const SortListboxBinding = makeBinding(SortListboxBlock, {
+export const SortListboxBinding = makeRequiredFieldBinding(SortListboxBlock, {
   field: 'sortListbox',
   init: { contextToArgs: () => [{ id: SORT_ORDER_ID }] },
 }).withOutMessagePolicy({

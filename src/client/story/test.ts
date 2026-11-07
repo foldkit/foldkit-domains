@@ -1,5 +1,5 @@
 import { Array, Option, Result, String } from 'effect'
-import { Command, type StorySimulation, message, steps } from 'foldkit/story'
+import { Story } from 'foldkit'
 
 import { VirtualList } from '@foldkit/ui'
 
@@ -11,24 +11,11 @@ import {
   DomainsQueryFailure,
 } from '../domainsQuery'
 import { Message } from '../message'
-import { urlOrThrow } from '../model.fixture'
+import { domainsRequestKey, urlOrThrow } from '../model.fixture'
 import { ResultsListBlock } from '../resultsList'
 import { searchHref } from '../route'
 
-export const domainsRequestKey = (args: DomainsQueryArgs) => {
-  const request = DomainsQuery.requestRevalidationOrLoad(
-    DomainsQuery.init().model,
-    args,
-  )
-
-  return Option.getOrThrow(
-    Array.head(
-      Array.getSomes(
-        Array.map(request.commands ?? [], Command.argsOf(DomainsQuery.Fetch)),
-      ),
-    ),
-  ).requestKey
-}
+export { domainsRequestKey } from '../model.fixture'
 
 export const makeDomainsFetch = (args: DomainsQueryArgs, generation: number) =>
   DomainsQuery.Fetch({
@@ -44,7 +31,7 @@ export const resolveSearchTime = (
   limit = 4,
   isRefreshRequested = false,
 ) =>
-  Command.resolve(
+  Story.Command.resolve(
     ReadCurrentTime({
       searchGeneration,
       offset,
@@ -65,15 +52,15 @@ export const changeSearchQuery = (
   searchGeneration: number,
   nowMillis: number,
 ) =>
-  steps(
-    message(Message.UpdatedSearch({ value: query })),
-    Command.resolve(
+  Story.steps(
+    Story.message(Message.UpdatedSearch({ value: query })),
+    Story.Command.resolve(
       ReplaceSearchUrl({
         q: Option.liftPredicate(query, String.isNonEmpty),
       }),
       Message.CompletedReplaceSearchUrl(),
     ),
-    message(
+    Story.message(
       Message.ChangedUrl({
         url: urlOrThrow(`http://localhost${searchHref(query)}`),
       }),
@@ -87,7 +74,7 @@ export const resolveDomainsSuccess = (
   domains: ReadonlyArray<Domain>,
   completedAtMillis = 0,
 ) =>
-  Command.resolve(
+  Story.Command.resolve(
     makeDomainsFetch(args, generation),
     DomainsQuery.Message.CompletedFetch({
       args,
@@ -105,7 +92,7 @@ export const resolveRemainingFirstPageDomains = (
   domains: ReadonlyArray<Domain>,
   nowMillis = 0,
 ) =>
-  steps(
+  Story.steps(
     resolveSearchTime(searchGeneration, nowMillis, 4, 56),
     resolveDomainsSuccess(
       { label, offset: 4, limit: 56 },
@@ -121,7 +108,7 @@ export const resolveDomainsFailure = (
   failure: DomainsQueryFailure,
   completedAtMillis = 0,
 ) =>
-  Command.resolve(
+  Story.Command.resolve(
     makeDomainsFetch(args, generation),
     DomainsQuery.Message.CompletedFetch({
       args,
@@ -136,7 +123,7 @@ export const resolveDomainsCancellation = (
   args: DomainsQueryArgs,
   generation: number,
 ) =>
-  Command.resolve(
+  Story.Command.resolve(
     DomainsQuery.Fetch.Interrupt(
       { requestKey: domainsRequestKey(args), generation },
       () => DomainsQuery.Message.CompletedCancelFetch(),
@@ -145,13 +132,13 @@ export const resolveDomainsCancellation = (
   )
 
 export const resolveResultsListScrolls = <Model, Message, OutMessage>(
-  simulation: StorySimulation<Model, Message, OutMessage>,
-): StorySimulation<Model, Message, OutMessage> =>
+  simulation: Story.StorySimulation<Model, Message, OutMessage>,
+): Story.StorySimulation<Model, Message, OutMessage> =>
   Array.reduce(simulation.commands, simulation, (current, command) =>
-    Option.match(Command.argsOf(VirtualList.test.ApplyScroll)(command), {
+    Option.match(Story.Command.argsOf(VirtualList.test.ApplyScroll)(command), {
       onNone: () => current,
       onSome: args =>
-        Command.resolve(
+        Story.Command.resolve(
           VirtualList.test.ApplyScroll(args),
           ResultsListBlock.Message.CompletedApplyScroll({
             version: args.version,

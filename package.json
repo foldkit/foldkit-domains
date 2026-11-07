@@ -21,19 +21,20 @@
     "generate:social": "node scripts/generate-social-assets.ts"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.0.6",
-    "@foldkit/devtools": "0.169.0-canary.90746b32d2ca",
-    "@foldkit/ui": "0.169.0-canary.90746b32d2ca",
+    "@effect/platform-browser": "4.1.0",
+    "@foldkit/devtools": "file:vendor/foldkit/29b3f80e4048/foldkit-devtools-0.170.0-canary.29b3f80e4048.tgz",
+    "@foldkit/ui": "file:vendor/foldkit/29b3f80e4048/foldkit-ui-0.170.0-canary.29b3f80e4048.tgz",
     "@fontsource-variable/geist": "^5.3.0",
-    "effect": "4.0.6",
-    "foldkit": "0.169.0-canary.90746b32d2ca"
+    "effect": "4.1.0",
+    "foldkit": "file:vendor/foldkit/29b3f80e4048/foldkit-0.170.0-canary.29b3f80e4048.tgz"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@effect/tsgo": "0.50.0",
-    "@foldkit/devtools-mcp": "0.25.0-canary.90746b32d2ca",
-    "@foldkit/oxlint-plugin": "0.15.3-canary.90746b32d2ca",
-    "@foldkit/vite-plugin": "0.28.0-canary.90746b32d2ca",
+    "@effect/vitest": "4.1.0",
+    "@foldkit/devtools-mcp": "file:vendor/foldkit/29b3f80e4048/foldkit-devtools-mcp-0.26.0-canary.29b3f80e4048.tgz",
+    "@foldkit/oxlint-plugin": "file:vendor/foldkit/29b3f80e4048/foldkit-oxlint-plugin-0.15.4-canary.29b3f80e4048.tgz",
+    "@foldkit/vite-plugin": "file:vendor/foldkit/29b3f80e4048/foldkit-vite-plugin-0.29.0-canary.29b3f80e4048.tgz",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.4.0",
@@ -51,7 +52,7 @@
   "private": true,
   "description": "A domain-search showcase built with Cloudflare, Alchemy, Foldkit, and Effect",
   "license": "MIT",
-  "packageManager": "pnpm@12.4.2",
+  "packageManager": "pnpm@12.18.0",
   "engines": {
     "node": ">=24.11.1"
   }

@@ -1,27 +1,33 @@
 import { Array } from 'effect'
-import { Command } from 'foldkit/story'
-import { describe, expect, test } from 'vitest'
+import { Story } from 'foldkit'
+import { describe, expect } from 'vitest'
 
+import { it } from '@effect/vitest'
+
+import { makeDomainFixtures } from '../shared/domain.fixture'
+import { ApplicationBlock } from './block'
 import { ReadCurrentTime, ReleaseEarlySearchListeners } from './command'
-import { init } from './init'
+import { layer } from './layer'
+import { Message } from './message'
 import { urlOrThrow } from './model.fixture'
 import { routeToQuery } from './route'
 import { searchViewState } from './searchViewState'
+import {
+  resolveDomainsSuccess,
+  resolveRemainingFirstPageDomains,
+  resolveResultsListScrolls,
+  resolveSearchTime,
+} from './story/test'
 
 describe('startup', () => {
-  test.each([
+  it.effect.each([
     { path: '/', query: '', viewStateTag: 'Idle', clocks: [] },
     {
       path: '/?q=Acme.dev',
       query: 'Acme.dev',
       viewStateTag: 'Loading',
       clocks: [
-        {
-          searchGeneration: 1,
-          offset: 0,
-          limit: 4,
-          isRefreshRequested: false,
-        },
+        { searchGeneration: 1, offset: 0, limit: 4, isRefreshRequested: false },
       ],
     },
     {
@@ -33,31 +39,43 @@ describe('startup', () => {
     { path: '/?q=', query: '', viewStateTag: 'Idle', clocks: [] },
   ])(
     'initializes $path from the URL and clocks valid searches before loading domain results',
-    ({ path, query, viewStateTag, clocks }) => {
-      const applicationInit = init(urlOrThrow(`http://localhost${path}`))
-
-      expect(applicationInit.model.searchLayout).toBe(
-        query ? 'Search' : 'Landing',
-      )
-      expect(applicationInit.model.cart).toEqual([])
-      expect(routeToQuery(applicationInit.model.route)).toBe(query)
-      expect(searchViewState(applicationInit.model)._tag).toBe(viewStateTag)
-      expect(
-        Array.getSomes(
-          Array.map(
-            applicationInit.commands ?? [],
-            Command.argsOf(ReadCurrentTime),
-          ),
+    ({ path, query, viewStateTag, clocks }) =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.init(urlOrThrow(`http://localhost${path}`)),
+        Story.model(model => {
+          expect(model.searchLayout).toBe(query ? 'Search' : 'Landing')
+          expect(model.cart).toEqual([])
+          expect(routeToQuery(model.route)).toBe(query)
+          expect(searchViewState(model)._tag).toBe(viewStateTag)
+        }),
+        resolveResultsListScrolls,
+        Story.Command.expectExact(
+          ReleaseEarlySearchListeners(),
+          ...Array.map(clocks, clock => ReadCurrentTime(clock)),
         ),
-      ).toEqual(clocks)
-      expect(
-        Array.getSomes(
-          Array.map(
-            applicationInit.commands ?? [],
-            Command.argsOf(ReleaseEarlySearchListeners),
-          ),
+        Story.Command.resolve(
+          ReleaseEarlySearchListeners,
+          Message.CompletedReleaseEarlySearchListeners({
+            isSearchStarted: false,
+          }),
         ),
-      ).toHaveLength(1)
-    },
+        ...Array.flatMap(clocks, () => [
+          resolveSearchTime(1, 0),
+          resolveDomainsSuccess(
+            { label: 'acme', offset: 0, limit: 4 },
+            1,
+            Array.take(makeDomainFixtures('acme'), 4),
+          ),
+          resolveRemainingFirstPageDomains(
+            'acme',
+            1,
+            2,
+            Array.take(Array.drop(makeDomainFixtures('acme'), 4), 56),
+          ),
+        ]),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      ),
   )
 })

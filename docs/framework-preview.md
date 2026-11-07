@@ -1,27 +1,33 @@
 # Framework preview notes
 
-This app exercises the unreleased Blocks and Layers API. The configuration below makes this checkout reproducible and records the integration work required by its pinned preview.
+This app exercises the unreleased Blocks and Layers API. Its package archives and reference source are pinned to one framework commit so a fresh checkout builds independently of another local repository.
 
-## Package versions
+## Package snapshot
 
-This app uses the unreleased Blocks and Layers preview at commit `90746b32d2ca8bc0476de7a051ace396ca590ae0`. All six Foldkit packages are pinned to the matching published npm canary versions, with exact versions and archive integrity in the lockfile. A fresh checkout builds without another framework checkout. The `create-foldkit-app` SSG scaffold supplies the build, development tooling, and framework conventions.
+The framework source is commit `29b3f80e4048996e43f3d3b1262870a96c3b005b` from `codex/preview-startup-testing-20261106`. The six packages are built from that commit and stored under `vendor/foldkit/29b3f80e4048/`; application dependencies use project-relative `file:` paths. These are local commit archives, not published npm releases.
 
-The application and infrastructure use Effect `4.0.6`, one of the patch versions verified by the Foldkit preview. Alchemy and its Cloudflare integration are pinned to `2.0.0-beta.84`. Each workspace typechecks with its own compiler; the application retains the scaffolded TypeScript preview.
+| Packages                                      | Version                       |
+| --------------------------------------------- | ----------------------------- |
+| `foldkit`, `@foldkit/ui`, `@foldkit/devtools` | `0.170.0-canary.29b3f80e4048` |
+| `@foldkit/devtools-mcp`                       | `0.26.0-canary.29b3f80e4048`  |
+| `@foldkit/oxlint-plugin`                      | `0.15.4-canary.29b3f80e4048`  |
+| `@foldkit/vite-plugin`                        | `0.29.0-canary.29b3f80e4048`  |
 
-## Development rendering
+The adjacent `manifest.json` records the source tree, build process, exact package versions, archive hashes, internal dependencies, and package verification. The source commit's release tooling stamps coherent canary versions and exact internal peers. The lockfile records the local archive integrity.
 
-Development uses a shared build identity across client and SSR environments, working around separate identities in the pinned preview. Foldkit’s Vite plugin refreshes the SSR module graph during development updates, and the server entry disposes its RPC handler before reevaluation.
+The application and infrastructure use Effect and platform adapters `4.1.0`. Alchemy and its Cloudflare integration are pinned to `2.0.0-beta.85`. Each workspace typechecks with its own compiler; the application retains the scaffolded TypeScript preview.
 
-## Framework source and UI patch
+Use pnpm `12.18.0`, pinned in `package.json`. It includes the fix for [incorrect peer warnings for local tarballs](https://github.com/pnpm/pnpm/issues/15298). Peer validation runs against the archives without ignore rules.
 
-`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to `90746b32d2ca8bc0476de7a051ace396ca590ae0`. It supplies source, examples, and documentation matching the installed preview packages. Application imports resolve through the installed packages. The app's formatting commands use its root configuration and skip the subtree.
+## Rendering and UI integration
 
-The UI dependency patch preserves responsive scroll anchors and accepts native
-scroll observations when their offset changes during a pending row-layout update.
-When the page viewport starts above the list, it preserves the signed offset
-instead of following a row that moves during sorting or filtering. Browser
-coverage protects resize anchoring, sorting without page jumps, and returning
-to the first catalog row with Home.
+Foldkit's Vite plugin coordinates client and SSR build identity and injects the installed DevTools overlay into the browser entry. The app supplies its document metadata and early search bootstrap. During development, the server entry disposes its RPC handler before module reevaluation.
+
+The framework supplies the VirtualList scroll fixes for responsive measurements, native scroll observations during layout updates, and preserving the page offset when sorting before the list origin. Browser coverage protects resize anchoring, sorting without page jumps, and returning to the first catalog row with Home.
+
+## Reference source
+
+`repos/foldkit` is a read-only Git subtree of [foldkit/foldkit](https://github.com/foldkit/foldkit), pinned to the same source commit as the archives. It supplies matching examples and documentation. Application imports resolve through the installed packages. Formatting commands use the app's root configuration and skip the subtree.
 
 When upgrading Foldkit, pull the subtree at the commit or release tag matching the new package versions:
 

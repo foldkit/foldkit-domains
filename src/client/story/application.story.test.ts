@@ -1,13 +1,14 @@
-import { Array, Option, Result } from 'effect'
+import { Array, Effect, Option, Result } from 'effect'
+import { Story } from 'foldkit'
 import { UrlRequest } from 'foldkit/navigation'
-import { Command, given, message, model, story } from 'foldkit/story'
-import { toParentMessage } from 'foldkit/test'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
 
+import { it } from '@effect/vitest'
 import { VirtualList } from '@foldkit/ui'
 
 import { Domain } from '../../shared/domain'
 import { makeDomainFixtures } from '../../shared/domain.fixture'
+import { ApplicationBlock } from '../block'
 import {
   FocusSearchInput,
   LoadExternal,
@@ -17,12 +18,12 @@ import {
 } from '../command'
 import { DomainsQueryBinding, ResultsListBinding } from '../composition'
 import { DomainsQuery, DomainsQueryFailure } from '../domainsQuery'
+import { layer } from '../layer'
 import { Message } from '../message'
 import { emptyModel, readyModel, urlOrThrow } from '../model.fixture'
 import { ResultsListBlock } from '../resultsList'
 import { ApplicationRoute, routeToQuery, searchHref } from '../route'
 import { SearchViewState, searchViewState } from '../searchViewState'
-import { update } from '../update'
 import {
   domainsRequestKey,
   makeDomainsFetch,
@@ -33,172 +34,196 @@ import {
   resolveSearchTime,
 } from './test'
 
-test('typing synchronizes the URL before the route starts its domain request', () => {
-  const args = {
-    label: 'fresh',
-    offset: 0,
-    limit: 4,
-  }
+it.effect(
+  'typing synchronizes the URL before the route starts its domain request',
+  () =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
 
-  story(
-    update,
-    given(emptyModel),
-    message(Message.UpdatedSearch({ value: 'fresh' })),
-    model(model => {
-      expect(model.route).toEqual(emptyModel.route)
-      expect(model.searchGeneration).toBe(1)
-      expect(model.searchLayout).toBe('Search')
-      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
-    }),
-    Command.expectExact(ReplaceSearchUrl({ q: Option.some('fresh') })),
-    Command.resolve(
-      ReplaceSearchUrl({ q: Option.some('fresh') }),
-      Message.CompletedReplaceSearchUrl(),
-    ),
-    message(
-      Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=fresh') }),
-    ),
-    model(model => {
-      expect(model.route).toEqual(
-        ApplicationRoute.Search({ q: Option.some('fresh') }),
+      const args = {
+        label: 'fresh',
+        offset: 0,
+        limit: 4,
+      }
+
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(Message.UpdatedSearch({ value: 'fresh' })),
+        Story.model(model => {
+          expect(model.route).toEqual(initialEmptyModel.route)
+          expect(model.searchGeneration).toBe(1)
+          expect(model.searchLayout).toBe('Search')
+          expect(searchViewState(model)).toEqual(SearchViewState.Idle())
+        }),
+        Story.Command.expectExact(
+          ReplaceSearchUrl({ q: Option.some('fresh') }),
+        ),
+        Story.Command.resolve(
+          ReplaceSearchUrl({ q: Option.some('fresh') }),
+          Message.CompletedReplaceSearchUrl(),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=fresh') }),
+        ),
+        Story.model(model => {
+          expect(model.route).toEqual(
+            ApplicationRoute.Search({ q: Option.some('fresh') }),
+          )
+          expect(model.searchGeneration).toBe(2)
+          expect(searchViewState(model)).toEqual(SearchViewState.Loading())
+        }),
+        resolveSearchTime(2, 100),
+        Story.Command.expectHas(makeDomainsFetch(args, 1)),
+        resolveDomainsSuccess(
+          args,
+          1,
+          Array.take(makeDomainFixtures('fresh'), 4),
+          120,
+        ),
+        Story.model(model => {
+          expect(searchViewState(model)._tag).toBe('Ready')
+        }),
+        resolveRemainingFirstPageDomains(
+          'fresh',
+          2,
+          2,
+          Array.take(Array.drop(makeDomainFixtures('fresh'), 4), 56),
+          120,
+        ),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
       )
-      expect(model.searchGeneration).toBe(2)
-      expect(searchViewState(model)).toEqual(SearchViewState.Loading())
     }),
-    resolveSearchTime(2, 100),
-    Command.expectHas(makeDomainsFetch(args, 1)),
-    resolveDomainsSuccess(
-      args,
-      1,
-      Array.take(makeDomainFixtures('fresh'), 4),
-      120,
-    ),
-    model(model => {
-      expect(searchViewState(model)._tag).toBe('Ready')
-    }),
-    resolveRemainingFirstPageDomains(
-      'fresh',
-      2,
-      2,
-      Array.take(Array.drop(makeDomainFixtures('fresh'), 4), 56),
-      120,
-    ),
-    resolveResultsListScrolls,
-    Command.expectNone(),
-  )
-})
+)
 
 describe('domain validation', () => {
-  test.each([
+  it.effect.each([
     { query: '  HTTPS://MiXeD-Name.dev/path  ', label: 'mixed-name' },
     { query: 'a', label: 'a' },
     { query: 'a'.repeat(63), label: 'a'.repeat(63) },
-  ])('searches the normalized label for $query', ({ query, label }) => {
-    const args = {
-      label,
-      offset: 0,
-      limit: 4,
-    }
+  ])('searches the normalized label for $query', ({ query, label }) =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
 
-    story(
-      update,
-      given(emptyModel),
-      message(
-        Message.ChangedUrl({
-          url: urlOrThrow(`http://localhost${searchHref(query)}`),
-        }),
-      ),
-      resolveSearchTime(1, 0),
-      Command.expectHas(makeDomainsFetch(args, 1)),
-      resolveDomainsSuccess(args, 1, Array.take(makeDomainFixtures(label), 4)),
-      model(model => {
-        expect(routeToQuery(model.route)).toBe(query)
-        expect(searchViewState(model)._tag).toBe('Ready')
-      }),
-      resolveRemainingFirstPageDomains(
+      const args = {
         label,
-        1,
-        2,
-        Array.take(Array.drop(makeDomainFixtures(label), 4), 56),
-      ),
-      resolveResultsListScrolls,
-      Command.expectNone(),
-    )
-  })
+        offset: 0,
+        limit: 4,
+      }
 
-  test.each([
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(
+          Message.ChangedUrl({
+            url: urlOrThrow(`http://localhost${searchHref(query)}`),
+          }),
+        ),
+        resolveSearchTime(1, 0),
+        Story.Command.expectHas(makeDomainsFetch(args, 1)),
+        resolveDomainsSuccess(
+          args,
+          1,
+          Array.take(makeDomainFixtures(label), 4),
+        ),
+        Story.model(model => {
+          expect(routeToQuery(model.route)).toBe(query)
+          expect(searchViewState(model)._tag).toBe('Ready')
+        }),
+        resolveRemainingFirstPageDomains(
+          label,
+          1,
+          2,
+          Array.take(Array.drop(makeDomainFixtures(label), 4), 56),
+        ),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      )
+    }),
+  )
+
+  it.effect.each([
     'not a domain!',
     '-acme',
     'acme-',
     'under_score',
     'a'.repeat(64),
     '   ',
-  ])('rejects %j without scheduling domain lookups', query => {
-    story(
-      update,
-      given(emptyModel),
-      message(
-        Message.ChangedUrl({
-          url: urlOrThrow(`http://localhost${searchHref(query)}`),
-        }),
-      ),
-      model(model => {
-        expect(searchViewState(model)).toEqual(
-          SearchViewState.Failed({
-            error:
-              'Enter a domain name using letters, numbers, and hyphens (up to 63 characters).',
+  ])('rejects %j without scheduling domain lookups', query =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
+
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(
+          Message.ChangedUrl({
+            url: urlOrThrow(`http://localhost${searchHref(query)}`),
           }),
-        )
-      }),
-      resolveResultsListScrolls,
-      Command.expectNone(),
-    )
-  })
-})
-
-test('an unchanged input keeps its active Query request', () => {
-  const args = {
-    label: 'acme',
-    offset: 0,
-    limit: 4,
-  }
-
-  story(
-    update,
-    given(emptyModel),
-    message(
-      Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
-    ),
-    resolveSearchTime(1, 0),
-    Command.expectHas(makeDomainsFetch(args, 1)),
-    message(Message.UpdatedSearch({ value: 'acme' })),
-    Command.resolve(
-      ReplaceSearchUrl({ q: Option.some('acme') }),
-      Message.CompletedReplaceSearchUrl(),
-    ),
-    model(model => {
-      expect(model.searchGeneration).toBe(1)
-      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([args])
+        ),
+        Story.model(model => {
+          expect(searchViewState(model)).toEqual(
+            SearchViewState.Failed({
+              error:
+                'Enter a domain name using letters, numbers, and hyphens (up to 63 characters).',
+            }),
+          )
+        }),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      )
     }),
-    resolveDomainsSuccess(
-      args,
-      1,
-      Array.take(makeDomainFixtures('acme'), 4),
-      10,
-    ),
-    resolveRemainingFirstPageDomains(
-      'acme',
-      1,
-      2,
-      Array.take(Array.drop(makeDomainFixtures('acme'), 4), 56),
-      10,
-    ),
-    resolveResultsListScrolls,
-    Command.expectNone(),
   )
 })
 
-test.each([
+it.effect('an unchanged input keeps its active Query request', () =>
+  Effect.gen(function* () {
+    const initialEmptyModel = yield* emptyModel
+
+    const args = {
+      label: 'acme',
+      offset: 0,
+      limit: 4,
+    }
+
+    yield* Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(initialEmptyModel),
+      Story.message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
+      ),
+      resolveSearchTime(1, 0),
+      Story.Command.expectHas(makeDomainsFetch(args, 1)),
+      Story.message(Message.UpdatedSearch({ value: 'acme' })),
+      Story.Command.resolve(
+        ReplaceSearchUrl({ q: Option.some('acme') }),
+        Message.CompletedReplaceSearchUrl(),
+      ),
+      Story.model(model => {
+        expect(model.searchGeneration).toBe(1)
+        expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([args])
+      }),
+      resolveDomainsSuccess(
+        args,
+        1,
+        Array.take(makeDomainFixtures('acme'), 4),
+        10,
+      ),
+      resolveRemainingFirstPageDomains(
+        'acme',
+        1,
+        2,
+        Array.take(Array.drop(makeDomainFixtures('acme'), 4), 56),
+        10,
+      ),
+      resolveResultsListScrolls,
+      Story.Command.expectNone(),
+    )
+  }),
+)
+
+it.effect.each([
   {
     name: 'success',
     result: Result.succeed(Array.take(makeDomainFixtures('acme'), 4)),
@@ -211,25 +236,29 @@ test.each([
   },
 ])(
   'a canceled $name before URL delivery cannot restore old results or schedule loading',
-  ({ result }) => {
-    const previousArgs = { label: 'acme', offset: 0, limit: 4 }
-    const currentArgs = { label: 'other', offset: 0, limit: 4 }
-    const currentDomains = Array.take(makeDomainFixtures('other'), 4)
+  ({ result }) =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
 
-    story(
-      update,
-      given(emptyModel),
-      message(
-        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
-      ),
-      resolveSearchTime(1, 0),
-      Command.expectHas(makeDomainsFetch(previousArgs, 1)),
-      message(Message.UpdatedSearch({ value: 'other' })),
-      resolveDomainsCancellation(previousArgs, 1),
-      resolveResultsListScrolls,
-      Command.expectExact(ReplaceSearchUrl({ q: Option.some('other') })),
-      message(
-        toParentMessage(
+      const previousArgs = { label: 'acme', offset: 0, limit: 4 }
+      const currentArgs = { label: 'other', offset: 0, limit: 4 }
+      const currentDomains = Array.take(makeDomainFixtures('other'), 4)
+
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
+        ),
+        resolveSearchTime(1, 0),
+        Story.Command.expectHas(makeDomainsFetch(previousArgs, 1)),
+        Story.message(Message.UpdatedSearch({ value: 'other' })),
+        resolveDomainsCancellation(previousArgs, 1),
+        resolveResultsListScrolls,
+        Story.Command.expectExact(
+          ReplaceSearchUrl({ q: Option.some('other') }),
+        ),
+        Story.messageIn(
           DomainsQueryBinding,
           DomainsQuery.Message.CompletedFetch({
             args: previousArgs,
@@ -239,289 +268,347 @@ test.each([
             completedAtMillis: 100,
           }),
         ),
-      ),
-      model(model => {
-        expect(routeToQuery(model.route)).toBe('acme')
-        expect(searchViewState(model)).toEqual(SearchViewState.Loading())
-      }),
-      Command.expectExact(ReplaceSearchUrl({ q: Option.some('other') })),
-      Command.resolve(
-        ReplaceSearchUrl({ q: Option.some('other') }),
-        Message.CompletedReplaceSearchUrl(),
-      ),
-      message(
-        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=other') }),
-      ),
-      resolveSearchTime(3, 200),
-      Command.expectHas(makeDomainsFetch(currentArgs, 3)),
-      resolveDomainsSuccess(currentArgs, 3, currentDomains, 220),
-      model(model => {
-        expect(routeToQuery(model.route)).toBe('other')
-        expect(searchViewState(model)).toEqual(
-          SearchViewState.Ready({ domains: currentDomains }),
-        )
-      }),
-      resolveRemainingFirstPageDomains(
-        'other',
-        3,
-        4,
-        Array.take(Array.drop(makeDomainFixtures('other'), 4), 56),
-        220,
-      ),
-      resolveResultsListScrolls,
-      Command.expectNone(),
-    )
-  },
+        Story.model(model => {
+          expect(routeToQuery(model.route)).toBe('acme')
+          expect(searchViewState(model)).toEqual(SearchViewState.Loading())
+        }),
+        Story.Command.expectExact(
+          ReplaceSearchUrl({ q: Option.some('other') }),
+        ),
+        Story.Command.resolve(
+          ReplaceSearchUrl({ q: Option.some('other') }),
+          Message.CompletedReplaceSearchUrl(),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=other') }),
+        ),
+        resolveSearchTime(3, 200),
+        Story.Command.expectHas(makeDomainsFetch(currentArgs, 3)),
+        resolveDomainsSuccess(currentArgs, 3, currentDomains, 220),
+        Story.model(model => {
+          expect(routeToQuery(model.route)).toBe('other')
+          expect(searchViewState(model)).toEqual(
+            SearchViewState.Ready({ domains: currentDomains }),
+          )
+        }),
+        resolveRemainingFirstPageDomains(
+          'other',
+          3,
+          4,
+          Array.take(Array.drop(makeDomainFixtures('other'), 4), 56),
+          220,
+        ),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      )
+    }),
 )
 
-test('a planning Clock from the previous route cannot start domain lookups', () => {
-  const otherArgs = {
-    label: 'other',
-    offset: 0,
-    limit: 4,
-  }
+it.effect(
+  'a planning Clock from the previous route cannot start domain lookups',
+  () =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
 
-  story(
-    update,
-    given(emptyModel),
-    message(
-      Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
-    ),
-    message(
-      Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=other') }),
-    ),
-    resolveSearchTime(1, 10),
-    model(model => {
-      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
-      expect(routeToQuery(model.route)).toBe('other')
-    }),
-    resolveSearchTime(2, 20),
-    Command.expectHas(makeDomainsFetch(otherArgs, 1)),
-    resolveDomainsSuccess(
-      otherArgs,
-      1,
-      Array.take(makeDomainFixtures('other'), 4),
-      30,
-    ),
-    resolveRemainingFirstPageDomains(
-      'other',
-      2,
-      2,
-      Array.take(Array.drop(makeDomainFixtures('other'), 4), 56),
-      30,
-    ),
-    resolveResultsListScrolls,
-    Command.expectNone(),
-  )
-})
+      const otherArgs = {
+        label: 'other',
+        offset: 0,
+        limit: 4,
+      }
 
-test('leaving search cancels its pending Query key', () => {
-  const args = {
-    label: 'acme',
-    offset: 0,
-    limit: 4,
-  }
-
-  story(
-    update,
-    given(emptyModel),
-    message(
-      Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
-    ),
-    resolveSearchTime(1, 0),
-    Command.expectHas(makeDomainsFetch(args, 1)),
-    message(
-      Message.ChangedUrl({ url: urlOrThrow('http://localhost/missing') }),
-    ),
-    model(model => {
-      expect(model.route).toEqual(
-        ApplicationRoute.NotFound({ path: '/missing' }),
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=other') }),
+        ),
+        resolveSearchTime(1, 10),
+        Story.model(model => {
+          expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
+          expect(routeToQuery(model.route)).toBe('other')
+        }),
+        resolveSearchTime(2, 20),
+        Story.Command.expectHas(makeDomainsFetch(otherArgs, 1)),
+        resolveDomainsSuccess(
+          otherArgs,
+          1,
+          Array.take(makeDomainFixtures('other'), 4),
+          30,
+        ),
+        resolveRemainingFirstPageDomains(
+          'other',
+          2,
+          2,
+          Array.take(Array.drop(makeDomainFixtures('other'), 4), 56),
+          30,
+        ),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
       )
-      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
-      expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
     }),
-    resolveDomainsCancellation(args, 1),
-    resolveResultsListScrolls,
-    Command.expectNone(),
-  )
-})
+)
 
-test('clearing the input returns to the idle route, restores focus, and scrolls to the top', () => {
-  story(
-    update,
-    given(readyModel('acme')),
-    message(Message.ClickedClearSearch()),
-    Command.resolve(
-      ReplaceSearchUrl({ q: Option.none() }),
-      Message.CompletedReplaceSearchUrl(),
-    ),
-    Command.resolve(FocusSearchInput, Message.CompletedFocusSearchInput()),
-    message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
-    Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
-    model(model => {
-      expect(model.route).toEqual(ApplicationRoute.Search({ q: Option.none() }))
-      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
-      expect(model.searchLayout).toBe('Search')
-    }),
-    resolveResultsListScrolls,
-    Command.expectNone(),
-  )
-})
+it.effect('leaving search cancels its pending Query key', () =>
+  Effect.gen(function* () {
+    const initialEmptyModel = yield* emptyModel
 
-test('backspacing to an empty query scrolls to the top after the route changes', () => {
-  story(
-    update,
-    given(readyModel('a')),
-    message(Message.UpdatedSearch({ value: '' })),
-    Command.expectExact(ReplaceSearchUrl({ q: Option.none() })),
-    Command.resolve(
-      ReplaceSearchUrl({ q: Option.none() }),
-      Message.CompletedReplaceSearchUrl(),
-    ),
-    message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
-    model(model => {
-      expect(searchViewState(model)).toEqual(SearchViewState.Idle())
-      expect(model.searchLayout).toBe('Search')
-    }),
-    Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
-    resolveResultsListScrolls,
-    Command.expectNone(),
-  )
-})
+    const args = {
+      label: 'acme',
+      offset: 0,
+      limit: 4,
+    }
 
-test('unrelated URL changes do not restart a settled search', () => {
-  const initialModel = readyModel('acme')
-
-  story(
-    update,
-    given(initialModel),
-    message(
-      Message.ChangedUrl({
-        url: urlOrThrow('http://localhost/?q=acme&utm_source=example#results'),
-      }),
-    ),
-    model(model => {
-      expect(model.searchGeneration).toBe(initialModel.searchGeneration)
-      expect(model.domainsQuery).toBe(initialModel.domainsQuery)
-      expect(searchViewState(model)).toEqual(searchViewState(initialModel))
-    }),
-    Command.expectNone(),
-  )
-})
-
-test('internal and external links use their respective navigation Commands', () => {
-  story(
-    update,
-    given(emptyModel),
-    message(
-      Message.ClickedLink({
-        request: UrlRequest.Internal({
-          url: urlOrThrow('http://localhost/?q=acme'),
-        }),
-      }),
-    ),
-    Command.resolve(
-      NavigateInternal({ url: 'http://localhost/?q=acme' }),
-      Message.CompletedNavigateInternal(),
-    ),
-    message(
-      Message.ClickedLink({
-        request: UrlRequest.External({ href: 'https://vercel.com/login' }),
-      }),
-    ),
-    Command.resolve(
-      LoadExternal({ href: 'https://vercel.com/login' }),
-      Message.CompletedLoadExternal(),
-    ),
-    Command.expectNone(),
-  )
-})
-
-test('cart additions are unique and removals are idempotent', () => {
-  const domain = Domain.Available({
-    name: 'acme.com',
-    tld: 'com',
-    price: 12,
-    renewalPrice: 12,
-    years: 1,
-    isPremium: false,
-  })
-
-  story(
-    update,
-    given(readyModel('acme')),
-    message(Message.ClickedAddDomain({ domain })),
-    message(Message.ClickedAddDomain({ domain })),
-    message(Message.ClickedRemoveDomain({ name: 'missing.com' })),
-    model(model => {
-      expect(model.cart).toEqual([domain])
-    }),
-    message(Message.ClickedRemoveDomain({ name: domain.name })),
-    message(Message.ClickedRemoveDomain({ name: domain.name })),
-    model(model => {
-      expect(model.cart).toEqual([])
-    }),
-    Command.expectNone(),
-  )
-})
-
-test('clearing a scrolled search discards its virtual viewport before another search', () => {
-  story(
-    update,
-    given(readyModel('acme')),
-    message(
-      toParentMessage(
-        ResultsListBinding,
-        ResultsListBlock.Message.ObservedContainerScroll({
-          scrollTop: 1300,
-          scrollHeight: 12000,
-          containerHeight: 400,
-          anchor: VirtualList.ObservedAnchor.Row({
-            key: 'acme.studio',
-            index: 2,
-            viewportOffset: -20,
-          }),
-        }),
+    yield* Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(initialEmptyModel),
+      Story.message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/?q=acme') }),
       ),
-    ),
-    model(model => {
-      expect(model.resultsList.scrollTop).toBe(1300)
-      expect(model.resultsList.viewportAnchor._tag).toBe('Row')
-    }),
-    message(Message.UpdatedSearch({ value: '' })),
-    Command.resolve(
-      ReplaceSearchUrl({ q: Option.none() }),
-      Message.CompletedReplaceSearchUrl(),
-    ),
-    message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
-    Command.resolve(ScrollPageToTop, Message.CompletedScrollPageToTop()),
-    model(model => {
-      expect(model.resultsList.scrollTop).toBe(0)
-      expect(model.resultsList.viewportAnchor).toEqual({
-        _tag: 'Offset',
-        scrollTop: 0,
-      })
-      expect(model.resultsList.measurement._tag).toBe('Unmeasured')
-    }),
-    resolveResultsListScrolls,
-    Command.expectNone(),
-  )
-})
-
-test.each([true, false])(
-  'the early search handoff preserves an opened search: %s',
-  isSearchStarted => {
-    story(
-      update,
-      given(emptyModel),
-      message(
-        Message.CompletedReleaseEarlySearchListeners({ isSearchStarted }),
+      resolveSearchTime(1, 0),
+      Story.Command.expectHas(makeDomainsFetch(args, 1)),
+      Story.message(
+        Message.ChangedUrl({ url: urlOrThrow('http://localhost/missing') }),
       ),
-      model(model => {
-        expect(model.searchLayout).toBe(isSearchStarted ? 'Search' : 'Landing')
+      Story.model(model => {
+        expect(model.route).toEqual(
+          ApplicationRoute.NotFound({ path: '/missing' }),
+        )
         expect(searchViewState(model)).toEqual(SearchViewState.Idle())
+        expect(DomainsQuery.pendingArgs(model.domainsQuery)).toEqual([])
       }),
-      Command.expectNone(),
+      resolveDomainsCancellation(args, 1),
+      resolveResultsListScrolls,
+      Story.Command.expectNone(),
     )
-  },
+  }),
+)
+
+it.effect(
+  'clearing the input returns to the idle route, restores focus, and scrolls to the top',
+  () =>
+    Effect.gen(function* () {
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(yield* readyModel('acme')),
+        Story.message(Message.ClickedClearSearch()),
+        Story.Command.resolve(
+          ReplaceSearchUrl({ q: Option.none() }),
+          Message.CompletedReplaceSearchUrl(),
+        ),
+        Story.Command.resolve(
+          FocusSearchInput,
+          Message.CompletedFocusSearchInput(),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/') }),
+        ),
+        Story.Command.resolve(
+          ScrollPageToTop,
+          Message.CompletedScrollPageToTop(),
+        ),
+        Story.model(model => {
+          expect(model.route).toEqual(
+            ApplicationRoute.Search({ q: Option.none() }),
+          )
+          expect(searchViewState(model)).toEqual(SearchViewState.Idle())
+          expect(model.searchLayout).toBe('Search')
+        }),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      )
+    }),
+)
+
+it.effect(
+  'backspacing to an empty query scrolls to the top after the route changes',
+  () =>
+    Effect.gen(function* () {
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(yield* readyModel('a')),
+        Story.message(Message.UpdatedSearch({ value: '' })),
+        Story.Command.expectExact(ReplaceSearchUrl({ q: Option.none() })),
+        Story.Command.resolve(
+          ReplaceSearchUrl({ q: Option.none() }),
+          Message.CompletedReplaceSearchUrl(),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/') }),
+        ),
+        Story.model(model => {
+          expect(searchViewState(model)).toEqual(SearchViewState.Idle())
+          expect(model.searchLayout).toBe('Search')
+        }),
+        Story.Command.resolve(
+          ScrollPageToTop,
+          Message.CompletedScrollPageToTop(),
+        ),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      )
+    }),
+)
+
+it.effect('unrelated URL changes do not restart a settled search', () =>
+  Effect.gen(function* () {
+    const initialModel = yield* readyModel('acme')
+
+    yield* Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(initialModel),
+      Story.message(
+        Message.ChangedUrl({
+          url: urlOrThrow(
+            'http://localhost/?q=acme&utm_source=example#results',
+          ),
+        }),
+      ),
+      Story.model(model => {
+        expect(model.searchGeneration).toBe(initialModel.searchGeneration)
+        expect(model.domainsQuery).toBe(initialModel.domainsQuery)
+        expect(searchViewState(model)).toEqual(searchViewState(initialModel))
+      }),
+      Story.Command.expectNone(),
+    )
+  }),
+)
+
+it.effect(
+  'internal and external links use their respective navigation Commands',
+  () =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
+
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(
+          Message.ClickedLink({
+            request: UrlRequest.Internal({
+              url: urlOrThrow('http://localhost/?q=acme'),
+            }),
+          }),
+        ),
+        Story.Command.resolve(
+          NavigateInternal({ url: 'http://localhost/?q=acme' }),
+          Message.CompletedNavigateInternal(),
+        ),
+        Story.message(
+          Message.ClickedLink({
+            request: UrlRequest.External({ href: 'https://vercel.com/login' }),
+          }),
+        ),
+        Story.Command.resolve(
+          LoadExternal({ href: 'https://vercel.com/login' }),
+          Message.CompletedLoadExternal(),
+        ),
+        Story.Command.expectNone(),
+      )
+    }),
+)
+
+it.effect('cart additions are unique and removals are idempotent', () =>
+  Effect.gen(function* () {
+    const domain = Domain.Available({
+      name: 'acme.com',
+      tld: 'com',
+      price: 12,
+      renewalPrice: 12,
+      years: 1,
+      isPremium: false,
+    })
+
+    yield* Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given(yield* readyModel('acme')),
+      Story.message(Message.ClickedAddDomain({ domain })),
+      Story.message(Message.ClickedAddDomain({ domain })),
+      Story.message(Message.ClickedRemoveDomain({ name: 'missing.com' })),
+      Story.model(model => {
+        expect(model.cart).toEqual([domain])
+      }),
+      Story.message(Message.ClickedRemoveDomain({ name: domain.name })),
+      Story.message(Message.ClickedRemoveDomain({ name: domain.name })),
+      Story.model(model => {
+        expect(model.cart).toEqual([])
+      }),
+      Story.Command.expectNone(),
+    )
+  }),
+)
+
+it.effect(
+  'clearing a scrolled search discards its virtual viewport before another search',
+  () =>
+    Effect.gen(function* () {
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(yield* readyModel('acme')),
+        Story.messageIn(
+          ResultsListBinding,
+          ResultsListBlock.Message.ObservedContainerScroll({
+            scrollTop: 1300,
+            scrollHeight: 12000,
+            containerHeight: 400,
+            anchor: VirtualList.ObservedAnchor.Row({
+              key: 'acme.studio',
+              index: 2,
+              viewportOffset: -20,
+            }),
+          }),
+        ),
+        Story.model(model => {
+          expect(model.resultsList.scrollTop).toBe(1300)
+          expect(model.resultsList.viewportAnchor._tag).toBe('Row')
+        }),
+        Story.message(Message.UpdatedSearch({ value: '' })),
+        Story.Command.resolve(
+          ReplaceSearchUrl({ q: Option.none() }),
+          Message.CompletedReplaceSearchUrl(),
+        ),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/') }),
+        ),
+        Story.Command.resolve(
+          ScrollPageToTop,
+          Message.CompletedScrollPageToTop(),
+        ),
+        Story.model(model => {
+          expect(model.resultsList.scrollTop).toBe(0)
+          expect(model.resultsList.viewportAnchor).toEqual({
+            _tag: 'Offset',
+            scrollTop: 0,
+          })
+          expect(model.resultsList.measurement._tag).toBe('Unmeasured')
+        }),
+        resolveResultsListScrolls,
+        Story.Command.expectNone(),
+      )
+    }),
+)
+
+it.effect.each([true, false])(
+  'the early search handoff preserves an opened search: %s',
+  isSearchStarted =>
+    Effect.gen(function* () {
+      const initialEmptyModel = yield* emptyModel
+
+      yield* Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(initialEmptyModel),
+        Story.message(
+          Message.CompletedReleaseEarlySearchListeners({ isSearchStarted }),
+        ),
+        Story.model(model => {
+          expect(model.searchLayout).toBe(
+            isSearchStarted ? 'Search' : 'Landing',
+          )
+          expect(searchViewState(model)).toEqual(SearchViewState.Idle())
+        }),
+        Story.Command.expectNone(),
+      )
+    }),
 )

@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-commit-archives",
+  "source": {
+    "repository": "https://github.com/foldkit/foldkit.git",
+    "commit": "29b3f80e4048996e43f3d3b1262870a96c3b005b",
+    "tree": "a3e3c0908b403ae83a40ad15b50e9a650a088988",
+    "branch": "codex/preview-startup-testing-20261106",
+    "sourceArchiveSha256": "de67f629eafa656a9623b77ee2b4317c53e6babebbd8ebf10ab10b5b5ef9ff81",
+    "method": "git archive of the exact commit; no untracked worktree files included",
+    "modifications": "Only the six package manifests were rewritten using the target commit canaryPackageJsons helper. Package source files are byte-identical to the git archive."
+  },
+  "build": {
+    "node": "22.22.3",
+    "pnpm": "12.4.2",
+    "typescript": "7.1.0-beta (oxlint plugin: @typescript/typescript6 6.0.2)",
+    "dependencyLockfile": "pnpm-lock.yaml from source commit, installed with --frozen-lockfile --ignore-scripts for selected packages",
+    "pipeline": "Clean package builds in dependency order, devtools MCP rolldown bundle, UI/devtools brand-dist, FOLDKIT_RELEASE_MANIFEST set; exact canary dependency metadata applied after building; pnpm pack via target commit packPackage helper",
+    "versioning": "Target commit canaryPackageJsons creates baseVersion-canary.29b3f80e4048 and pins every internal dependency and peer to the exact coherent version. No npm publication performed."
+  },
+  "verification": {
+    "builds": "passed for all six packages",
+    "artifactMetadata": "target commit assertArtifactsMatchPackages passed",
+    "sourceAudit": "passed: only the six intended manifests differ from git archive",
+    "publicExportPaths": "all exported JS/declaration/JSON targets exist in extracted archives",
+    "runtimeImports": {
+      "status": "passed",
+      "count": 73
+    },
+    "devtoolsMcpCli": "passed bundled server syntax, stdio MCP initialization, tools/list (15 tools), and clean shutdown after stdin closed",
+    "emittedDeclarations": "passed external emission, rejected wiring, relocation, native completion, compiler diagnostics, and inferred configuration documentation",
+    "uiEmittedDeclarations": "passed",
+    "childInstanceDeclarations": "passed source, emitted, external consumer, relocated and negative-control checks"
+  },
+  "installation": {
+    "recommendation": "Keep all six .tgz archives and this manifest together in vendor/foldkit/29b3f80e4048. Depend on project-relative file: archive paths. Pin internal peer resolution to those same file: archives via pnpm overrides if needed. Install Effect and @effect/platform-browser 4.1.0, with platform-node/node-shared 4.1.0 where used. Do not use a machine-specific link: to the framework worktree.",
+    "packageManager": "pnpm 12.18.0 verified: pnpm peers check reports no issues for the app using these archives. pnpm 12.4.2 has the upstream local tarball peer-version validation bug fixed by pnpm/pnpm#15299.",
+    "packageManagerFixSource": "https://github.com/pnpm/pnpm/issues/15298"
+  },
+  "packages": [
+    {
+      "name": "foldkit",
+      "version": "0.170.0-canary.29b3f80e4048",
+      "archive": "foldkit-0.170.0-canary.29b3f80e4048.tgz",
+      "sha256": "2692ea33caae366f40b00f2583fe08f8093ff8ae65342d7c5ace3592174d8127",
+      "integrity": "sha512-QwejGF1LLB53gNJ3vakenvs0qSIRJIcqekTI3z4xzGoPVkqRj9qvekqpDQwe0JJBF0M+hEqxb98usB1Y4K+5AA==",
+      "baseVersion": "0.170.0",
+      "dependencies": {
+        "parse5": "^8.0.1"
+      },
+      "peerDependencies": {
+        "@effect/platform-browser": "~4.1.0",
+        "effect": "~4.1.0"
+      },
+      "distFileCount": 1161,
+      "distContentSha256": "300a86b53774a6e24508e38c8995e7fdf7bd2c0ab77b44a99550cdfc63b8add4"
+    },
+    {
+      "name": "@foldkit/ui",
+      "version": "0.170.0-canary.29b3f80e4048",
+      "archive": "foldkit-ui-0.170.0-canary.29b3f80e4048.tgz",
+      "sha256": "582ad56022c376bbf89dc2fc77a8a6e71be4c2a24b3e49161256015846d4298c",
+      "integrity": "sha512-y3cyFLwiqiEcSIp/xcrjvcbfdQtc66oT0odB7pkihzmRPMNEwVm4WJc0itJW/y0mJODNxkzctI26DSDJNxsTtA==",
+      "baseVersion": "0.170.0",
+      "dependencies": {
+        "@floating-ui/dom": "^1.8.0"
+      },
+      "peerDependencies": {
+        "effect": "~4.1.0",
+        "foldkit": "0.170.0-canary.29b3f80e4048"
+      },
+      "distFileCount": 456,
+      "distContentSha256": "38ea959155a31a33b0477ab8006e98151e2b60545d25a25225a109f7eab322fe"
+    },
+    {
+      "name": "@foldkit/devtools",
+      "version": "0.170.0-canary.29b3f80e4048",
+      "archive": "foldkit-devtools-0.170.0-canary.29b3f80e4048.tgz",
+      "sha256": "34a526fef662c819a1c18d269ac824ed66aeee5e19f49eb70e53d28624335c58",
+      "integrity": "sha512-caVVK2NdXmwZI3xSHlXfwzFBulL7s+iRRnnGSLtQJLhnUhLiw1AC79vu6g0tI5Qdo2isoL0wxkAZJR0CnrSLIg==",
+      "baseVersion": "0.170.0",
+      "dependencies": {
+        "clsx": "^2.1.1"
+      },
+      "peerDependencies": {
+        "@effect/platform-browser": "~4.1.0",
+        "@foldkit/ui": "0.170.0-canary.29b3f80e4048",
+        "effect": "~4.1.0",
+        "foldkit": "0.170.0-canary.29b3f80e4048"
+      },
+      "distFileCount": 12,
+      "distContentSha256": "c0880f11e91028589170a3b1e4493adbd3310bb3235262d0ca555a3d8779bf18"
+    },
+    {
+      "name": "@foldkit/devtools-mcp",
+      "version": "0.26.0-canary.29b3f80e4048",
+      "archive": "foldkit-devtools-mcp-0.26.0-canary.29b3f80e4048.tgz",
+      "sha256": "35d4446ecc6d62015999a1aefb1a93fbd8fd3e301b59c6a5ee9b4c14e9b295ea",
+      "integrity": "sha512-CIz8coHPBie8TSfdTQ/6hJuono9zi3XnMSWJk3k7nHmUGXZVPkFjoRLfsPCAT+wCX3tgACBVtCEn393uthzBzQ==",
+      "baseVersion": "0.26.0",
+      "dependencies": {
+        "@modelcontextprotocol/sdk": "1.32.0",
+        "ws": "^8.21.3"
+      },
+      "peerDependencies": {
+        "effect": "~4.1.0",
+        "foldkit": "0.170.0-canary.29b3f80e4048"
+      },
+      "distFileCount": 24,
+      "distContentSha256": "4a7a190350638a4540a8ea8aa5839b3943e7cbda3addc08a6c9a6864ec74d2cb"
+    },
+    {
+      "name": "@foldkit/oxlint-plugin",
+      "version": "0.15.4-canary.29b3f80e4048",
+      "archive": "foldkit-oxlint-plugin-0.15.4-canary.29b3f80e4048.tgz",
+      "sha256": "c6e43f8abfbda55a1910b4e59ecbaa2fd7fa220fdd0d9929340c0595e33d951f",
+      "integrity": "sha512-QTS2I9HPFPEfCQLEUlE9OvEHQGGspivMsHzFzE9Gt0iWzdmgUKVfXbYuN+X4TQrwJdlK0GsqUQN79u2XuMXRoA==",
+      "baseVersion": "0.15.4",
+      "dependencies": {
+        "effect-oxlint": "^0.3.4 || ^0.4.0",
+        "oxc-parser": "0.150.0"
+      },
+      "distFileCount": 85,
+      "distContentSha256": "0986669423b72945b5373246e4f50a41ff737177382632bfc691b9b7de89a4e1"
+    },
+    {
+      "name": "@foldkit/vite-plugin",
+      "version": "0.29.0-canary.29b3f80e4048",
+      "archive": "foldkit-vite-plugin-0.29.0-canary.29b3f80e4048.tgz",
+      "sha256": "f754027245bc0e3b7f135036bfa01479aaabbc683eed086d34fbf2276c53a872",
+      "integrity": "sha512-c+KbH9DCAQVAk+VFEfXDivvPwVjWJCuT2/i7oVx260C+6ZjqM55rM/m0qM+281/V9xRf/2C6i6sIIDK93a7g9Q==",
+      "baseVersion": "0.29.0",
+      "dependencies": {
+        "@effect/platform-node": "~4.1.0",
+        "@effect/platform-node-shared": "~4.1.0",
+        "magic-string": "^1.4.2",
+        "vitefu": "^1.1.3",
+        "ws": "^8.21.3"
+      },
+      "peerDependencies": {
+        "effect": "~4.1.0",
+        "foldkit": "0.170.0-canary.29b3f80e4048",
+        "vite": "^8.0.0"
+      },
+      "distFileCount": 36,
+      "distContentSha256": "5ac4e2b0f10d97023b3e7524cfe2b846f9ebb18b460216e440e6708fa7a7d35e"
+    }
+  ]
+}

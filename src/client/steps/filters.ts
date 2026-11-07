@@ -1,6 +1,6 @@
 import { Update } from 'foldkit'
 
-import { makeFieldsStep } from '../definition'
+import { makeFieldsStep } from '../block'
 import { AvailabilityFilter, SortOrder, TldFilter } from '../domain'
 import { requestNextDomainRange } from './domainRequests'
 import { informResultsList } from './resultsList'

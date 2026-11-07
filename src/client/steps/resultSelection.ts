@@ -2,7 +2,7 @@ import { Array } from 'effect'
 import { AsyncData } from 'foldkit'
 
 import { DomainCandidateRange, domainTlds } from '../../shared/domain'
-import { makeFieldsStep } from '../definition'
+import { makeFieldsStep } from '../block'
 import { DomainsQuery, DomainsQueryArgs } from '../domainsQuery'
 
 export const includeDomainRangeInResults = (range: DomainCandidateRange) =>

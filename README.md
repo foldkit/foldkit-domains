@@ -8,7 +8,7 @@ The app explores URL synchronization, debounced and cached requests, progressive
 
 ## Run locally
 
-Requires Node.js 24.11.1 or newer and pnpm 12.4.2.
+Requires Node.js 24.11.1 or newer and pnpm 12.18.0.
 
 ```sh
 pnpm install

@@ -3,6 +3,12 @@ import { Update, Url } from 'foldkit'
 import { UrlRequest } from 'foldkit/navigation'
 
 import {
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+} from './block'
+import {
   DismissSearchKeyboard,
   FocusCartCloseButton,
   FocusSearchInput,
@@ -19,12 +25,6 @@ import {
   ResultsListBinding,
   TldDialogBinding,
 } from './composition'
-import {
-  makeCommandsStep,
-  makeFieldsStep,
-  makeNoopStep,
-  makeStep,
-} from './definition'
 import { ApplicationRoute, routeToQuery, urlToApplicationRoute } from './route'
 import {
   changeSearchQuery,

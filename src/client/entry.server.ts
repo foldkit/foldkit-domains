@@ -5,6 +5,7 @@ import { Server } from 'foldkit/experimental'
 import { ApplicationBlock } from './block'
 import { bootstrapSearchInput } from './bootstrap'
 import { documentHead } from './documentHead'
+import { layer } from './layer'
 import { ApplicationRoute, urlToApplicationRoute } from './route'
 import { searchInputConfig } from './searchInput'
 
@@ -47,7 +48,7 @@ export const renderPage = (request: Request): Promise<Server.EntryResult> => {
 
   return Effect.runPromise(
     Server.renderToString(
-      ApplicationBlock,
+      { block: ApplicationBlock, layer },
       { routing: {} },
       { url: request.url },
     ).pipe(Effect.map(application => Server.Rendered(application, { status }))),

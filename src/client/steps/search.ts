@@ -2,14 +2,14 @@ import { Array, Number, Option, String } from 'effect'
 import { Update } from 'foldkit'
 
 import { domainTlds, queryToMaybeDomainLabel } from '../../shared/domain'
-import { ReplaceSearchUrl } from '../command'
-import { DomainsQueryBinding } from '../composition'
 import {
   makeCommandsStep,
   makeFieldsStep,
   makeNoopStep,
   makeStep,
-} from '../definition'
+} from '../block'
+import { ReplaceSearchUrl } from '../command'
+import { DomainsQueryBinding } from '../composition'
 import { TOP_RESULT_COUNT, isCompleteCatalogRequired } from '../domain'
 import { DomainsQuery } from '../domainsQuery'
 import { routeToQuery } from '../route'

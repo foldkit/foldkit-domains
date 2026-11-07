@@ -1,13 +1,13 @@
 import { Array, pipe } from 'effect'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 
+import { makeStep } from '../block'
 import { ResultsListBinding } from '../composition'
-import { makeStep } from '../definition'
 import { resultListings } from '../resultListings'
 import { groupDomainListings, resultsListConfig } from '../resultsList'
 
 export const informResultsList = makeStep(model =>
-  ResultsListBinding.informItemsChanged(
+  ResultsListBinding.informOfItemsChanged(
     pipe(
       model,
       resultListings,

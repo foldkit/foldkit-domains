@@ -6,6 +6,7 @@ The search input arrives in static HTML, accepts edits before hydration, and mov
 
 `src/client/` owns the Foldkit application, browser startup, SSR renderer, and Story/Scene tests. `src/server/` owns the Worker entry and sample-domain RPC handlers. `src/shared/` owns domain and RPC contracts, the candidate catalog, and sample-data generation. Shared code imports neither implementation. The Worker entry connects backend routing to frontend SSR. Lint enforces these import boundaries, with execution-test exceptions for exercising the real RPC client and server together.
 
+- `src/client/block.ts` declares the passive application contract, including URL initialization and handler Service requirements. `layer.ts` acquires the registered children and supplies their construction Layers. Browser startup, SSR, Story, and Scene use the same Block and Layer pair.
 - `src/client/model.ts` and `src/client/message.ts` declare state and events. `init.ts` starts a search from the URL; `update.ts` maps Messages to search, filter, and cart transitions.
 - `src/client/steps/` owns reusable parent Steps shared by update, composition, and init. `domainPlanning.ts` selects the next required candidate range without creating Commands. `searchViewState.ts` derives search status and checked domains from Query data.
 - `src/client/domainsQuery.ts` defines the KeyedQuery Block, one-minute freshness, a 100-settled-entry retention bound, and the typed RPC fetch handler. `command.ts` defines the EffectsLayer, including Clock reads and URL synchronization; `services.ts` supplies the Runtime-scoped RPC client.
@@ -13,7 +14,7 @@ The search input arrives in static HTML, accepts edits before hydration, and mov
 - `src/shared/domain.ts` defines domains, pricing, labels, candidates, and ranges. `src/shared/demoDomains.ts` generates sample results. `src/client/domain/` exports listings, filters, sorting, formatting, candidate-range planning, and the Cart Schema through its barrel.
 - `src/client/filterListboxes.ts` defines typed filter and sort Listbox Blocks. Desktop Listboxes and mobile sheets share transitions through `steps/filters.ts`; mobile choices apply directly and close their animated sheet. The TLD sheet searches the full catalog.
 - `src/client/route.ts` defines the bidirectional search router. The Model stores the parsed Route. Input changes replace the URL, and `ChangedUrl` updates the Route before starting its lookup.
-- `src/client/resultsList.ts` creates the VirtualList Block and locates pending listings in the viewport and overscan area. `composition.ts` binds it, Query, filter Listboxes, and cart/filter Dialogs to the root Model. `resultListings.ts` selects the displayed listings; `block.ts` assembles the application.
+- `src/client/resultsList.ts` creates the VirtualList Block and locates pending listings in the viewport and overscan area. `composition.ts` binds it, Query, filter Listboxes, and cart/filter Dialogs to the root Model. `resultListings.ts` selects the displayed listings; `layer.ts` constructs the application graph.
 - `src/client/focusTarget.ts` shares stable control IDs between the view and focus Commands. Focus uses `Dom.focus` after the render commits, with scrolling suppressed.
 - `src/client/view.ts` contains named views and layout utilities; `styles.css` defines the Tailwind theme, reusable components, and single-input positioning. `icon.ts` renders Lucide icons; attribution is in `THIRD_PARTY_NOTICES.md`.
 - `src/client/entry.server.ts` renders the same Block for static generation and request-time SSR. `src/server/entry.ts` delegates page rendering, routes `/rpc` and `/rpc/` to the Effect RPC server, and disposes its handler on development reload.
@@ -58,6 +59,6 @@ The input is editable before the main bundle executes.
 
 ## DevTools
 
-The deployed app includes the Foldkit DevTools button. Select it to inspect Message payloads, Model changes, Commands, and Mounts. Inspect mode shows the selected Message’s state in the inspector while searches and the virtualized results stay live. `@foldkit/devtools` is a production dependency so the Vite plugin includes the overlay in the shipped build. The browser entry explicitly imports the plugin's overlay module for SSR builds. The panel remembers whether each visitor left it open.
+The deployed app includes the Foldkit DevTools button. Select it to inspect Message payloads, Model changes, Commands, and Mounts. Inspect mode shows the selected Message’s state in the inspector while searches and the virtualized results stay live. `@foldkit/devtools` is a production dependency so the Vite plugin includes the overlay in the shipped build. The plugin injects the overlay for development and SSR client builds. The panel remembers whether each visitor left it open.
 
 The scaffold's `AGENTS.md`, `FOLDKIT.md`, and DevTools MCP configuration support agent-assisted development. The MCP server uses the installed preview package.

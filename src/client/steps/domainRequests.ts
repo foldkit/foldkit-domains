@@ -5,9 +5,9 @@ import {
   DomainCandidateRange,
   queryToMaybeDomainLabel,
 } from '../../shared/domain'
+import { makeCommandsStep, makeStep } from '../block'
 import { ReadCurrentTime } from '../command'
 import { DomainsQueryBinding } from '../composition'
-import { makeCommandsStep, makeStep } from '../definition'
 import { findNextDomainRangeToLoad } from '../domainPlanning'
 import {
   DomainsQuery,
@@ -58,12 +58,12 @@ export const loadDomainRange = makeStep(
       return { model }
     }
 
-    const isDomainRequestPending = Array.some(
+    const isDomainRangeLoadingForLabel = Array.some(
       DomainsQuery.pendingArgs(model.domainsQuery),
       args => args.label === maybeDomainLabel.value,
     )
 
-    if (isDomainRequestPending) {
+    if (isDomainRangeLoadingForLabel) {
       return { model }
     }
 

@@ -1,20 +1,28 @@
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
+import { Url } from 'foldkit/url'
 
-import { EffectsLayer } from './command'
-import { ApplicationComposition } from './composition'
-import { init } from './init'
+import { Message } from './message'
 import { Model } from './model'
-import { update } from './update'
-import { view } from './view'
+import { DomainsClient } from './rpc'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Url]),
+  view: { kind: 'Document' },
+  effects: { services: [DomainsClient] },
+  Model,
+  Message,
+})
+
+export const {
+  makeCommand,
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = ApplicationBlock
