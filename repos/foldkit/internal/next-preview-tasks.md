@@ -1,11 +1,48 @@
 # Next preview tasks
 
+## November 7 observed broken-pipe recovery
+
+The improved diagnostic identified `EPIPE` in the next pre-upload lookup failure. The [follow-up checkpoint](preview-final-20261107/registry-recovery.md#observed-broken-pipe-follow-up) records why it joins the two existing socket codes, with the original single retry and timeout unchanged. All nine versions from the failed run remain absent; publication remains authorized.
+
+- [x] Inspect the actual `write EPIPE` failure and complete registry state before another publication attempt.
+- [x] Observe both EPIPE tests fail before extending the socket-code check.
+- [x] Pass 52 coherent-release tests, 254 script tests and script typechecking.
+- [ ] Complete exact-commit review, normal push, protected integration and the authorized Daybreak follow-up.
+- [ ] Publish and verify the complete registry manifest, external consumer and immutable Website before updating Ready.
+
+## November 7 registry recovery
+
+Publication remains authorized. Both attempts for reviewed source `52ecdc1050024fb1f5bd526e696d32f9e4c01c6e` stopped on an npm metadata read before any upload. All nine target versions remain absent and stable tags are unchanged. The [recovery checkpoint](preview-final-20261107/registry-recovery.md) records the failure, narrowly bounded read retry, tests and remaining gates.
+
+- [x] Inspect both failed attempts and all nine registry versions before recovery.
+- [x] Add one retry for interrupted metadata GETs inside the existing timeout, preserving upload, integrity, HTTP and absence semantics.
+- [x] Pass 50 coherent-release tests, 252 script tests, script typechecking and negative controls.
+- [ ] Complete exact-commit independent review, normal push and protected integration.
+- [ ] Complete the already-authorized Daybreak follow-up for the recovery.
+- [ ] Publish the integrated candidate and verify the nine-package manifest, external consumer and immutable Website before updating Ready.
+
+## November 7 record completion and publication
+
+This section supersedes the earlier holds below. The user authorized publication after this work and approved sending the final Foldkit candidate, relevant Git history and review-driven follow-ups to OpenAI Daybreak. Approval is scoped through publication and does not require a separate request for each commit. The final documentation consistency follow-up is isolated on `codex/preview-record-docs-20261107` from proposed integration `38a835dca745558096eb503d56b31627336a7fbc`.
+
+- [x] Prove record completion from the init plan's authenticated Composition inventory, with passive scoped acquisition and exact dependencies, errors, identities and host-handler requirements.
+- [x] Preserve custom Effect construction and reject record/Effect hybrids before hidden constructor work can run.
+- [x] Check childless, split-file Workspace, generic UI, inline/local/extracted builders, source and relocated emitted consumers, invalid graphs, deferred init, init Commands and cleanup.
+- [x] Migrate ordinary applications, UI/Query families, scaffolds, active snippets and guidance. Retain custom construction, unchanged compiler fixtures and historical published content.
+- [x] Reconcile active migration, lifecycle, Query, UI, organization, scaffold and agent guidance with record completion as the ordinary default. Preserve explicit child acquisition only for genuine custom Effect construction.
+- [x] Repair declared host-handler bounds and validate every provider alternative without losing exact selected requirements.
+- [x] Pass all eight unchanged compiler ceilings. The separate canonical manual/record comparison preserves its uncalibrated native-ceiling overruns; no budgets are revised.
+- [ ] Finish full adoption checks, exact-commit independent review, normal push gate and protected integration.
+- [ ] Refresh final rendering/artifact evidence and preview-related feedback, PR description and release migration material.
+- [ ] Complete Daybreak's authorized exact-candidate review and any required fixes.
+- [ ] Publish the verified preview and verify coherent packages, GitHub artifacts and Website deployment.
+
 ## November 6 follow-up feedback
 
 Daybreak and publication remain held while this pass is in progress. The prior
-Binding adoption is frozen at `3d3eb8998eeced834d4a7fa1810f72179796a3c3` in
-[#1903](https://github.com/foldkit/foldkit/pull/1903); these changes belong to its
-follow-up rather than that already reviewed commit.
+Binding adoption merged through [#1903](https://github.com/foldkit/foldkit/pull/1903)
+as `4a196d9f05`, with the same tree as reviewed `3d3eb8998e`. These changes
+belong to its follow-up rather than that already reviewed commit.
 
 - [x] Permit keyed-array initialization without an identity `toItem` only for
       direct child Model storage. Preserve wrapped adapters, exact keys,
@@ -35,9 +72,15 @@ follow-up rather than that already reviewed commit.
 - [x] Update the guidance, migration notes, skills, changesets and release
       preparation. Preserve singular `subscription.ts`, minimal childless
       Composition, explicit Block identities and ordinary OutMessage unions.
-- [ ] Pass focused runtime, source/emitted, consumer and unchanged compiler
+- [x] Pass focused runtime, source/emitted, consumer and unchanged compiler
       gates; refresh performance evidence and preview-related feedback before
       freezing another candidate for review.
+- [ ] Complete the selected candidate's normal pre-push gate and protected
+      integration, then obtain the applicable fresh Daybreak authorization.
+- [ ] Review the remaining optimized-rendering and bundle costs separately
+      from compiler acceptance. The fresh capture retains all samples and
+      records high host load and low reported free memory.
+- [ ] Obtain publication approval. No release is dispatched by this work.
 
 ## November 6 explicit Binding relationships
 
