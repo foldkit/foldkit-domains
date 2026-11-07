@@ -1,16 +1,33 @@
 # Next preview release handoff
 
+## November 7 record completion
+
+The user approved publication after the current work, then separately approved Daybreak review of the final Foldkit candidate and relevant history, including review-driven fixes and rechecks through publication. These approvals supersede the older holds below. The verified published snapshot remains `90746b32d2ca` until a new release is actually published.
+
+Record-form `Block.makeLayer({ init, update, view, ... })` acquires the authenticated init Composition's explicit registered inventory under the existing Layer Scope and memoization. Custom Effects retain explicit child acquisition. The prototype passes source/emitted/relocated checks, realistic Workspace and generic UI consumers, deferred initialization and lifecycle checks. Ordinary consumers and active guidance are migrated. The full adoption gates, exact-commit review, protected integration, refreshed performance evidence and authorized Daybreak review still precede publication. See the [current task board](next-preview-tasks.md#november-7-record-completion-and-publication) and [compiler comparison](block-record-completion-20261107/performance.json).
+
+The implementation is frozen as `1117a93316ff8111d402bffc995067476ec97983` and passes independent review. The [final verification record](preview-final-20261107/README.md) retains Daybreak, the fresh 32-sample rendering comparison and dependency audits. Daybreak reports no new security finding; its current-README defect is corrected in a documentation follow-up. The optimized workload remains slower than main, with 207.4/308.1 ms medians and about 48 KB additional gzip. Publication is authorized with verification still required; no earlier approval hold is reinstated by these dated reports.
+
 ## November 6 follow-up feedback
 
 The [follow-up report](preview-followup-feedback-20261106.md) and
 [task board](next-preview-tasks.md#november-6-follow-up-feedback) supersede the
-earlier readiness checkpoints below. The explicit Binding adoption is frozen in
-#1903; the new initializer, acquisition and testing follow-ups are separate work.
+earlier readiness checkpoints below. The explicit Binding adoption merged through #1903 as
+`4a196d9f05`, with the same tree as reviewed `3d3eb8998e`; the new initializer, acquisition and testing follow-ups are separate work.
 The source/emitted/relocated consumer gate and all eight existing compiler
-workloads pass without budget changes. Focused application and UI verification
-is complete. The final full pre-push gate, rendering comparison, exact-commit
-review and protected integration remain in progress. No final candidate is
-frozen yet.
+workloads pass without budget changes. Focused application and UI verification,
+installed packed SSR consumers in three browsers and the scaffold smoke test
+pass. The implementation passes independent review at `29b3f80e40`.
+The final normal pre-push gate, exact-commit review and protected integration
+remain requirements for the selected release candidate.
+
+The [fresh rendering comparison](preview-followup-20261106/rendering/README.md)
+retains all 64 samples across two batches. Optimized medians are 216.7/284.6 ms
+and 180.7/254.6 ms; all 16 optimized pairs are slower. Host load, reported free
+memory and sample ranges limit both percentages (+31.33% and +40.90%); neither
+is a stable regression estimate. Added
+gzip costs are 47,884/48,511 bytes. The earlier rendering comparisons below
+retain their dated scope.
 
 Daybreak is held for this additional feedback. Do not act on the older pending
 authorization card for `3d3eb8998eeced834d4a7fa1810f72179796a3c3`. A later approval
