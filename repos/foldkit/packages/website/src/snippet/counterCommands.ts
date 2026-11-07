@@ -12,27 +12,29 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep } = ApplicationDefinition
+const { makeFieldsStep, makeCommandsStep, makeComposition, makeCommand } =
+  ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = makeComposition()
 
-export const WaitBeforeReset = ApplicationDefinition.makeCommand(
-  'WaitBeforeReset',
-  {
-    messages: [Message.CompletedWaitBeforeReset],
-    handler: function* () {
-      return () =>
-        Effect.sleep('1 second').pipe(
-          Effect.as(Message.CompletedWaitBeforeReset()),
-        )
-    },
+export const WaitBeforeReset = makeCommand('WaitBeforeReset', {
+  messages: [Message.CompletedWaitBeforeReset],
+  handler: function* () {
+    return () =>
+      Effect.sleep('1 second').pipe(
+        Effect.as(Message.CompletedWaitBeforeReset()),
+      )
   },
-)
+})
 
 export const EffectsLayer = WaitBeforeReset.layer
 
@@ -65,14 +67,14 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      EffectsLayer,
+    }
+  }),
+)

@@ -8,10 +8,10 @@ Tab panel navigation with roving tabindex keyboard support, horizontal and verti
 
 `Tabs.makeBlock()` and Blocks returned by `Tabs.makeBlock` keep their own keyboard-focus state, but the parent owns the active tab. Store the active value in your Model, pass it in as `selectedValue`, and fold the `Selected` OutMessage back into that field through the Binding’s selected `fold` policy.
 
-What `Tabs.makeBlock<Value>()` returns is typed [`Completed<Value>` from `@foldkit/ui/tabs`](/ui/selection-blocks#completed-type), for cases where a created Block has to be named.
+What `Tabs.makeBlock<Value>()` returns is typed [`Tabs.Completed<Value>` from `@foldkit/ui`](/ui/selection-blocks#completed-type), for cases where a created Block has to be named.
 
 :::Info{label="See it in an app"}
-Check out how Tabs is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/ui/view/tabs.ts).
+Check out how Tabs is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/blocks/ui/view/tabs.ts).
 :::
 
 :::Info{label="Each item its own URL?"}
@@ -22,7 +22,7 @@ Tabs switches content within one page and applies the `tablist`/`tab`/`tabpanel`
 
 ### Horizontal
 
-Declare the tabs component once at module scope with `Tabs.makeBlock<Value>()` to lift the tab type through `view` and `update` without casting. Pass the typed `tabs` array and a `toView` callback that receives one `TabInfo<Value>` per tab (with attribute bundles for the tab button and its panel).
+Declare the tabs component once at module scope with `Tabs.makeBlock<Value>()` to type its view inputs and `Selected` OutMessage. Pass the typed `tabs` array and a `toView` callback that receives one `TabInfo<Value>` per tab (with attribute bundles for the tab button and its panel).
 
 ::Demo{name="horizontal"}
 
@@ -65,7 +65,7 @@ The tab list receives `role="tablist"` with `aria-orientation` and `aria-label`.
 
 ### InitConfig {#init-config}
 
-Configuration passed to the Binding for the completed Block returned by `Tabs.makeBlock<Tab>()`.
+Configuration passed to the Binding for the public contract returned by `Tabs.makeBlock<Tab>()`.
 
 | Name             | Type                      | Default       | Description                                                                                                                      |
 | ---------------- | ------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |

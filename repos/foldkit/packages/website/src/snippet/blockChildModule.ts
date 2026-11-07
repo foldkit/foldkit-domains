@@ -1,4 +1,4 @@
-// page/settings/block.ts
+// blocks/settings/block.ts
 import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
@@ -24,10 +24,17 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-const SettingsComposition = Block.makeDefinition('Settings', {
+export const SettingsKey = Symbol('Settings')
+const SettingsBlock = Block.make('Settings', {
+  key: SettingsKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = SettingsBlock
+
+const SettingsComposition = makeComposition()
 
 export const update = SettingsComposition.makeUpdate({
   ChangedTheme: (model, { theme }) => ({

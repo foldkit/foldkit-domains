@@ -1,12 +1,8 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 import { Popover } from '@foldkit/ui'
-import type { RenderInfo as PopoverRenderInfo } from '@foldkit/ui/popover'
 
 // Add one Popover Block field for each level:
 const Model = Schema.Struct({
@@ -20,43 +16,45 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
-const AccountMenuDefinition = Block.makeDefinition('AccountMenu', {
+export const AccountMenuKey = Symbol('AccountMenu')
+export const AccountMenuBlock = Block.make('AccountMenu', {
+  key: AccountMenuKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = AccountMenuDefinition
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = AccountMenuBlock
 
-const foldPopoverOutMessage = AccountMenuDefinition.makeOutMessageFold(
-  Popover.PopoverBlock,
-  {
-    Opened: makeNoopStep,
-    Closed: makeNoopStep,
+const foldPopoverOutMessage = makeOutMessageFold(Popover.PopoverBlock, {
+  Opened: makeNoopStep,
+  Closed: makeNoopStep,
+})
+
+const AccountPopoverBinding = makeRequiredFieldBinding(Popover.PopoverBlock, {
+  field: 'accountPopover',
+  init: {
+    contextToArgs: () => [{ id: 'account-popover', contentFocus: true }],
   },
-)
+}).withOutMessagePolicy({ fold: foldPopoverOutMessage })
 
-const AccountPopoverBinding = AccountMenuDefinition.makeBinding(
-  Popover.PopoverBlock,
-  {
-    field: 'accountPopover',
-    init: {
-      contextToArgs: () =>
-        Tuple.make({ id: 'account-popover', contentFocus: true }),
-    },
-  },
-).withOutMessagePolicy({ fold: foldPopoverOutMessage })
-
-const AccountDetailsPopoverBinding = AccountMenuDefinition.makeBinding(
+const AccountDetailsPopoverBinding = makeRequiredFieldBinding(
   Popover.PopoverBlock,
   {
     field: 'accountDetailsPopover',
     init: {
-      contextToArgs: () => Tuple.make({ id: 'account-details-popover' }),
+      contextToArgs: () => [{ id: 'account-details-popover' }],
     },
   },
 ).withOutMessagePolicy({ fold: foldPopoverOutMessage })
 
-const AccountMenuComposition = AccountMenuDefinition.makeComposition({
+const AccountMenuComposition = makeComposition({
   bindings: [AccountPopoverBinding, AccountDetailsPopoverBinding],
 })
 
@@ -79,7 +77,7 @@ const view = AccountMenuComposition.makeView((model, h) => {
     panel,
     backdrop,
     isVisible,
-  }: PopoverRenderInfo) =>
+  }: Popover.RenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -123,7 +121,7 @@ const view = AccountMenuComposition.makeView((model, h) => {
     panel,
     backdrop,
     isVisible,
-  }: PopoverRenderInfo) =>
+  }: Popover.RenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -158,3 +156,16 @@ const view = AccountMenuComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = AccountMenuBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* AccountMenuComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Popover.layer))

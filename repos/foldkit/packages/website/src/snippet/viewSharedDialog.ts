@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
-import type * as Dialog from '@foldkit/ui/dialog'
+import { Dialog } from '@foldkit/ui'
 
 type RenderDialog = (
   attributes: Dialog.RenderInfo['dialog'],

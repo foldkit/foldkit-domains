@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   mkdirSync,
   readdirSync,
+  realpathSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -177,9 +178,18 @@ const assertPortableDeclarations = (directory: string): void => {
 
 const main = (): void => {
   for (const fixture of [
+    'date-picker-layer-alias.accepted.ts',
+    'dialog-layer-alias.accepted.ts',
+    'listbox-layer-alias.accepted.ts',
+    'menu-layer-alias.accepted.ts',
+    'popover-layer-alias.accepted.ts',
+    'dialog-layer-alias.consume.ts',
     'generic-composition.accepted.ts',
     'generic-composition.rejected.ts',
     'generic-composition.consume.ts',
+    'unified-factories.accepted.ts',
+    'unified-factories.rejected.ts',
+    'unified-factories.consume.ts',
     'test-namespaces.accepted.ts',
     'kernel-operation-channels.accepted.ts',
     'kernel-operation-channels.consume.ts',
@@ -205,9 +215,27 @@ const main = (): void => {
     join(fixtureRoot, 'tsconfig.shared-dialog-renderer.source.json'),
   ])
 
-  const workspace = mkdtempSync(join(tmpdir(), 'foldkit-ui-declarations-'))
+  runCompiler('Checking unified UI factory source contracts', [
+    '-p',
+    join(fixtureRoot, 'tsconfig.unified-factories.source.json'),
+  ])
+
+  const workspace = realpathSync(
+    mkdtempSync(join(tmpdir(), 'foldkit-ui-declarations-')),
+  )
 
   try {
+    linkDependency(
+      workspace,
+      'effect',
+      join(foldkitRoot, 'node_modules', 'effect'),
+    )
+    linkDependency(
+      workspace,
+      'parse5',
+      join(foldkitRoot, 'node_modules', 'parse5'),
+    )
+
     const coreDist = join(workspace, 'packages', 'foldkit', 'dist')
     const uiDist = join(workspace, 'packages', 'ui', 'dist')
     const coreConfig = join(workspace, 'foldkit.build.json')
@@ -251,8 +279,15 @@ const main = (): void => {
     const sources = join(emitter, 'fixtures')
     mkdirSync(sources, { recursive: true })
     for (const fixture of [
+      'date-picker-layer-alias.accepted.ts',
+      'dialog-layer-alias.accepted.ts',
+      'listbox-layer-alias.accepted.ts',
+      'menu-layer-alias.accepted.ts',
+      'popover-layer-alias.accepted.ts',
       'generic-composition.accepted.ts',
       'generic-composition.rejected.ts',
+      'unified-factories.accepted.ts',
+      'unified-factories.rejected.ts',
       'test-namespaces.accepted.ts',
       'kernel-operation-channels.accepted.ts',
       'shared-dialog-renderer.ts',
@@ -276,11 +311,37 @@ const main = (): void => {
       },
       files: [
         join(sources, 'generic-composition.accepted.ts'),
+        join(sources, 'unified-factories.accepted.ts'),
         join(sources, 'test-namespaces.accepted.ts'),
         join(sources, 'kernel-operation-channels.accepted.ts'),
         join(sources, 'shared-dialog-renderer.accepted.ts'),
       ],
     })
+    const isolatedLayerAliasConfig = join(emitter, 'isolated-layer-alias.json')
+    for (const fixture of [
+      'date-picker-layer-alias.accepted.ts',
+      'dialog-layer-alias.accepted.ts',
+      'listbox-layer-alias.accepted.ts',
+      'menu-layer-alias.accepted.ts',
+      'popover-layer-alias.accepted.ts',
+    ]) {
+      writeJson(isolatedLayerAliasConfig, {
+        compilerOptions: {
+          ...compilerOptions,
+          declaration: true,
+          emitDeclarationOnly: true,
+          noEmitOnError: true,
+          rootDir: sources,
+          outDir: output,
+        },
+        files: [join(sources, fixture)],
+      })
+      runCompiler(`Emitting isolated public provider alias ${fixture}`, [
+        '-p',
+        isolatedLayerAliasConfig,
+      ])
+    }
+
     runCompiler('Emitting external generic UI declarations', [
       '-p',
       acceptedConfig,
@@ -312,6 +373,7 @@ const main = (): void => {
       compilerOptions: { ...compilerOptions, noEmit: true },
       files: [
         join(sources, 'generic-composition.rejected.ts'),
+        join(sources, 'unified-factories.rejected.ts'),
         join(sources, 'shared-dialog-renderer.rejected.ts'),
       ],
     })
@@ -324,7 +386,10 @@ const main = (): void => {
       join(relocated, 'generic-composition.consume.ts'),
     )
     for (const fixture of [
+      'dialog-layer-alias.consume.ts',
       'kernel-operation-channels.consume.ts',
+      'unified-factories.consume.ts',
+      'unified-factories.rejected.ts',
       'shared-dialog-renderer.consume.ts',
       'shared-dialog-renderer.rejected.ts',
     ]) {
@@ -334,7 +399,10 @@ const main = (): void => {
     writeJson(consumerConfig, {
       compilerOptions: { ...compilerOptions, noEmit: true },
       files: [
+        'dialog-layer-alias.consume.ts',
         'generic-composition.consume.ts',
+        'unified-factories.consume.ts',
+        'unified-factories.rejected.ts',
         'kernel-operation-channels.consume.ts',
         'shared-dialog-renderer.consume.ts',
         'shared-dialog-renderer.rejected.ts',

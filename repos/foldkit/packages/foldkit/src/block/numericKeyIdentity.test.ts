@@ -1,4 +1,4 @@
-import { Array, Effect, Option, Schema, Tuple } from 'effect'
+import { Array, Effect, Option, Schema } from 'effect'
 import { expect, it, vi } from 'vitest'
 
 import { defineMessageUnion } from '../message/index.js'
@@ -51,7 +51,7 @@ const Parent = makeDefinition('NumericIdentityParent', {
   Model,
   Message: Schema.Never,
 })
-const EntriesBinding = Parent.makeBinding(child, {
+const EntriesBinding = Parent.makeKeyedArrayBinding(child, {
   field: 'entries',
   key: 'id',
   childField: 'child',
@@ -117,12 +117,12 @@ it('rejects zero and negative zero as duplicate occurrences of the requested key
 })
 
 it('retains automatic startup Commands when Schema storage normalizes a zero key', () => {
-  const StartupBinding = Parent.makeBinding(child, {
+  const StartupBinding = Parent.makeKeyedArrayBinding(child, {
     field: 'entries',
     key: 'id',
     childField: 'child',
     init: {
-      instances: () => [{ key: -0, args: Tuple.make() }],
+      instances: () => [{ key: -0, args: [] }],
       toItem: (_occurrence, child) => ({ id: 0, child }),
     },
   })
@@ -135,14 +135,14 @@ it('retains automatic startup Commands when Schema storage normalizes a zero key
 })
 
 it('rejects duplicate signed-zero startup keys before initializing either occurrence', () => {
-  const StartupBinding = Parent.makeBinding(child, {
+  const StartupBinding = Parent.makeKeyedArrayBinding(child, {
     field: 'entries',
     key: 'id',
     childField: 'child',
     init: {
       instances: () => [
-        { key: -0, args: Tuple.make() },
-        { key: 0, args: Tuple.make() },
+        { key: -0, args: [] },
+        { key: 0, args: [] },
       ],
       toItem: ({ key }, child) => ({ id: key, child }),
     },

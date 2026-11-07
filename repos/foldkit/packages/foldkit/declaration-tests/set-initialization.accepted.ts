@@ -1,6 +1,6 @@
 import { Context, Effect, Option, Schema, Tuple } from 'effect'
 import { Block, Message, Struct, Update } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 
 export class ReadService extends Context.Service<
   ReadService,
@@ -84,11 +84,14 @@ export const ParentDefinition = Block.makeDefinition('DeclarationSetParent', {
   Model: ParentModel,
   Message: ParentMessage,
 })
-export const BaseRequiredBinding = ParentDefinition.makeBinding(ChildBlock, {
-  placement: 'required',
-  field: 'requiredChild',
-  init: { contextToArgs: () => [0] },
-})
+export const BaseRequiredBinding = ParentDefinition.makeRequiredFieldBinding(
+  ChildBlock,
+  {
+    placement: 'required',
+    field: 'requiredChild',
+    init: { contextToArgs: () => [0] },
+  },
+)
 const foldChildOutMessage = ChildBlock.OutMessage.match<
   Update.Step<typeof ParentModel.Type, typeof ParentMessage.Type>
 >({
@@ -97,15 +100,18 @@ const foldChildOutMessage = ChildBlock.OutMessage.match<
 export const RequiredBinding = BaseRequiredBinding.withOutMessagePolicy({
   fold: foldChildOutMessage,
 })
-const BaseOptionalBinding = ParentDefinition.makeBinding(ChildBlock, {
-  placement: 'optional',
-  field: 'maybeChild',
-  init: { contextToArgs: () => Option.none() },
-})
+const BaseOptionalBinding = ParentDefinition.makeOptionalFieldBinding(
+  ChildBlock,
+  {
+    placement: 'optional',
+    field: 'maybeChild',
+    init: { contextToArgs: () => Option.none() },
+  },
+)
 export const OptionalBinding = BaseOptionalBinding.withOutMessagePolicy({
   fold: foldChildOutMessage,
 })
-const BaseProjectedBinding = ParentDefinition.makeBinding(ChildBlock, {
+const BaseProjectedBinding = ParentDefinition.makeCustomBinding(ChildBlock, {
   placement: 'projected',
   read: model => Option.some(model.projectedChild),
   write: (model, nextChild) =>
@@ -118,22 +124,26 @@ const BaseProjectedBinding = ParentDefinition.makeBinding(ChildBlock, {
 export const ProjectedBinding = BaseProjectedBinding.withOutMessagePolicy({
   fold: foldChildOutMessage,
 })
-export const DefaultBinding = ParentDefinition.makeBinding(DefaultChildBlock, {
-  placement: 'default',
-  field: 'defaultChild',
-})
-export const DisabledStartupBinding = ParentDefinition.makeBinding(ChildBlock, {
-  placement: 'disabledStartup',
-  field: 'requiredChild',
-  init: false,
-})
-export const ParentOwnedOptionalBinding = ParentDefinition.makeBinding(
-  ChildBlock,
+export const DefaultBinding = ParentDefinition.makeRequiredFieldBinding(
+  DefaultChildBlock,
   {
-    placement: 'parentOwnedOptional',
-    field: 'maybeChild',
+    placement: 'default',
+    field: 'defaultChild',
   },
 )
+export const DisabledStartupBinding = ParentDefinition.makeRequiredFieldBinding(
+  ChildBlock,
+  {
+    placement: 'disabledStartup',
+    field: 'requiredChild',
+    init: false,
+  },
+)
+export const ParentOwnedOptionalBinding =
+  ParentDefinition.makeOptionalFieldBinding(ChildBlock, {
+    placement: 'parentOwnedOptional',
+    field: 'maybeChild',
+  })
 export const ParentComposition = ParentDefinition.makeComposition({
   bindings: [
     RequiredBinding,
@@ -173,13 +183,13 @@ export const setDisabledStartup = (model: typeof ParentModel.Type) =>
   initAndSet(DisabledStartupBinding, model, { args: [4] })
 export const setParentOwnedOptional = (model: typeof ParentModel.Type) =>
   initAndSet(ParentOwnedOptionalBinding, model, { args: [5] })
-export const setStep = ParentDefinition.makeStep(model => setRequired(model, 4))
+export const set = ParentDefinition.makeStep(model => setRequired(model, 4))
 export const update = ParentComposition.makeUpdate({
   RequestedSet: (model, { count }) => setRequired(model, count),
 })
 export const init = ParentComposition.makeInit(() => ({
   model: { label: 'current' },
-  steps: [setStep],
+  steps: [set],
 }))
 const prepareParent = () => ParentComposition.prepareBlock({ init, update })
 export const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<

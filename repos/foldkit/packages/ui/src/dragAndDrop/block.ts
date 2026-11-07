@@ -13,10 +13,10 @@ import {
 import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
 import {
-  type Attribute,
   type ChildAttribute,
   type Html,
   type HtmlBuilder,
+  type TaggedAttribute,
   childAttributes,
   inertHtml as ih,
 } from 'foldkit/html'
@@ -142,7 +142,9 @@ type CompletedResolveKeyboardMove =
 /** Parent-facing drag facts. `StartedKeyboardDrag` announces keyboard pickup;
  *  `ChangedKeyboardTarget` carries the previous and next proposed positions and
  *  emits only for a changed target. The parent owns announcements and commits
- *  item data after `Reordered`; Binding writers only store the child Model. */
+ *  item data after `Reordered`; Binding writers only store the child Model.
+ *  `Reordered.toIndex` is the destination index after removing the source item,
+ *  for both pointer and keyboard drops. A no-op drop still emits `Reordered`. */
 export const OutMessage = defineMessageUnion({
   StartedKeyboardDrag: {
     itemId: Schema.String,
@@ -167,13 +169,21 @@ export const OutMessage = defineMessageUnion({
 })
 export type OutMessage = typeof OutMessage.Type
 
-const DragAndDropDefinition = Block.makeDefinition('DragAndDrop', {
+/** @internal Stable identity of the DragAndDrop contract. */
+export const DragAndDropKey = Symbol('DragAndDrop')
+export const DragAndDropBlock = Block.make('DragAndDrop', {
+  key: DragAndDropKey,
   Model,
   Message,
   OutMessage,
+  InitArgs: Block.makeInputContract<readonly [config: InitConfig]>(),
+  view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
 })
 
-const DragAndDropComposition = DragAndDropDefinition.makeComposition()
+/** Public DragAndDrop authoring contract and passive graph identity. */
+export type DragAndDropBlock = typeof DragAndDropBlock
+
+const DragAndDropComposition = DragAndDropBlock.makeComposition()
 
 // INIT
 
@@ -203,7 +213,7 @@ export const init = DragAndDropComposition.makeInit((config: InitConfig) => ({
 type Direction = (typeof Message.PressedArrowKey.Type)['direction']
 
 /** Focuses a draggable item by ID after a keyboard move, drop, or cancel. */
-export const FocusItem = DragAndDropDefinition.makeCommand('FocusItem', {
+export const FocusItem = DragAndDropBlock.makeCommand('FocusItem', {
   args: { itemId: Schema.String },
   messages: [Message.CompletedFocusItem],
   handler: function* () {
@@ -214,6 +224,17 @@ export const FocusItem = DragAndDropDefinition.makeCommand('FocusItem', {
       )
   },
 })
+
+const sortableElements = (
+  container: ParentNode,
+  itemId: string,
+): ReadonlyArray<HTMLElement> =>
+  pipe(
+    container.querySelectorAll<HTMLElement>('[data-sortable-id]'),
+    Array.fromIterable,
+    Array.filter(({ dataset }) => dataset['sortableId'] !== itemId),
+  )
+
 const resolveWithinContainer = (
   config: Readonly<{
     itemId: string
@@ -234,12 +255,7 @@ const resolveWithinContainer = (
     })
   }
 
-  const itemCount = pipe(
-    container.querySelectorAll<HTMLElement>('[data-sortable-id]'),
-    Array.fromIterable,
-    Array.filter(({ dataset }) => dataset['sortableId'] !== config.itemId),
-    Array.length,
-  )
+  const itemCount = sortableElements(container, config.itemId).length
 
   const nextIndex = config.isForward
     ? Math.min(config.currentIndex + 1, itemCount)
@@ -351,7 +367,7 @@ export const ResolveKeyboardMoveArgs = Schema.Struct({
 export type ResolveKeyboardMoveArgs = typeof ResolveKeyboardMoveArgs.Type
 
 /** Resolves the next keyboard drag position by querying the DOM for adjacent sortable items and containers. */
-export const ResolveKeyboardMove = DragAndDropDefinition.makeCommand(
+export const ResolveKeyboardMove = DragAndDropBlock.makeCommand(
   'ResolveKeyboardMove',
   {
     args: ResolveKeyboardMoveArgs.fields,
@@ -366,7 +382,7 @@ export const ResolveKeyboardMove = DragAndDropDefinition.makeCommand(
 /** Processes a drag-and-drop Message and returns the next Model, optional
  *  Commands, and an optional OutMessage for the parent. */
 export const update = DragAndDropComposition.makeUpdate({
-  PressedDraggable: DragAndDropDefinition.makeFieldsStep.fromMessage(
+  PressedDraggable: DragAndDropBlock.makeFieldsStep.fromMessage(
     ({ itemId, containerId, index, screenX, screenY }) => ({
       dragState: () =>
         DragState.Pending({
@@ -554,15 +570,18 @@ export const update = DragAndDropComposition.makeUpdate({
       })),
       Match.orElse(() => ({ model })),
     ),
-  AdvancedAutoScrollFrame: DragAndDropDefinition.makeNoopStep(),
-  CompletedFocusItem: DragAndDropDefinition.makeNoopStep(),
+  AdvancedAutoScrollFrame: DragAndDropBlock.makeNoopStep(),
+  CompletedFocusItem: DragAndDropBlock.makeNoopStep(),
 })
 
 // SUBSCRIPTION
 
 const DragActivity = Schema.Literals(['Idle', 'Active'])
 type DragActivity = typeof DragActivity.Type
-const PointerDragActivity = Schema.Literals(['Idle', 'Active'])
+const PointerDragActivity = defineTaggedUnion({
+  Idle: {},
+  Active: { itemId: Schema.String },
+})
 type PointerDragActivity = typeof PointerDragActivity.Type
 const KeyboardDragActivity = Schema.Literals(['Idle', 'Active'])
 type KeyboardDragActivity = typeof KeyboardDragActivity.Type
@@ -571,6 +590,7 @@ const resolveDropTarget = (
   clientX: number,
   clientY: number,
   orientation: Orientation,
+  itemId: string,
 ): Option.Option<DropTarget> => {
   const maybeContainer = pipe(
     document.elementsFromPoint(clientX, clientY),
@@ -584,9 +604,7 @@ const resolveDropTarget = (
       return Option.none()
     }
 
-    const sortableItems = Array.fromIterable(
-      container.querySelectorAll<HTMLElement>('[data-sortable-id]'),
-    )
+    const sortableItems = sortableElements(container, itemId)
 
     const insertionIndex = pipe(
       sortableItems,
@@ -629,8 +647,10 @@ const autoScroll = (clientY: number): void => {
 const pointerDragActivityFromModel = (model: Model): PointerDragActivity =>
   Match.value(model.dragState).pipe(
     Match.withReturnType<PointerDragActivity>(),
-    Match.tag('Pending', 'Dragging', () => 'Active'),
-    Match.orElse(() => 'Idle'),
+    Match.tag('Pending', 'Dragging', ({ itemId }) =>
+      PointerDragActivity.Active({ itemId }),
+    ),
+    Match.orElse(() => PointerDragActivity.Idle()),
   )
 
 const dragActivityFromModel = (model: Model): DragActivity =>
@@ -680,7 +700,7 @@ const streamKeyboardDragEvents = () =>
     },
   })
 
-export const subscriptions = DragAndDropDefinition.makeSubscriptions(entry => ({
+export const subscriptions = DragAndDropBlock.makeSubscriptions(entry => ({
   documentPointer: entry(
     'DragAndDropDocumentPointer',
     {
@@ -695,35 +715,41 @@ export const subscriptions = DragAndDropDefinition.makeSubscriptions(entry => ({
       }),
       handler: function* () {
         return ({ dragActivity, orientation }) => {
-          const pointerEvents = Stream.merge(
-            Stream.fromEventListener<PointerEvent>(
-              document,
-              'pointermove',
-            ).pipe(
-              Stream.mapEffect(event =>
-                Effect.sync(() =>
-                  Message.MovedPointer({
-                    screenX: event.screenX,
-                    screenY: event.screenY,
-                    clientX: event.clientX,
-                    clientY: event.clientY,
-                    maybeDropTarget: resolveDropTarget(
-                      event.clientX,
-                      event.clientY,
-                      orientation,
+          const pointerEvents = PointerDragActivity.match(dragActivity, {
+            Idle: () => Stream.empty,
+            Active: ({ itemId }) =>
+              Stream.merge(
+                Stream.fromEventListener<PointerEvent>(
+                  document,
+                  'pointermove',
+                ).pipe(
+                  Stream.mapEffect(event =>
+                    Effect.sync(() =>
+                      Message.MovedPointer({
+                        screenX: event.screenX,
+                        screenY: event.screenY,
+                        clientX: event.clientX,
+                        clientY: event.clientY,
+                        maybeDropTarget: resolveDropTarget(
+                          event.clientX,
+                          event.clientY,
+                          orientation,
+                          itemId,
+                        ),
+                      }),
                     ),
-                  }),
+                  ),
                 ),
+                Stream.fromEventListener<PointerEvent>(
+                  document,
+                  'pointerup',
+                ).pipe(Stream.map(() => Message.ReleasedPointer())),
               ),
-            ),
-            Stream.fromEventListener<PointerEvent>(document, 'pointerup').pipe(
-              Stream.map(() => Message.ReleasedPointer()),
-            ),
-          )
+          })
 
           return Stream.when(
             Stream.merge(pointerEvents, documentDragStyles),
-            Effect.sync(() => dragActivity === 'Active'),
+            Effect.sync(() => dragActivity._tag === 'Active'),
           )
         }
       },
@@ -838,7 +864,7 @@ const draggable = (
   model: Model,
   input: DraggableAttributesInput,
   h: HtmlBuilder<Message>,
-): ReadonlyArray<Attribute<Message>> => {
+): ReadonlyArray<TaggedAttribute<Message>> => {
   const isKeyboardDragActivationKey = (key: string): boolean =>
     key === ' ' || key === 'Enter'
 
@@ -892,7 +918,7 @@ const draggable = (
 export const droppable = (
   containerId: string,
   label?: string,
-): ReadonlyArray<Attribute<never>> => [
+): ReadonlyArray<TaggedAttribute<never>> => [
   ih.DataAttribute('droppable-id', containerId),
   ih.Role('listbox'),
   ...(label ? [ih.AriaLabel(label)] : []),
@@ -902,7 +928,9 @@ export const droppable = (
  *  Typically combined with `draggable`. Handler-free, so the bundle is built
  *  with `inertHtml` and spreads into any Message universe's attribute
  *  array. */
-export const sortable = (itemId: string): ReadonlyArray<Attribute<never>> => [
+export const sortable = (
+  itemId: string,
+): ReadonlyArray<TaggedAttribute<never>> => [
   ih.DataAttribute('sortable-id', itemId),
 ]
 
@@ -923,7 +951,7 @@ export type ViewInputs = Readonly<{
 
 /** Publishes drag-and-drop attribute groups while the consumer retains full
  * control over the rendered elements and content. */
-export const view = DragAndDropComposition.makeView.withInputs<ViewInputs>(
+export const view = DragAndDropComposition.makeView.withInputs(
   (model, { toView }, h) =>
     toView({
       draggable: input => childAttributes(draggable(model, input, h)),
@@ -968,7 +996,8 @@ export const maybeDraggedItemId = (model: Model): Option.Option<string> =>
     Match.option,
   )
 
-/** Returns the current drop target, if any. Populated during pointer drag (from collision detection) and keyboard drag (from resolved position). */
+/** Returns the current drop target, if any. Its index is the destination slot
+ *  after removing the source item, for both pointer and keyboard drag. */
 export const maybeDropTarget = (model: Model): Option.Option<DropTarget> =>
   Match.value(model.dragState).pipe(
     Match.tag('Dragging', dragging => dragging.maybeDropTarget),
@@ -981,18 +1010,19 @@ export const maybeDropTarget = (model: Model): Option.Option<DropTarget> =>
     Match.orElse(() => Option.none()),
   )
 
-const prepare = () =>
-  DragAndDropComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer,
-  })
-/** Completed DragAndDrop Block contract. */
-export interface DragAndDropBlock extends Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> {}
-/** Complete DragAndDrop Block definition for connecting to a parent. */
-export const DragAndDropBlock: DragAndDropBlock = Block.assemble(prepare)
+/** Constructs the DragAndDrop implementation without starting occurrence effects. */
+export const layer = DragAndDropBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      subscriptions,
+      EffectsLayer,
+    }
+  }),
+)
+
+/** @internal Selected implementation used by component tests. */
+export const block = { block: DragAndDropBlock, layer }

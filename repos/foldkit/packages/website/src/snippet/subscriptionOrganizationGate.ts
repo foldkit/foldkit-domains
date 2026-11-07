@@ -1,7 +1,7 @@
-import { ApplicationDefinition } from './definition'
+import { makeRequiredFieldBinding } from './block'
 import * as Settings from './settings'
 
-export const SettingsBinding = ApplicationDefinition.makeBinding(
+export const SettingsBinding = makeRequiredFieldBinding(
   Settings.SettingsBlock,
   {
     field: 'settings',

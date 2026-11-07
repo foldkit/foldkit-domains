@@ -1,6 +1,11 @@
 import type { Block } from 'foldkit'
 
-import { ApplicationDefinition, makeStep } from './definition'
+import {
+  makeComposition,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeStep,
+} from './block'
 import { Message } from './message'
 import {
   EDITION_RADIO_GROUP_ID,
@@ -9,14 +14,14 @@ import {
 } from './model'
 import { stepMachine } from './transition'
 
-export const EditionRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const EditionRadioGroupBinding = makeRequiredFieldBinding(
   EditionRadioGroupBlock,
   {
     field: 'editionRadioGroup',
     init: { contextToArgs: () => [{ id: EDITION_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(EditionRadioGroupBlock, {
+  fold: makeOutMessageFold(EditionRadioGroupBlock, {
     Selected: ({ value }) =>
       makeStep(
         stepMachine(
@@ -28,7 +33,7 @@ export const EditionRadioGroupBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [EditionRadioGroupBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

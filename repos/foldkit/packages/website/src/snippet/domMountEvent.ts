@@ -10,9 +10,18 @@ type Message = typeof Message.Type
 const Model = Schema.Struct({})
 type Model = typeof Model.Type
 
-const PanelDefinition = Block.makeDefinition('Panel', { Model, Message })
+export const PanelKey = Symbol('Panel')
+const PanelBlock = Block.make('Panel', {
+  key: PanelKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message,
+})
 
-const TrackPointer = PanelDefinition.makeMountStream('TrackPointer', {
+const { makeMountStream, makeComposition } = PanelBlock
+
+const TrackPointer = makeMountStream('TrackPointer', {
   messages: [Message.MovedPointer],
   handler: function* () {
     return ({ element }) =>
@@ -28,7 +37,7 @@ const TrackPointer = PanelDefinition.makeMountStream('TrackPointer', {
   },
 })
 
-const PanelComposition = PanelDefinition.makeComposition({
+const PanelComposition = makeComposition({
   mounts: [TrackPointer],
 })
 

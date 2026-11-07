@@ -1,6 +1,6 @@
 import { Context, Effect, Option, Schema } from 'effect'
 import { Block, Message } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 
 export class ReadService extends Context.Service<
   ReadService,
@@ -64,11 +64,14 @@ export const ParentDefinition = Block.makeDefinition(
   'DeclarationOptionalSetParent',
   { Model: ParentModel, Message: ParentMessage },
 )
-export const EntryBinding = ParentDefinition.makeBinding(ChildBlock, {
-  field: 'maybeEntry',
-  key: 'id',
-  childField: 'child',
-})
+export const EntryBinding = ParentDefinition.makeOptionalKeyedFieldBinding(
+  ChildBlock,
+  {
+    field: 'maybeEntry',
+    key: 'id',
+    childField: 'child',
+  },
+)
 export const ParentComposition = ParentDefinition.makeComposition({
   bindings: [EntryBinding],
 })
@@ -96,7 +99,7 @@ export const setGenericEntry = <const Count extends number>(
   model: typeof ParentModel.Type,
   count: Count,
 ) => initAndSet(EntryBinding, model, { key: firstId, args: [count] })
-export const setEntryStep = ParentDefinition.makeStep(model =>
+export const initOptionalEntry = ParentDefinition.makeStep(model =>
   setEntry(model, firstId, 2),
 )
 export const update = ParentComposition.makeUpdate({
@@ -104,7 +107,7 @@ export const update = ParentComposition.makeUpdate({
 })
 export const init = ParentComposition.makeInit(() => ({
   model: { maybeEntry: Option.none(), label: 'current' },
-  steps: [setEntryStep],
+  steps: [initOptionalEntry],
 }))
 const prepareParent = () => ParentComposition.prepareBlock({ init, update })
 export const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<

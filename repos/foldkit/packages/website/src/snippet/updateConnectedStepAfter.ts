@@ -1,13 +1,9 @@
 // ✅ Preserve connected Steps until the Composition runs them.
 import { Update } from 'foldkit'
 
-import {
-  ApplicationDefinition,
-  DialogBinding,
-  SelectionBinding,
-} from './composition'
+import { DialogBinding, SelectionBinding, makeStep } from './composition'
 
-export const finishEditingStep = ApplicationDefinition.makeStep(() =>
+export const finishEditing = makeStep(() =>
   Update.combineSteps([
     DialogBinding.requestClose(),
     SelectionBinding.requestClear(),

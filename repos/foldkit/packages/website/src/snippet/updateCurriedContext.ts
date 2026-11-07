@@ -1,5 +1,5 @@
-import { Schema } from 'effect'
-import { Block } from 'foldkit'
+import { Effect, Schema } from 'effect'
+import { Block, Story } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import * as Update from 'foldkit/update'
 
@@ -15,15 +15,19 @@ type Message = typeof Message.Type
 const DispatchContext = Schema.Struct({ requestId: Schema.String })
 type DispatchContext = typeof DispatchContext.Type
 
-const ContextualRefreshDefinition = Block.makeDefinition('ContextualRefresh', {
+export const ContextualRefreshKey = Symbol('ContextualRefresh')
+export const ContextualRefreshBlock = Block.make('ContextualRefresh', {
+  key: ContextualRefreshKey,
+  InitArgs: Schema.Tuple([]),
+  Context: Schema.Tuple([DispatchContext]),
+
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ContextualRefreshDefinition
+const { makeFieldsStep, makeComposition } = ContextualRefreshBlock
 
-const ContextualRefreshComposition =
-  ContextualRefreshDefinition.makeComposition()
+const ContextualRefreshComposition = makeComposition()
 const update = ContextualRefreshComposition.makeUpdate.withContext(
   ({ requestId }: DispatchContext) => ({
     RequestedRefresh: makeFieldsStep(() => ({
@@ -32,12 +36,29 @@ const update = ContextualRefreshComposition.makeUpdate.withContext(
   }),
 )
 
-const refreshStep = (model: Model) =>
-  update(Message.RequestedRefresh())(model, { requestId: 'current' })
-
-const countRefreshStep = makeFieldsStep(() => ({
-  refreshCount: count => count + 1,
+const init = ContextualRefreshComposition.makeInit(() => ({
+  model: { lastRequestId: '', refreshCount: 0 },
 }))
 
-export const requestRefreshStep = (model: Model) =>
-  Update.combineSteps(model, [refreshStep, countRefreshStep])
+const layer = ContextualRefreshBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+    }
+  }),
+)
+
+export const requestRefresh = Story.withBlock(
+  { block: ContextualRefreshBlock, layer },
+  block => {
+    const refresh = (model: Model) =>
+      block.update(Message.RequestedRefresh())(model, { requestId: 'current' })
+    const countRefresh = makeFieldsStep(() => ({
+      refreshCount: count => count + 1,
+    }))
+
+    return Update.combineSteps(block.init().model, [refresh, countRefresh])
+  },
+)

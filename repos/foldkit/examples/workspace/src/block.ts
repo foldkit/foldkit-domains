@@ -1,22 +1,30 @@
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
+import { Url } from 'foldkit/url'
 
-import { ApplicationComposition } from './composition'
-import { init } from './init'
-import { EffectsLayer } from './layer'
-import type { Model } from './model'
-import { subscriptions } from './subscription'
-import { update } from './update'
-import { view } from './view/view'
+import { Message } from './message'
+import { Model } from './model'
+import { WorkspaceRepository } from './repository'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Url]),
+  view: { kind: 'Document' },
+  effects: { services: [WorkspaceRepository] },
+  Model,
+  Message,
+})
+
+export const {
+  makeRequiredFieldBinding,
+  makeCommand,
+  makeCommandsStep,
+  makeComposition,
+  makeFieldsStep,
+  makeRecordBinding,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeStep,
+  makeSubscriptions,
+} = ApplicationBlock

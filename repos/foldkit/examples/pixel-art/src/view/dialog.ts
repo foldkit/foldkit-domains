@@ -1,16 +1,16 @@
 import { Option } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import { Button, DialogBlock } from '@foldkit/ui'
+import { Button, Dialog } from '@foldkit/ui'
 
 import {
   type ApplicationViewBuilder,
-  ErrorDialogBinding as ErrorDialogBinding,
-  GridSizeConfirmDialogBinding as GridSizeConfirmDialogBinding,
+  ErrorDialogBinding,
+  GridSizeConfirmDialogBinding,
 } from '../composition'
 import { Message } from '../message'
 
-type DialogModel = typeof DialogBlock.Model.Type
+type DialogModel = typeof Dialog.DialogBlock.Model.Type
 
 const dialogClassName =
   'bg-transparent p-0 open:flex items-center justify-center'

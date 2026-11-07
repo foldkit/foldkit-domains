@@ -41,14 +41,14 @@ const ClearJoinDraft = Home.makeCommand('ClearJoinDraft', {
   },
 })
 const HomeComposition = Home.makeComposition()
-const resetJoinFormStep = Home.makeStep((model, username: string) => ({
+const resetJoinForm = Home.makeStep((model, username: string) => ({
   model: modifyFields(model, {
     username: () => username,
     resetCount: count => count + 1,
   }),
   commands: [ClearJoinDraft()],
 }))
-const requestJoinStep = Home.makeStep(
+const requestJoin = Home.makeStep(
   (model, roomId: string, username: string) => ({
     model,
     outMessage: HomeOutMessage.JoinedRoom({ roomId, username }),
@@ -61,9 +61,9 @@ const prepareHomeBlock = () =>
     })),
     update: HomeComposition.makeUpdate({
       RequestedResetJoinForm: (model, { username }) =>
-        resetJoinFormStep(model, username),
+        resetJoinForm(model, username),
       RequestedJoin: (model, { roomId, username }) =>
-        requestJoinStep(model, roomId, username),
+        requestJoin(model, roomId, username),
       SucceededJoinRoom: (model, { roomId, username }) => ({
         model,
         outMessage: HomeOutMessage.JoinedRoom({ roomId, username }),
@@ -102,7 +102,7 @@ const Room = Block.makeDefinition('Room', {
   OutMessage: RoomOutMessage,
 })
 const RoomComposition = Room.makeComposition()
-const informJoinedStep = Room.makeStep(
+const informOfJoined = Room.makeStep(
   (model, username: string, _context: RoomContext) => ({
     model: modifyFields(model, { maybeUsername: () => Option.some(username) }),
   }),
@@ -114,14 +114,14 @@ const prepareRoomBlock = () =>
     })),
     update: RoomComposition.makeUpdate.withContext((context: RoomContext) => ({
       RequestedInformJoined: (model, { username }) =>
-        informJoinedStep(model, username, context),
+        informOfJoined(model, username, context),
       CompletedLeaveRoom: model => ({
         model,
         outMessage: RoomOutMessage.LeftRoom({ roomId: context.roomId }),
       }),
     })),
     operations: {
-      informJoined: (username: string, context: RoomContext) =>
+      informOfJoined: (username: string, context: RoomContext) =>
         Tuple.make(RoomMessage.RequestedInformJoined({ username }), context),
     },
     EffectsLayer: Layer.empty,
@@ -181,7 +181,7 @@ const foldHomeOutMessage = Application.makeOutMessageFold(HomeBlock, {
             }),
         }),
       ),
-      RoomBinding.informJoined(roomId, username, { roomId }),
+      RoomBinding.informOfJoined(roomId, username, { roomId }),
       Application.makeStep(model => ({
         model: modifyFields(model, {
           route: () => ApplicationRoute.Room({ roomId }),
@@ -190,15 +190,15 @@ const foldHomeOutMessage = Application.makeOutMessageFold(HomeBlock, {
     ]),
 })
 
-const HomeBinding = Application.makeBinding(HomeBlock, {
+const HomeBinding = Application.makeRequiredFieldBinding(HomeBlock, {
   field: 'home',
-  presentWhen: model => model.route._tag === 'Home',
+  activeWhen: model => model.route._tag === 'Home',
   init: false,
 }).withOutMessagePolicy({
   fold: foldHomeOutMessage,
 })
 
-const RoomBinding = Application.makeBinding(RoomBlock, {
+const RoomBinding = Application.makeCustomKeyedBinding(RoomBlock, {
   readAll: model => Option.toArray(model.maybeRoomInstance),
   key: instance => instance.roomId,
   read: instance => instance.model,
@@ -235,36 +235,36 @@ const makeInitialModel = () =>
     maybeRoomInstance: Option.none(),
     route: ApplicationRoute.Home(),
   })
-const directHomeRequestStep = HomeBinding.requestJoin('room-a', 'Devin')
+const directHomeRequest = HomeBinding.requestJoin('room-a', 'Devin')
 
 // @ts-expect-error A raw recipe cannot erase its deferred Binding policy obligation.
-const erasedDirectHomeRequestStep: (
-  model: Parameters<typeof directHomeRequestStep>[0],
+const erasedDirectHomeRequest: (
+  model: Parameters<typeof directHomeRequest>[0],
 ) => Update.ResultRecipe<
   Model,
   Parameters<typeof update>[1],
   never,
-  Update.RequirementsOf<typeof directHomeRequestStep>,
+  Update.RequirementsOf<typeof directHomeRequest>,
   Block.RequirementOfBinding<typeof HomeBinding>
-> = directHomeRequestStep
+> = directHomeRequest
 
-const widenedDirectHomeRequestStep: (
-  model: Parameters<typeof directHomeRequestStep>[0],
+const widenedDirectHomeRequest: (
+  model: Parameters<typeof directHomeRequest>[0],
 ) => Update.ResultRecipe<
   Model,
   Parameters<typeof update>[1],
   never,
-  Update.RequirementsOf<typeof directHomeRequestStep>,
+  Update.RequirementsOf<typeof directHomeRequest>,
   unknown
-> = directHomeRequestStep
+> = directHomeRequest
 
 // @ts-expect-error Composition init rejects a recipe whose Binding policy obligation was widened away.
 ApplicationComposition.makeInit(() => ({
   model: makeInitialModel(),
-  steps: [widenedDirectHomeRequestStep],
+  steps: [widenedDirectHomeRequest],
 }))
 
-void erasedDirectHomeRequestStep
+void erasedDirectHomeRequest
 const prepareApplicationBlock = () =>
   ApplicationComposition.prepareBlock({
     init: ApplicationComposition.makeInit(() => ({
@@ -327,10 +327,11 @@ describe('reciprocal sibling coordination', () => {
   ])(
     'rejects $name OutMessage policy from erased configuration',
     ({ policy, error }) => {
-      const binding = Reflect.apply(Application.makeBinding, undefined, [
-        HomeBlock,
-        { field: 'home' },
-      ])
+      const binding = Reflect.apply(
+        Application.makeRequiredFieldBinding,
+        undefined,
+        [HomeBlock, { field: 'home' }],
+      )
 
       expect(() => {
         const selectedBinding =
@@ -347,10 +348,11 @@ describe('reciprocal sibling coordination', () => {
   it('validates a policy without calling it during Binding construction', () => {
     const fold = vi.fn(() => Application.makeStep(model => ({ model })))
 
-    const binding = Reflect.apply(Application.makeBinding, undefined, [
-      HomeBlock,
-      { field: 'home' },
-    ])
+    const binding = Reflect.apply(
+      Application.makeRequiredFieldBinding,
+      undefined,
+      [HomeBlock, { field: 'home' }],
+    )
     const selectedBinding = Reflect.apply(
       binding.withOutMessagePolicy,
       binding,

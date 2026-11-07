@@ -18,12 +18,19 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const ApplicationComposition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Flags]),
   Model,
   Message,
-}).makeComposition()
+})
 
-const init = ApplicationComposition.makeInit((flags: Flags) => ({
+const { makeComposition } = ApplicationBlock
+
+const ApplicationComposition = makeComposition()
+
+const init = ApplicationComposition.makeInit(flags => ({
   model: {
     count: Option.getOrElse(flags.savedCount, () => 0),
     startingCount: flags.savedCount,

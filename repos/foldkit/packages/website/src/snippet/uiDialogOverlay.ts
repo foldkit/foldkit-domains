@@ -1,4 +1,4 @@
-import { Option, Schema, Tuple } from 'effect'
+import { Effect, Layer, Option, Schema } from 'effect'
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
@@ -6,7 +6,6 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 import { Combobox, Dialog } from '@foldkit/ui'
-import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
 
 const City = Schema.Literals(['Johannesburg', 'Kyiv', 'Oxford', 'Wellington'])
 type City = typeof City.Type
@@ -34,44 +33,48 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
-const FilterDialogDefinition = Block.makeDefinition('FilterDialog', {
+export const FilterDialogKey = Symbol('FilterDialog')
+export const FilterDialogBlock = Block.make('FilterDialog', {
+  key: FilterDialogKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = FilterDialogDefinition
+const {
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = FilterDialogBlock
 
-const foldDialogOutMessage = FilterDialogDefinition.makeOutMessageFold(
-  Dialog.DialogBlock,
-  {
+const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
+  field: 'dialog',
+  init: { contextToArgs: () => [{ id: 'edit-filters' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Dialog.DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
-  },
-)
+  }),
+})
 
-const foldComboboxOutMessage = FilterDialogDefinition.makeOutMessageFold(
-  CityCombobox,
-  {
+const ComboboxBinding = makeRequiredFieldBinding(CityCombobox, {
+  field: 'combobox',
+  init: { contextToArgs: () => [{ id: 'city' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(CityCombobox, {
     Selected: ({ value }) =>
       makeFieldsStep(() => ({
         maybeCity: () => Option.some(value),
       })),
     ClearedSelection: makeNoopStep,
-  },
-)
+  }),
+})
 
-const DialogBinding = FilterDialogDefinition.makeBinding(Dialog.DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => Tuple.make({ id: 'edit-filters' }) },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
-
-const ComboboxBinding = FilterDialogDefinition.makeBinding(CityCombobox, {
-  field: 'combobox',
-  init: { contextToArgs: () => Tuple.make({ id: 'city' }) },
-}).withOutMessagePolicy({ fold: foldComboboxOutMessage })
-
-const FilterDialogComposition = FilterDialogDefinition.makeComposition({
+const FilterDialogComposition = makeComposition({
   bindings: [DialogBinding, ComboboxBinding],
 })
 
@@ -96,7 +99,7 @@ const view = FilterDialogComposition.makeView((model, h) => {
     panel,
     title,
     isVisible,
-  }: DialogRenderInfo) =>
+  }: Dialog.RenderInfo) =>
     h.dialog(
       [...dialog],
       isVisible
@@ -144,3 +147,16 @@ const view = FilterDialogComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = FilterDialogBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* FilterDialogComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Layer.mergeAll(Dialog.layer, Combobox.layer)))

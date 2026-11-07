@@ -90,7 +90,7 @@ const ParentDefinition = makeDefinition('GeneratedSimulationParent', {
   Model: ParentModel,
   Message: ParentMessage,
 })
-const ChildBinding = ParentDefinition.makeBinding(ChildBlock, {
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(ChildBlock, {
   field: 'child',
 })
 const ParentComposition = ParentDefinition.makeComposition({
@@ -120,9 +120,12 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message,
 })
-const ParentBinding = ApplicationDefinition.makeBinding(ParentBlock, {
-  field: 'parent',
-})
+const ParentBinding = ApplicationDefinition.makeRequiredFieldBinding(
+  ParentBlock,
+  {
+    field: 'parent',
+  },
+)
 const ApplicationComposition = ApplicationDefinition.makeComposition({
   bindings: [ParentBinding],
 })
@@ -251,7 +254,9 @@ it('requires a framework-created root Composition for registry assembly', () => 
   expect(() =>
     // @ts-expect-error Erased JavaScript input must receive an actionable configuration error.
     Scene.subscriptions({}),
-  ).toThrow('Scene.subscriptions Composition must come from')
+  ).toThrow(
+    'Scene.subscriptions Composition must come from Block.make(...).makeComposition(...).',
+  )
 })
 
 it('decodes a complete dispatch contract and replays it through pure update', () => {

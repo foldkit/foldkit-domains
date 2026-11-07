@@ -1,10 +1,10 @@
 import { Match, Option } from 'effect'
 
-import { PreviewBanner, Shared } from '../component'
+import { HomeBlock } from '../blocks'
 import type { ApplicationViewBuilder } from '../composition'
 import {
   ApplicationComposition,
-  HomeBinding,
+  MaybeHomeBinding,
   PlaygroundBinding,
   SnippetCopyBinding,
   SnippetDisclosureBinding,
@@ -13,22 +13,19 @@ import { Deployment } from '../deployment'
 import { Docs, Marketing } from '../layout'
 import { Message } from '../message'
 import { type Model } from '../model'
-import { HomeBlock, Newsletter } from '../page'
+import { Newsletter } from '../page'
 import { routeToCanonicalUrl } from '../route'
 import { routeTitle } from '../routeTitle'
 import * as SnippetCopyRenderer from '../snippetCopyRenderer'
 import * as SnippetDisclosureRenderer from '../snippetDisclosureRenderer'
 import * as Blog from './blog'
+import * as DeploymentBanner from './deploymentBanner'
 
 type HomeBlockModel = typeof HomeBlock.Model.Type
 
-type HomeViewInput = Readonly<{
-  model: Model
-  homeModel: HomeBlockModel
-}>
-
 const homeView = (
-  { model, homeModel }: HomeViewInput,
+  model: Model,
+  homeModel: HomeBlockModel,
   h: ApplicationViewBuilder,
 ) => {
   const renderCopyButton = SnippetCopyRenderer.renderer(
@@ -36,7 +33,7 @@ const homeView = (
     config => h.block(SnippetCopyBinding.embedView(config)),
   )
   const content = h.block(
-    HomeBinding.embedView({
+    MaybeHomeBinding.embedView({
       slotId: 'home',
       model: homeModel,
       viewInputs: {
@@ -87,7 +84,7 @@ export const view = ApplicationComposition.makeView((model, h) => {
     Match.tag('Home', () =>
       Option.match(model.maybeHome, {
         onNone: () => h.empty,
-        onSome: homeModel => homeView({ model, homeModel }, h),
+        onSome: homeModel => homeView(model, homeModel, h),
       }),
     ),
     Match.tag('Newsletter', () => newsletterView(model, h)),
@@ -115,8 +112,10 @@ export const view = ApplicationComposition.makeView((model, h) => {
     canonical: routeToCanonicalUrl(model.route),
     body: Deployment.match(model.deployment, {
       Production: () => body,
-      Canary: ({ commit }) => h.div([], [body, Shared.canaryBanner(commit)]),
-      Preview: ({ release }) => h.div([], [body, PreviewBanner.view(release)]),
+      Canary: ({ commit }) =>
+        h.div([], [body, DeploymentBanner.canaryView(commit)]),
+      Preview: ({ release }) =>
+        h.div([], [body, DeploymentBanner.previewView(release)]),
     }),
   }
 })

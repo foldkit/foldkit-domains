@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -14,12 +14,18 @@ const ThemePickerMessage = defineMessageUnion({
 })
 type ThemePickerMessage = typeof ThemePickerMessage.Type
 
-const ThemePickerComposition = Block.makeDefinition('ThemePicker', {
+export const ThemePickerKey = Symbol('ThemePicker')
+export const ThemePickerBlock = Block.make('ThemePicker', {
+  key: ThemePickerKey,
+  InitArgs: Schema.Tuple([Theme]),
+  view: { kind: 'Element' },
   Model: ThemePickerModel,
   Message: ThemePickerMessage,
-}).makeComposition()
+})
 
-const themePickerInit = ThemePickerComposition.makeInit((theme: Theme) => ({
+const ThemePickerComposition = ThemePickerBlock.makeComposition()
+
+const themePickerInit = ThemePickerComposition.makeInit(theme => ({
   model: ThemePickerModel.make({ theme }),
 }))
 const themePickerUpdate = ThemePickerComposition.makeUpdate({
@@ -30,13 +36,17 @@ const themePickerUpdate = ThemePickerComposition.makeUpdate({
 const themePickerView = ThemePickerComposition.makeView((model, h) =>
   h.p([], [`Theme: ${model.theme}`]),
 )
-const prepare = () =>
-  ThemePickerComposition.prepareBlock({
-    init: themePickerInit,
-    update: themePickerUpdate,
-    view: themePickerView,
-  })
-const ThemePickerBlock = Block.assemble(prepare)
+
+const layer = ThemePickerBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init: themePickerInit,
+      update: themePickerUpdate,
+      view: themePickerView,
+    }
+  }),
+)
 
 const ProfileModel = Schema.Struct({
   username: Schema.String,
@@ -53,26 +63,30 @@ const ProfileChildInitContext = Schema.Struct({
 })
 type ProfileChildInitContext = typeof ProfileChildInitContext.Type
 
-const ProfileDefinition = Block.makeDefinition('Profile', {
+export const ProfileKey = Symbol('Profile')
+const ProfileBlock = Block.make('Profile', {
+  key: ProfileKey,
+  InitArgs: Schema.Tuple([ProfileChildInitContext]),
   Model: ProfileModel,
   Message: ProfileMessage,
   ChildInitContext: ProfileChildInitContext,
 })
 
-const ThemePickerBinding = ProfileDefinition.makeBinding(ThemePickerBlock, {
-  field: 'themePicker',
-  init: {
-    contextToArgs: ({ savedTheme }) => [savedTheme],
+const ThemePickerBinding = ProfileBlock.makeRequiredFieldBinding(
+  ThemePickerBlock,
+  {
+    field: 'themePicker',
+    init: {
+      contextToArgs: ({ savedTheme }) => [savedTheme],
+    },
   },
-})
+)
 
-const ProfileComposition = ProfileDefinition.makeComposition({
+const ProfileComposition = ProfileBlock.makeComposition({
   bindings: [ThemePickerBinding],
 })
 
-export const init = ProfileComposition.makeInit(
-  (childInitContext: ProfileChildInitContext) => ({
-    childInitContext,
-    model: { username: childInitContext.username },
-  }),
-)
+export const init = ProfileComposition.makeInit(childInitContext => ({
+  childInitContext,
+  model: { username: childInitContext.username },
+}))

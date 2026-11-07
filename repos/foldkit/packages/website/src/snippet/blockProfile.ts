@@ -1,16 +1,21 @@
-import { Block } from 'foldkit'
+import { Effect, Layer } from 'effect'
 
-import type { Model } from './blockProfileContract'
-import { ApplicationDefinition, makeFieldsStep } from './blockProfileContract'
+import {
+  ApplicationBlock,
+  makeFieldsStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} from './blockProfileContract'
 import * as Settings from './blockSettings'
 
-export const SettingsBinding = ApplicationDefinition.makeBinding(
+export const SettingsBinding = makeRequiredFieldBinding(
   Settings.SettingsBlock,
   {
     field: 'settings',
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(Settings.SettingsBlock, {
+  fold: makeOutMessageFold(Settings.SettingsBlock, {
     ChangedTheme: ({ theme }) =>
       makeFieldsStep(() => ({
         previewTheme: () => theme,
@@ -18,7 +23,7 @@ export const SettingsBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [SettingsBinding],
 })
 
@@ -41,13 +46,17 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ApplicationComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Settings.layer))
+
+export { ApplicationBlock } from './blockProfileContract'

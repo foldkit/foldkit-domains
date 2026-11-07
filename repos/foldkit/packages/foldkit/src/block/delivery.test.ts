@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { defineMessageUnion } from '../schema/index.js'
 import { modifyFields } from '../struct/index.js'
+import { toParentMessage } from '../test/toParentMessage.js'
 import { makeDefinition } from './define.js'
 import {
   makeCompositionUpdate,
@@ -31,6 +32,90 @@ const childMessageOf = (message: Readonly<{ _tag: string }>) =>
   Schema.decodeUnknownSync(ParentEnvelope)(message).message
 
 describe('Composition update delivery', () => {
+  it('uses current parent context to gate interaction without dropping completions', () => {
+    const ReaderModel = Schema.Struct({ count: Schema.Number })
+    type ReaderModel = typeof ReaderModel.Type
+    const ReaderMessage = defineMessageUnion({
+      ClickedIncrement: {},
+      CompletedRead: { count: Schema.Number },
+    })
+    type ReaderMessage = typeof ReaderMessage.Type
+    const ReaderComposition = makeDefinition('DeliveryGatedReader', {
+      Model: ReaderModel,
+      Message: ReaderMessage,
+    }).makeComposition()
+    const prepareReader = () =>
+      ReaderComposition.prepareBlock({
+        init: ReaderComposition.makeInit(() => ({ model: { count: 0 } })),
+        update: ReaderComposition.makeUpdate.withContext(
+          (isInteractionAllowed: boolean) => ({
+            ClickedIncrement: model =>
+              isInteractionAllowed
+                ? {
+                    model: modifyFields(model, {
+                      count: count => count + 1,
+                    }),
+                  }
+                : { model },
+            CompletedRead: (model, { count }) => ({
+              model: modifyFields(model, { count: () => count }),
+            }),
+          }),
+        ),
+      })
+    const ReaderBlock: Block.FromAssemblyWithoutViewOrOutMessage<
+      typeof ReaderModel,
+      typeof prepareReader
+    > = Block.assemble(prepareReader)
+    const ParentModel = Schema.Struct({
+      reader: ReaderBlock.Model,
+      isInteractionAllowed: Schema.Boolean,
+    })
+    type ParentModel = typeof ParentModel.Type
+    const ParentDefinition = makeDefinition('DeliveryGatedReaderParent', {
+      Model: ParentModel,
+      Message: Schema.Never,
+    })
+    const ReaderBinding = ParentDefinition.makeRequiredFieldBinding(
+      ReaderBlock,
+      {
+        field: 'reader',
+        delivery: {
+          toUpdateContext: model => [model.isInteractionAllowed],
+        },
+      },
+    )
+    const ParentComposition = ParentDefinition.makeComposition({
+      bindings: [ReaderBinding],
+    })
+    const update = ParentComposition.makeUpdate({})
+    const model = ParentModel.make({
+      reader: { count: 0 },
+      isInteractionAllowed: false,
+    })
+    const clicked = toParentMessage(
+      ReaderBinding,
+      ReaderMessage.ClickedIncrement(),
+    )
+
+    const blocked = update(model, clicked)
+    const completed = update(
+      blocked.model,
+      toParentMessage(ReaderBinding, ReaderMessage.CompletedRead({ count: 5 })),
+    )
+
+    expect(blocked.model).toEqual(model)
+    expect(blocked.model.reader).toBe(model.reader)
+    expect(completed.model.reader.count).toBe(5)
+
+    const authorized = modifyFields(completed.model, {
+      isInteractionAllowed: () => true,
+    })
+    const incremented = update(authorized, clicked)
+
+    expect(incremented.model.reader.count).toBe(6)
+  })
+
   it('rejects an omitted route for a generated child update with required context', () => {
     const ContextualChildModel = Schema.Struct({ count: Schema.Number })
     type ContextualChildModel = typeof ContextualChildModel.Type
@@ -75,7 +160,7 @@ describe('Composition update delivery', () => {
 
     expect(contextualBlock.update.length).toBe(2)
     expect(() =>
-      Reflect.apply(ContextualParent.makeBinding, undefined, [
+      Reflect.apply(ContextualParent.makeRequiredFieldBinding, undefined, [
         contextualBlock,
         {
           field: 'child',
@@ -160,7 +245,7 @@ describe('Composition update delivery', () => {
       Model: ParentModel,
       Message: Schema.Never,
     })
-    const CounterBinding = Parent.makeBinding(counterBlock, {
+    const CounterBinding = Parent.makeCustomKeyedBinding(counterBlock, {
       readAll: model => model.counters,
       key: instance => instance.id,
       read: instance => instance.counter,

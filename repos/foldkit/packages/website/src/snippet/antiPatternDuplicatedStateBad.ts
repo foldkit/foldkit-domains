@@ -19,10 +19,17 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const ApplicationComposition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = ApplicationBlock
+
+const ApplicationComposition = makeComposition()
 
 const update = ApplicationComposition.makeUpdate({
   UpdatedQuery: (model, { query }) => ({

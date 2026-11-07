@@ -8,28 +8,28 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({ CompletedWaitBeforeDismissal: {} })
 type Message = typeof Message.Type
 
-const NotificationDefinition = Block.makeDefinition('Notification', {
+export const NotificationKey = Symbol('Notification')
+const NotificationBlock = Block.make('Notification', {
+  key: NotificationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeCommandsStep } = NotificationDefinition
+const { makeCommandsStep, makeCommand } = NotificationBlock
 
-const WaitBeforeDismissal = NotificationDefinition.makeCommand(
-  'WaitBeforeDismissal',
-  {
-    args: { delayMs: Schema.Number },
-    messages: [Message.CompletedWaitBeforeDismissal],
-    handler: function* () {
-      return ({ delayMs }) =>
-        Effect.sleep(Duration.millis(delayMs)).pipe(
-          Effect.as(Message.CompletedWaitBeforeDismissal()),
-        )
-    },
+const WaitBeforeDismissal = makeCommand('WaitBeforeDismissal', {
+  args: { delayMs: Schema.Number },
+  messages: [Message.CompletedWaitBeforeDismissal],
+  handler: function* () {
+    return ({ delayMs }) =>
+      Effect.sleep(Duration.millis(delayMs)).pipe(
+        Effect.as(Message.CompletedWaitBeforeDismissal()),
+      )
   },
-)
+})
 
-export const waitBeforeDismissalStep = makeCommandsStep(model => [
+export const waitBeforeDismissal = makeCommandsStep(model => [
   WaitBeforeDismissal({ delayMs: model.dismissDelayMs }),
 ])
 

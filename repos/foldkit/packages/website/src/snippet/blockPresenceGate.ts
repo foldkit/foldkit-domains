@@ -1,10 +1,10 @@
-import { ApplicationDefinition } from './definition'
+import { makeRequiredFieldBinding } from './block'
 import * as Room from './room'
 import { ApplicationRoute } from './route'
 
-const RoomBinding = ApplicationDefinition.makeBinding(Room.RoomBlock, {
+const RoomBinding = makeRequiredFieldBinding(Room.RoomBlock, {
   field: 'room',
-  presentWhen: model =>
+  activeWhen: model =>
     ApplicationRoute.match(model.route, {
       Home: () => false,
       Room: () => true,

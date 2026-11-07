@@ -1,10 +1,21 @@
-import { Array, Equal, type Option, Predicate, Schema, pipe } from 'effect'
+import {
+  Array,
+  Equal,
+  type Option,
+  Predicate,
+  Schema,
+  type Stream,
+  pipe,
+} from 'effect'
 
+import {
+  type InMessageStep,
+  runInMessageStep,
+} from '../experimental/layered/testing/inMessage.js'
 import {
   type MessageDeclaration,
   type Registrations,
   type RegistryEntries,
-  type Subscription as RuntimeSubscription,
   __messageDeclarations as subscriptionMessageDeclarations,
 } from '../subscription/subscription.js'
 import { commandArgs } from './bindingMatcher.js'
@@ -23,6 +34,7 @@ import type {
 import {
   assertAllCommandsResolved,
   assertExactCommands,
+  assertExactCommandsInOrder,
   assertHasCommands,
   assertResolveUnambiguous,
   assertZeroCommands,
@@ -35,6 +47,7 @@ import {
 } from './internal.js'
 
 export type { AnyCommand, CommandMatcher, Resolver }
+export { type InitStep, init } from './internal.js'
 
 /** An immutable test simulation of a Foldkit program. */
 export type StorySimulation<Model, Message, OutMessage = undefined> = Readonly<{
@@ -85,34 +98,51 @@ export type OutMessageStep<OutMessage> = Readonly<{
   expected: OutMessage
 }>
 
+const AssertModels = Symbol('StoryAssertModels')
+
 /** A grouped sequence of Story steps produced by {@link steps}. */
-export type StoryStepsStep<GivenModel, ModelAssertion, Message, OutMessage> =
-  Readonly<{
-    _tag: 'StoryStepsStep'
-    /** @internal Carries the produced Model type through a reusable step group. */
-    _phantomGivenModel?: GivenModel
-    /** @internal Carries Model assertion types through a reusable step group. */
-    _phantomModelAssertion?: ModelAssertion
-    /** @internal Carries the Message type through a reusable step group. */
-    _phantomMessage?: Message
-    /** @internal Carries the OutMessage type through a reusable step group. */
-    _phantomOutMessage?: OutMessage
-    steps: ReadonlyArray<StoryStep<any, any, any>>
-  }>
+export interface StoryStepsStep<
+  GivenModel,
+  ModelAssertion,
+  Message,
+  OutMessage,
+  InMessage = never,
+> extends Readonly<{
+  _tag: 'StoryStepsStep'
+  /** @internal Carries the produced Model type through a reusable step group. */
+  _phantomGivenModel?: GivenModel
+  /** @internal Carries Model assertion types through a reusable step group. */
+  _phantomModelAssertion?: ModelAssertion
+  /** @internal Carries the Message type through a reusable step group. */
+  _phantomMessage?: Message
+  /** @internal Carries the OutMessage type through a reusable step group. */
+  _phantomOutMessage?: OutMessage
+  /** @internal Retains the separate input requirement of grouped steps. */
+  _phantomInMessage?: InMessage
+  [AssertModels]?: (before: any, after: any) => void
+  steps: ReadonlyArray<StoryStep<any, any, any, unknown>>
+}> {}
 
 /** A single step in a story. */
-export type StoryStep<Model, Message = unknown, OutMessage = unknown> =
+export type StoryStep<
+  Model,
+  Message = unknown,
+  OutMessage = unknown,
+  InMessage = never,
+> =
   | GivenStep<NoInfer<Model>>
   | ModelStep<NoInfer<Model>>
   | MessageStep<NoInfer<Message>>
   | MessageWithStep<NoInfer<Model>, NoInfer<Message>>
   | SubscriptionMessageStep<NoInfer<Message>>
   | OutMessageStep<NoInfer<OutMessage>>
+  | ([InMessage] extends [never] ? never : InMessageStep<NoInfer<InMessage>>)
   | StoryStepsStep<
       NoInfer<Model>,
       (model: NoInfer<Model>) => void,
       NoInfer<Message>,
-      NoInfer<OutMessage>
+      NoInfer<OutMessage>,
+      NoInfer<InMessage>
     >
   | ((
       simulation: StorySimulation<any, any, any>,
@@ -126,6 +156,7 @@ type InternalStorySimulation<
   OutMessage = undefined,
 > = StorySimulation<Model, Message, OutMessage> &
   Readonly<{
+    isInitialized: boolean
     message: Message | undefined
     updateFn: (
       model: Model,
@@ -149,12 +180,37 @@ export const given = <Model>(model: Model): GivenStep<Model> => {
   ): StorySimulation<M, Message, OutMessage> => {
     const internal = toInternal(simulation)
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    return { ...internal, model } as unknown as StorySimulation<
-      M,
-      Message,
-      OutMessage
-    >
+    return {
+      ...internal,
+      isInitialized: true,
+      model,
+    } as unknown as StorySimulation<M, Message, OutMessage>
   }
+  /* eslint-disable @typescript-eslint/consistent-type-assertions */
+  return Object.assign(step, {
+    _phantomModel: undefined as unknown as Model,
+  }) as GivenStep<Model>
+  /* eslint-enable @typescript-eslint/consistent-type-assertions */
+}
+
+/** @internal Seeds a story from a complete initialization result without executing Commands. */
+export const __givenInit = <Model, OutMessage = undefined>(
+  init: SimulationUpdateReturn<Model, OutMessage>,
+): GivenStep<Model> => {
+  const step = <Message>(
+    simulation: StorySimulation<Model, Message, OutMessage>,
+  ): StorySimulation<Model, Message, OutMessage> => {
+    const next = {
+      ...toInternal(simulation),
+      isInitialized: true,
+      model: init.model,
+      commands: init.commands ?? [],
+      outMessage: init.outMessage,
+    }
+
+    return next
+  }
+
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   return Object.assign(step, {
     _phantomModel: undefined as unknown as Model,
@@ -179,6 +235,24 @@ const applyMessage = <Model, Message, OutMessage>(
   } as StorySimulation<Model, Message, OutMessage>
 }
 
+const applyInMessage = <Model, Message, OutMessage>(
+  simulation: StorySimulation<Model, Message, OutMessage>,
+  step: object,
+): StorySimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const received = runInMessageStep<Model, OutMessage>(step, internal.model)
+
+  const next = {
+    ...internal,
+    model: received.model,
+    message: undefined,
+    commands: Array.appendAll(internal.commands, received.commands ?? []),
+    outMessage: received.outMessage,
+  }
+
+  return next
+}
+
 /** Sends a Message through update. Commands stay pending until resolve or
  *  resolveAll. */
 export const message = <Message>(message_: Message): MessageStep<Message> => ({
@@ -197,14 +271,17 @@ export const messageWith = <Model, Message>(
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false
 
+interface SubscriptionStream<Message> {
+  readonly dependenciesToStream: (
+    ...args: ReadonlyArray<any>
+  ) => Stream.Stream<Message, never, any>
+}
+
 type MessageOfSubscriptions<Subscriptions> =
   IsAny<Subscriptions> extends true
     ? any
-    : RegistryEntries<Subscriptions>[keyof RegistryEntries<Subscriptions>] extends RuntimeSubscription<
-          any,
-          infer Message,
-          any,
-          any
+    : RegistryEntries<Subscriptions>[keyof RegistryEntries<Subscriptions>] extends SubscriptionStream<
+          infer Message
         >
       ? Message
       : never
@@ -212,27 +289,27 @@ type MessageOfSubscriptions<Subscriptions> =
 type EmissionSourceOf<Subscriptions> =
   IsAny<Subscriptions> extends true
     ? any
-    : {
-        readonly [
-          Key in keyof RegistryEntries<Subscriptions>
-        ]: SubscriptionEmissionSource<RegistryEntries<Subscriptions>[Key]>
-      }[keyof RegistryEntries<Subscriptions>]
+    : SubscriptionEmissionSource<
+        RegistryEntries<Subscriptions>[keyof RegistryEntries<Subscriptions>]
+      >
+
+interface SubscriptionMessages<Messages extends ReadonlyArray<Schema.Top>> {
+  readonly messages: Messages
+}
 
 /** Emission steps for one registered Subscription record. Explicit annotations
  *  retain the accepted entry source as the second type argument. */
-export type SubscriptionEmitter<Message, EmissionSource> = Readonly<{
+export interface SubscriptionEmitter<Message, EmissionSource> {
   /** Feeds a decoded Message declared by `entry` through update. For a child
    *  entry, Story applies the generated delivery in the registered record. */
-  emit: <
-    Entry extends Readonly<{
-      messages: ReadonlyArray<Schema.Top>
-    }> &
+  readonly emit: <
+    Entry extends SubscriptionMessages<ReadonlyArray<Schema.Top>> &
       EmissionSource,
   >(
     entry: Entry,
-    message: NoInfer<Schema.Schema.Type<Entry['messages'][number]>>,
+    message: NoInfer<Entry['messages'][number]['Type']>,
   ) => SubscriptionMessageStep<Message>
-}>
+}
 
 const fromSubscriptions = <
   const Subscriptions extends Registrations<any, any, any>,
@@ -366,13 +443,15 @@ export const model = <Model>(f: (model: Model) => void): ModelStep<Model> => ({
 
 /** Groups Story steps so a reusable setup can remain type-safe without
  *  erasing its Message or OutMessage types through function composition. */
-export const steps = <Steps extends ReadonlyArray<StoryStep<any, any, any>>>(
+export const steps = <
+  Steps extends ReadonlyArray<StoryStep<any, any, any, unknown>>,
+>(
   ...storySteps: Steps
 ): StoryStepsStep<
   Steps[number] extends infer Step
     ? Step extends GivenStep<infer Model>
       ? Model
-      : Step extends StoryStepsStep<infer Model, any, any, any>
+      : Step extends StoryStepsStep<infer Model, any, any, any, any>
         ? Model
         : never
     : never,
@@ -381,7 +460,7 @@ export const steps = <Steps extends ReadonlyArray<StoryStep<any, any, any>>>(
       ? (model: Model) => void
       : Step extends MessageWithStep<infer Model, any>
         ? (model: Model) => void
-        : Step extends StoryStepsStep<any, infer ModelAssertion, any, any>
+        : Step extends StoryStepsStep<any, infer ModelAssertion, any, any, any>
           ? ModelAssertion
           : never
     : never,
@@ -392,20 +471,56 @@ export const steps = <Steps extends ReadonlyArray<StoryStep<any, any, any>>>(
         ? Message
         : Step extends SubscriptionMessageStep<infer Message>
           ? Message
-          : Step extends StoryStepsStep<any, any, infer Message, any>
+          : Step extends StoryStepsStep<any, any, infer Message, any, any>
             ? Message
             : never
     : never,
   Steps[number] extends infer Step
     ? Step extends OutMessageStep<infer OutMessage>
       ? OutMessage
-      : Step extends StoryStepsStep<any, any, any, infer OutMessage>
+      : Step extends StoryStepsStep<any, any, any, infer OutMessage, any>
         ? OutMessage
+        : never
+    : never,
+  Steps[number] extends infer Step
+    ? Step extends InMessageStep<infer Input>
+      ? Input
+      : Step extends StoryStepsStep<any, any, any, any, infer Input>
+        ? Input
         : never
     : never
 > => ({
   _tag: 'StoryStepsStep',
   steps: storySteps,
+})
+
+/** Runs grouped Story steps, then asserts against the Models immediately before
+ *  and after that group. */
+export const models = <
+  Model,
+  GivenModel,
+  ModelAssertion,
+  Message,
+  OutMessage,
+  InMessage,
+>(
+  groupedSteps: StoryStepsStep<
+    GivenModel,
+    ModelAssertion,
+    Message,
+    OutMessage,
+    InMessage
+  >,
+  assert: (before: Model, after: Model) => void,
+): StoryStepsStep<
+  GivenModel,
+  ModelAssertion | ((model: Model) => void),
+  Message,
+  OutMessage,
+  InMessage
+> => ({
+  ...groupedSteps,
+  [AssertModels]: assert,
 })
 
 /** Asserts that every matcher selects a pending Command. Definitions select
@@ -431,6 +546,18 @@ const expectExactCommandsStep =
     simulation: StorySimulation<Model, Message, OutMessage>,
   ): StorySimulation<Model, Message, OutMessage> => {
     assertExactCommands(toInternal(simulation).commands, matchers)
+    return simulation
+  }
+
+/** Asserts that the pending Commands match the given matchers exactly in
+ *  dispatch order. Definitions select their originating identity; instances
+ *  also compare complete args and any scoped occurrence. */
+const expectExactCommandsInOrderStep =
+  (...matchers: ReadonlyArray<CommandMatcher>) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: StorySimulation<Model, Message, OutMessage>,
+  ): StorySimulation<Model, Message, OutMessage> => {
+    assertExactCommandsInOrder(toInternal(simulation).commands, matchers)
     return simulation
   }
 
@@ -473,6 +600,8 @@ export const Command = {
   expectHas: expectHasCommandsStep,
   /** Asserts that the pending Commands match the given definitions exactly (order-independent). */
   expectExact: expectExactCommandsStep,
+  /** Asserts that the pending Commands match the given matchers exactly in dispatch order. */
+  expectExactInOrder: expectExactCommandsInOrderStep,
   /** Asserts that there are no pending Commands. */
   expectNone: expectNoCommandsStep,
 } as const
@@ -520,9 +649,9 @@ export const expectNoOutMessage =
 
 // STORY
 
-const applyStoryStep = <Model, Message, OutMessage>(
+const applyStoryStep = <Model, Message, OutMessage, InMessage>(
   current: StorySimulation<Model, Message, OutMessage>,
-  step: StoryStep<Model, Message, OutMessage>,
+  step: StoryStep<Model, Message, OutMessage, InMessage>,
 ): StorySimulation<Model, Message, OutMessage> => {
   if (Predicate.isTagged(step, 'ModelStep')) {
     step.assert(toInternal(current).model)
@@ -531,6 +660,10 @@ const applyStoryStep = <Model, Message, OutMessage>(
 
   if (Predicate.isTagged(step, 'MessageStep')) {
     return applyMessage(current, step.message)
+  }
+
+  if (Predicate.isTagged(step, 'BlockInMessageStep')) {
+    return applyInMessage(current, step)
   }
 
   if (Predicate.isTagged(step, 'MessageWithStep')) {
@@ -547,17 +680,38 @@ const applyStoryStep = <Model, Message, OutMessage>(
   }
 
   if (Predicate.isTagged(step, 'StoryStepsStep')) {
-    return Array.reduce(step.steps, current, applyStoryStep)
+    const internal = toInternal(current)
+    const assertModels = step[AssertModels]
+
+    if (assertModels !== undefined && !internal.isInitialized) {
+      throw new Error(
+        '[foldkit] Story.models requires an initial Model before its grouped steps.',
+      )
+    }
+
+    const next = Array.reduce(step.steps, current, applyStoryStep)
+
+    assertModels?.(internal.model, toInternal(next).model)
+
+    return next
   }
 
   if (Predicate.isFunction(step)) {
-    return step(current)
+    const next = step(current)
+    const nextInternal = toInternal(next)
+
+    if (nextInternal.isInitialized === undefined) {
+      return { ...toInternal(current), ...nextInternal }
+    } else {
+      return next
+    }
   }
 
   return current
 }
 
-/** Executes a test story. Throws if any Commands remain unresolved. */
+/** Executes a test story and returns its final Model. Throws if any Commands
+ *  remain unresolved. */
 export const story: {
   <Model, Message, OutMessage = never>(
     updateFn: (
@@ -571,7 +725,7 @@ export const story: {
     ...steps: ReadonlyArray<
       StoryStep<NoInfer<Model>, NoInfer<Message>, NoInfer<OutMessage>>
     >
-  ): void
+  ): Model
   <Model, Message>(
     updateFn: (
       model: Model,
@@ -584,16 +738,17 @@ export const story: {
     ...steps: ReadonlyArray<
       StoryStep<NoInfer<Model>, NoInfer<Message>, undefined>
     >
-  ): void
+  ): Model
 } = <Model, Message, OutMessage = undefined>(
   updateFn: (
     model: Model,
     message: Message,
   ) => SimulationUpdateReturn<Model, OutMessage>,
   ...steps: ReadonlyArray<StoryStep<Model, Message, OutMessage>>
-): void => {
+): Model => {
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   const seed = {
+    isInitialized: false,
     model: undefined as unknown,
     message: undefined,
     commands: Array.empty(),
@@ -607,4 +762,12 @@ export const story: {
 
   const internal = toInternal(result)
   assertAllCommandsResolved(internal.commands)
+
+  if (!internal.isInitialized) {
+    throw new Error(
+      '[foldkit] Story requires an initial Model before it can return a final Model.',
+    )
+  }
+
+  return internal.model
 }

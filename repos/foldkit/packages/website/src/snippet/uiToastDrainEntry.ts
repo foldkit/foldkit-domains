@@ -1,7 +1,6 @@
-import { Schema, Tuple } from 'effect'
-import { Block } from 'foldkit'
+import { Effect, Layer, Schema } from 'effect'
+import { Block, Story } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import * as Story from 'foldkit/story'
 
 import { Toast } from '@foldkit/ui'
 
@@ -16,26 +15,32 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({ RequestedShowToast: {} })
 type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeNoopStep } = ApplicationDefinition
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = ApplicationBlock
 
-const foldToastOutMessage = ApplicationDefinition.makeOutMessageFold(
-  ToastBlock,
-  {
-    DismissedToast: makeNoopStep,
-  },
-)
-const ToastBinding = ApplicationDefinition.makeBinding(ToastBlock, {
+const ToastBinding = makeRequiredFieldBinding(ToastBlock, {
   field: 'toast',
   init: {
-    contextToArgs: () => Tuple.make({ id: 'notifications' }),
+    contextToArgs: () => [{ id: 'notifications' }],
   },
-}).withOutMessagePolicy({ fold: foldToastOutMessage })
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ToastBlock, {
+    DismissedToast: makeNoopStep,
+  }),
+})
+const ApplicationComposition = makeComposition({
   bindings: [ToastBinding],
 })
 
@@ -44,13 +49,27 @@ const update = ApplicationComposition.makeUpdate({
   RequestedShowToast: ToastBinding.requestShow({ payload: { body: 'Saved' } }),
 })
 
-Story.story(
-  update,
-  Story.given(init().model),
-  Story.message(Message.RequestedShowToast()),
-  ToastBlock.test.drainEntry({
-    binding: ToastBinding,
-    entryId: 'notifications-entry-0',
+const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ApplicationComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+    }
   }),
-  Story.Command.expectNone(),
+).pipe(Layer.provide(Toast.layer))
+
+await Effect.runPromise(
+  Story.story(
+    { block: ApplicationBlock, layer },
+    Story.init(),
+    Story.message(Message.RequestedShowToast()),
+    ToastBlock.test.drainEntry({
+      binding: ToastBinding,
+      entryId: 'notifications-entry-0',
+    }),
+    Story.Command.expectNone(),
+  ),
 )

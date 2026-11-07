@@ -26,27 +26,27 @@ export const DefinitionWithoutOutMessage = Block.makeDefinition(
   'StepsWithoutOutMessage',
   { Model, Message },
 )
-export const emitSelectedStep = OutMessageStepsDefinition.makeOutMessageStep(
-  () => OutMessage.SelectedChoice({ value: 'Pear' }),
+export const emitSelected = OutMessageStepsDefinition.makeOutMessageStep(() =>
+  OutMessage.SelectedChoice({ value: 'Pear' }),
 )
-export const emitRefinedStep = OutMessageStepsDefinition.makeOutMessageStep(
-  () => RefinedOutMessage.SelectedChoice({ value: 'Apple' }),
+export const emitRefined = OutMessageStepsDefinition.makeOutMessageStep(() =>
+  RefinedOutMessage.SelectedChoice({ value: 'Apple' }),
 )
-export const emitClosedStep = OutMessageStepsDefinition.makeOutMessageStep(() =>
+export const emitClosed = OutMessageStepsDefinition.makeOutMessageStep(() =>
   OutMessage.ClosedPicker(),
 )
-export const emitUnionStep = (outMessage: typeof OutMessage.Type) =>
+export const emitUnion = (outMessage: typeof OutMessage.Type) =>
   OutMessageStepsDefinition.makeOutMessageStep(() => outMessage)
 export const applyToGenericModel = <Current extends typeof Model.Type>(
   model: Current,
-) => emitRefinedStep(model)
+) => emitRefined(model)
 
 export const PrimitiveDefinition = Block.makeDefinition('PrimitiveSteps', {
   Model: Schema.String,
   Message: Schema.Never,
   OutMessage: Schema.Literals(['Accepted', 'Cancelled']),
 })
-export const emitPrimitiveStep = PrimitiveDefinition.makeOutMessageStep(
+export const emitPrimitive = PrimitiveDefinition.makeOutMessageStep(
   () => 'Accepted',
 )
 
@@ -62,7 +62,7 @@ const prepare = () =>
         OutMessageStepsDefinition.makeOutMessageStep(() =>
           OutMessage.SelectedChoice({ value }),
         )(model),
-      RequestedClose: model => emitClosedStep(model),
+      RequestedClose: model => emitClosed(model),
       CompletedObserveSelection: model => ({ model }),
     }),
     operations: {
@@ -85,10 +85,13 @@ export const ParentDefinition = Block.makeDefinition('OutMessageStepsParent', {
   Message: Schema.Never,
   OutMessage: ParentOutMessage,
 })
-export const ChildBinding = ParentDefinition.makeBinding(OutMessageStepsBlock, {
-  field: 'child',
-  init: false,
-})
+export const ChildBinding = ParentDefinition.makeRequiredFieldBinding(
+  OutMessageStepsBlock,
+  {
+    field: 'child',
+    init: false,
+  },
+)
 export const foldChildOutMessage = ParentDefinition.makeOutMessageFold(
   OutMessageStepsBlock,
   {

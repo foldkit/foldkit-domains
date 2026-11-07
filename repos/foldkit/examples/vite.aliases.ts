@@ -67,6 +67,10 @@ export const foldkitAliases = (dirname: string) => ({
     dirname,
     '../../packages/foldkit/src/html/public',
   ),
+  'foldkit/internal/block': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/internal/block/public',
+  ),
   'foldkit/http': path.resolve(
     dirname,
     '../../packages/foldkit/src/http/public',
@@ -75,13 +79,9 @@ export const foldkitAliases = (dirname: string) => ({
     dirname,
     '../../packages/foldkit/src/managedResource/public',
   ),
-  'foldkit/bindingInit': path.resolve(
+  'foldkit/binding': path.resolve(
     dirname,
-    '../../packages/foldkit/src/block/bindingInit',
-  ),
-  'foldkit/variantBinding': path.resolve(
-    dirname,
-    '../../packages/foldkit/src/block/variantBinding',
+    '../../packages/foldkit/src/binding/public',
   ),
   'foldkit/message': path.resolve(
     dirname,

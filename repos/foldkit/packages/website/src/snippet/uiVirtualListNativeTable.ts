@@ -1,4 +1,4 @@
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { childAttributes } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
@@ -22,40 +22,47 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({ ClickedJumpToLastInvoice: {} })
 type Message = typeof Message.Type
 
-const InvoiceTableDefinition = Block.makeDefinition('InvoiceTable', {
+export const InvoiceTableKey = Symbol('InvoiceTable')
+export const InvoiceTableBlock = Block.make('InvoiceTable', {
+  key: InvoiceTableKey,
+  InitArgs: Schema.Tuple([Schema.Array(Invoice)]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
-const { makeNoopStep } = InvoiceTableDefinition
+const {
+  makeNoopStep,
+  makeRequiredFieldBinding,
+  makeOutMessageFold,
+  makeComposition,
+} = InvoiceTableBlock
 
-const InvoiceRowsBinding = InvoiceTableDefinition.makeBinding(
-  InvoiceRowsBlock,
-  {
-    field: 'invoiceRows',
-    init: {
-      contextToArgs: () =>
-        Tuple.make({
-          id: 'invoice-rows',
-          rowHeightPx: 48,
-          scrollContainer: VirtualList.ScrollContainer.Ancestor({
-            selector: '#invoice-scroll',
-          }),
+const InvoiceRowsBinding = makeRequiredFieldBinding(InvoiceRowsBlock, {
+  field: 'invoiceRows',
+  init: {
+    contextToArgs: () => [
+      {
+        id: 'invoice-rows',
+        rowHeightPx: 48,
+        scrollContainer: VirtualList.ScrollContainer.Ancestor({
+          selector: '#invoice-scroll',
         }),
-    },
+      },
+    ],
   },
-).withOutMessagePolicy({
-  fold: InvoiceTableDefinition.makeOutMessageFold(InvoiceRowsBlock, {
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(InvoiceRowsBlock, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
   }),
 })
-const InvoiceTableComposition = InvoiceTableDefinition.makeComposition({
+const InvoiceTableComposition = makeComposition({
   bindings: [InvoiceRowsBinding],
 })
-const init = InvoiceTableComposition.makeInit(
-  (invoices: ReadonlyArray<Invoice>) => ({ model: { invoices } }),
-)
+const init = InvoiceTableComposition.makeInit(invoices => ({
+  model: { invoices },
+}))
 const update = InvoiceTableComposition.makeUpdate({
   ClickedJumpToLastInvoice: InvoiceRowsBinding.requestScrollToEnd(),
 })
@@ -125,9 +132,15 @@ const view = InvoiceTableComposition.makeView((model, h) =>
   ),
 )
 
-const prepare = () =>
-  InvoiceTableComposition.prepareBlock({ init, update, view })
-export const InvoiceTableBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = InvoiceTableBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* InvoiceTableComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(VirtualList.layer))

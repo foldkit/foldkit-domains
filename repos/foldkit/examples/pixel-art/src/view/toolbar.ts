@@ -2,8 +2,7 @@ import clsx from 'clsx'
 import { Array, Option } from 'effect'
 import { type Html, childAttributes } from 'foldkit/html'
 
-import { Button, Switch } from '@foldkit/ui'
-import type { AnchorConfig } from '@foldkit/ui/listbox'
+import { Button, Listbox, Switch } from '@foldkit/ui'
 
 import {
   GridSizeRadioGroupBlock,
@@ -13,10 +12,10 @@ import {
 } from '../components'
 import {
   type ApplicationViewBuilder,
-  GridSizeRadioGroupBinding as GridSizeRadioGroupBinding,
-  PaletteRadioGroupBinding as PaletteRadioGroupBinding,
-  ThemeListboxBinding as ThemeListboxBinding,
-  ToolRadioGroupBinding as ToolRadioGroupBinding,
+  GridSizeRadioGroupBinding,
+  PaletteRadioGroupBinding,
+  ThemeListboxBinding,
+  ToolRadioGroupBinding,
 } from '../composition'
 import { EMPTY_COLOR, GRID_SIZE_STRINGS } from '../constant'
 import { Message } from '../message'
@@ -41,7 +40,7 @@ const TOOL_SHORTCUTS: Record<Tool, string> = {
 
 export const THEME_INDEX_STRINGS = Array.makeBy(PALETTE_THEMES.length, String)
 
-export const THEME_LISTBOX_ANCHOR: AnchorConfig = {
+export const THEME_LISTBOX_ANCHOR: Listbox.AnchorConfig = {
   placement: 'bottom-start',
   gap: 4,
   padding: 8,

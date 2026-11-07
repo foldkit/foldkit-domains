@@ -1,34 +1,33 @@
-import { ApplicationDefinition, makeFieldsStep } from './definition'
+import {
+  makeFieldsStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} from './block'
 
-const foldSearchOutMessage = ApplicationDefinition.makeOutMessageFold(
-  Search.SearchBlock,
-  {
+const SearchBinding = makeRequiredFieldBinding(Search.SearchBlock, {
+  field: 'search',
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Search.SearchBlock, {
     RestoredQuery: ({ query }) =>
       makeFieldsStep(() => ({
         maybeRestoredQuery: () => Option.some(query),
       })),
-  },
-)
+  }),
+})
 
-const foldEditorOutMessage = ApplicationDefinition.makeOutMessageFold(
-  Editor.EditorBlock,
-  {
+const EditorBinding = makeRequiredFieldBinding(Editor.EditorBlock, {
+  field: 'editor',
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Editor.EditorBlock, {
     RestoredDraft: ({ documentId }) =>
       makeFieldsStep(() => ({
         maybeRestoredDocumentId: () => Option.some(documentId),
       })),
-  },
-)
+  }),
+})
 
-const SearchBinding = ApplicationDefinition.makeBinding(Search.SearchBlock, {
-  field: 'search',
-}).withOutMessagePolicy({ fold: foldSearchOutMessage })
-
-const EditorBinding = ApplicationDefinition.makeBinding(Editor.EditorBlock, {
-  field: 'editor',
-}).withOutMessagePolicy({ fold: foldEditorOutMessage })
-
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [SearchBinding, EditorBinding],
 })
 

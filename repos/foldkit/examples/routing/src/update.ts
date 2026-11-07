@@ -4,9 +4,9 @@ import { UrlRequest } from 'foldkit/navigation'
 import { Transition } from 'foldkit/route'
 import { toString as urlToString } from 'foldkit/url'
 
+import { makeCommandsStep, makeFieldsStep, makeNoopStep } from './block'
 import { LoadExternal, NavigateInternal } from './command'
 import { ApplicationComposition, PeoplePageBinding } from './composition'
-import { makeCommandsStep, makeFieldsStep, makeNoopStep } from './definition'
 import { type NavigationShortcut } from './message'
 import {
   ApplicationRoute,
@@ -26,14 +26,14 @@ const navigationUrlByShortcut: Readonly<
   GN: nestedRouter,
 }
 
-const setRouteStep = (nextRoute: ApplicationRoute) =>
+const setRoute = (nextRoute: ApplicationRoute) =>
   makeFieldsStep(() => ({ route: () => nextRoute }))
 
-const keepModelStep = makeNoopStep()
+const keepModel = makeNoopStep()
 
-type InformPeopleRouteStep =
-  | typeof keepModelStep
-  | ReturnType<typeof PeoplePageBinding.informRouteChanged>
+type InformPeopleOfRouteChange =
+  | typeof keepModel
+  | ReturnType<typeof PeoplePageBinding.informOfRouteChange>
 
 export const update = ApplicationComposition.makeUpdate({
   CompletedNavigateInternal: makeNoopStep(),
@@ -55,22 +55,22 @@ export const update = ApplicationComposition.makeUpdate({
     const nextRoute = urlToApplicationRoute(url)
 
     const transition = Transition.make(model.route, nextRoute)
-    const informPeopleRouteStep =
-      Transition.matchOrElse<InformPeopleRouteStep>()(
+    const informPeopleOfRouteChange =
+      Transition.matchOrElse<InformPeopleOfRouteChange>()(
         transition,
         'People',
         {
           Entered: peopleRoute =>
-            PeoplePageBinding.informRouteChanged({ route: peopleRoute }),
+            PeoplePageBinding.informOfRouteChange({ route: peopleRoute }),
           Stayed: ({ nextRoute }) =>
-            PeoplePageBinding.informRouteChanged({ route: nextRoute }),
+            PeoplePageBinding.informOfRouteChange({ route: nextRoute }),
         },
-        () => keepModelStep,
+        () => keepModel,
       )
 
     return Update.combineSteps(model, [
-      setRouteStep(nextRoute),
-      informPeopleRouteStep,
+      setRoute(nextRoute),
+      informPeopleOfRouteChange,
     ])
   },
 

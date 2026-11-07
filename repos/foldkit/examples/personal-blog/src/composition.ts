@@ -1,13 +1,13 @@
 import type { Block } from 'foldkit'
 
-import { ApplicationDefinition } from './definition'
-import { CounterBlock } from './island'
+import { makeComposition, makeRequiredFieldBinding } from './block'
+import { CounterBlock } from './blocks'
 
-export const CounterBinding = ApplicationDefinition.makeBinding(CounterBlock, {
+export const CounterBinding = makeRequiredFieldBinding(CounterBlock, {
   field: 'counter',
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [CounterBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

@@ -1,4 +1,4 @@
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Message } from '../message'

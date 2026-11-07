@@ -5,15 +5,25 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readlink,
   readdir,
   rename,
   rm,
   symlink,
   writeFile,
 } from 'node:fs/promises'
+import { Socket, connect, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest'
 
 import {
   type RelayRegistryReader,
@@ -21,6 +31,7 @@ import {
   isWithinRoot,
   makeRelayRegistryReader,
 } from '../src/relayRegistry.ts'
+import { boundPort } from './boundPort.ts'
 import {
   RELAY_DIRECTORY_VARIABLE,
   RUNTIME_DIRECTORY_VARIABLE,
@@ -28,12 +39,23 @@ import {
   runWithNode,
 } from './relayRegistryFixtures.ts'
 
+vi.mock(import('node:net'), async importOriginal => {
+  const net = { ...(await importOriginal()) }
+  vi.spyOn(net, 'connect')
+
+  return { ...net }
+})
+
 const REGISTRY_DIRECTORY_NAME = 'foldkit-devtools-relays'
 const PRIVATE_DIRECTORY_MODE = 0o700
 const SHARED_DIRECTORY_MODE = 0o777
+const RELAY_TOKEN = 'a'.repeat(64)
 // NOTE: This exceeds every PID Linux or macOS can issue, so no live process can
 // carry it.
 const DEAD_PID = 2_147_483_647
+const REFUSING_PORT = 1
+const OTHER_PID_NAMESPACE = 'pid:[1]'
+const OTHER_NETWORK_NAMESPACE = 'net:[1]'
 
 const record = (
   root: string,
@@ -43,7 +65,7 @@ const record = (
   version: 1,
   id: `relay-for-${root}`,
   root,
-  url: `ws://127.0.0.1:${port}/__foldkit/devtools-mcp`,
+  url: `ws://127.0.0.1:${port}/__foldkit/devtools-mcp?token=${RELAY_TOKEN}`,
   pid: process.pid,
   startedAt: 1_000,
   ...overrides,
@@ -51,6 +73,20 @@ const record = (
 
 const urls = (records: ReadonlyArray<RelayRecord>) =>
   records.map(({ url }) => url)
+
+const acceptConnections = async (): Promise<number> => {
+  const server = createServer()
+  onTestFinished(() => new Promise<void>(done => server.close(() => done())))
+  await new Promise<void>((resolveListening, reject) => {
+    server.on('error', reject)
+    server.listen(0, '127.0.0.1', () => resolveListening())
+  })
+
+  return Option.getOrThrowWith(
+    boundPort(server.address()),
+    () => new Error('The server has no bound port'),
+  )
+}
 
 describe('discoverRelays', () => {
   let registryDirectory = ''
@@ -79,6 +115,54 @@ describe('discoverRelays', () => {
     registryReader: RelayRegistryReader,
     projectRoot: string,
   ) => runWithNode(discoverRelays(projectRoot, registryReader))
+
+  const discoverWithoutOwnNamespaces = (projectRoot: string) =>
+    runWithNode(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem
+        const registryReader = yield* makeUncheckedRegistryReader
+        const namespaceUnavailableFileSystem: FileSystem.FileSystem = {
+          ...fileSystem,
+          readLink: path =>
+            path.startsWith('/proc/self/ns/')
+              ? fileSystem.readLink(`${path}.unavailable`)
+              : fileSystem.readLink(path),
+        }
+
+        return yield* discoverRelays(projectRoot, registryReader).pipe(
+          Effect.provideService(
+            FileSystem.FileSystem,
+            namespaceUnavailableFileSystem,
+          ),
+        )
+      }),
+    )
+
+  const discoverFromOtherPidNamespace = (projectRoot: string) =>
+    runWithNode(
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem
+        const registryReader = yield* makeUncheckedRegistryReader
+        const namespacedFileSystem: FileSystem.FileSystem = {
+          ...fileSystem,
+          readLink: path => {
+            if (path === '/proc/self/ns/pid') {
+              return Effect.succeed('pid:[2]')
+            }
+
+            if (path === '/proc/self/ns/net') {
+              return Effect.succeed(OTHER_NETWORK_NAMESPACE)
+            }
+
+            return fileSystem.readLink(path)
+          },
+        }
+
+        return yield* discoverRelays(projectRoot, registryReader).pipe(
+          Effect.provideService(FileSystem.FileSystem, namespacedFileSystem),
+        )
+      }),
+    )
 
   const refusalLine = () =>
     `[foldkit-devtools-mcp] ignoring the relay registry at ${registryDirectory}: it is readable or writable by other users`
@@ -138,6 +222,7 @@ describe('discoverRelays', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks()
+    vi.mocked(connect).mockReset()
 
     if (previousRegistryDirectory === undefined) {
       delete process.env[RELAY_DIRECTORY_VARIABLE]
@@ -228,6 +313,60 @@ describe('discoverRelays', () => {
     ])
   })
 
+  it.each([
+    `ws://remote.invalid:5173/__foldkit/devtools-mcp?token=${RELAY_TOKEN}`,
+    `wss://127.0.0.1:5173/__foldkit/devtools-mcp?token=${RELAY_TOKEN}`,
+    `ws://user@127.0.0.1:5173/__foldkit/devtools-mcp?token=${RELAY_TOKEN}`,
+    'ws://127.0.0.1:5173/__foldkit/devtools-mcp?token=short',
+    `ws://127.0.0.1:5173/other?token=${RELAY_TOKEN}`,
+    'not a URL',
+  ])(
+    'ignores an unsafe relay record without probing or removing it: %s',
+    async url => {
+      const probe = vi.mocked(connect).mockImplementation(() => {
+        const socket = new Socket()
+        queueMicrotask(() => socket.emit('connect'))
+
+        return socket
+      })
+      await publish(
+        'unsafe',
+        record('/workspace/app', 5173, {
+          url,
+          pid: DEAD_PID,
+          namespaces: {
+            pid: OTHER_PID_NAMESPACE,
+            network: OTHER_NETWORK_NAMESPACE,
+          },
+        }),
+      )
+
+      const discovered = await discoverFromOtherPidNamespace('/workspace/app')
+
+      expect(probe).not.toHaveBeenCalled()
+      expect(discovered).toStrictEqual([])
+      expect(await readdir(registryDirectory)).toEqual(['unsafe.json'])
+    },
+  )
+
+  it('probes a valid authenticated relay from another PID namespace', async () => {
+    const port = await acceptConnections()
+    const elsewhere = record('/workspace/app', port, {
+      pid: DEAD_PID,
+      namespaces: {
+        pid: OTHER_PID_NAMESPACE,
+        network: OTHER_NETWORK_NAMESPACE,
+      },
+    })
+    await publish('elsewhere', elsewhere)
+
+    expect(await discoverFromOtherPidNamespace('/workspace/app')).toEqual([
+      elsewhere,
+    ])
+    expect(connect).toHaveBeenCalledWith({ host: '127.0.0.1', port })
+    expect(await readdir(registryDirectory)).toEqual(['elsewhere.json'])
+  })
+
   it('finds a relay published for a project inside the root', async () => {
     await publish('app', record('/workspace/apps/site', 4200))
 
@@ -277,6 +416,102 @@ describe('discoverRelays', () => {
     expect(await discover('/workspace')).toStrictEqual([])
     expect(await readdir(registryDirectory)).toEqual([])
   })
+
+  it('retains a namespaced record when the reader cannot inspect its own namespaces', async () => {
+    const uncertain = record('/workspace/app', REFUSING_PORT, {
+      pid: DEAD_PID,
+      namespaces: {
+        pid: OTHER_PID_NAMESPACE,
+        network: OTHER_NETWORK_NAMESPACE,
+      },
+    })
+    await publish('uncertain', uncertain)
+
+    expect(await discoverWithoutOwnNamespaces('/workspace')).toStrictEqual([])
+    expect(await readdir(registryDirectory)).toEqual(['uncertain.json'])
+  })
+
+  it.skipIf(process.platform !== 'linux')(
+    'keeps a live record from another PID namespace while its port accepts connections',
+    async () => {
+      const port = await acceptConnections()
+      const namespaces = {
+        pid: OTHER_PID_NAMESPACE,
+        network: await readlink('/proc/self/ns/net'),
+      }
+      const elsewhere = record('/workspace/app', port, {
+        pid: DEAD_PID,
+        namespaces,
+      })
+      await publish('elsewhere', elsewhere)
+
+      expect(await discover('/workspace')).toStrictEqual([elsewhere])
+      expect(await readdir(registryDirectory)).toEqual(['elsewhere.json'])
+    },
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'removes a record from another PID namespace once its port refuses connections',
+    async () => {
+      const elsewhere = record('/workspace/app', REFUSING_PORT, {
+        pid: DEAD_PID,
+        namespaces: {
+          pid: OTHER_PID_NAMESPACE,
+          network: await readlink('/proc/self/ns/net'),
+        },
+      })
+      await publish('elsewhere', elsewhere)
+
+      expect(await discover('/workspace')).toStrictEqual([])
+      expect(await readdir(registryDirectory)).toEqual([])
+    },
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'leaves a record from another network namespace on disk without listing it, even when the PID namespace matches',
+    async () => {
+      const unreachable = record('/workspace/app', REFUSING_PORT, {
+        pid: process.pid,
+        namespaces: {
+          pid: await readlink('/proc/self/ns/pid'),
+          network: OTHER_NETWORK_NAMESPACE,
+        },
+      })
+      await publish('unreachable', unreachable)
+
+      expect(await discover('/workspace')).toStrictEqual([])
+      expect(await readdir(registryDirectory)).toEqual(['unreachable.json'])
+    },
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'leaves a record from another network namespace on disk without listing it when both namespaces differ',
+    async () => {
+      const unreachable = record('/workspace/app', REFUSING_PORT, {
+        pid: DEAD_PID,
+        namespaces: {
+          pid: OTHER_PID_NAMESPACE,
+          network: OTHER_NETWORK_NAMESPACE,
+        },
+      })
+      await publish('unreachable', unreachable)
+
+      expect(await discover('/workspace')).toStrictEqual([])
+      expect(await readdir(registryDirectory)).toEqual(['unreachable.json'])
+    },
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'keeps a legacy record without namespaces while its port accepts connections',
+    async () => {
+      const older = record('/workspace/app', await acceptConnections(), {
+        pid: DEAD_PID,
+      })
+      await publish('older', older)
+
+      expect(await discover('/workspace')).toStrictEqual([older])
+    },
+  )
 
   it('keeps the newest replacement published while stale cleanup is in progress', async () => {
     const stale = record('/workspace/app', 4750, {

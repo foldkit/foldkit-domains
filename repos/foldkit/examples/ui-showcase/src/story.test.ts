@@ -1,25 +1,17 @@
 import { Option } from 'effect'
-import { Calendar } from 'foldkit'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { Calendar, Story } from 'foldkit'
 import { fromString } from 'foldkit/url'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
 
-import { Dialog, DialogBlock } from '@foldkit/ui'
+import { it } from '@effect/vitest'
+import { Dialog } from '@foldkit/ui'
 
+import { ApplicationBlock, layer } from './index'
 import { Message } from './message'
-import { type Model } from './model'
-import { ApplicationRoute } from './route'
-import { init } from './ui/init'
-import { update } from './update'
+
+const application = { block: ApplicationBlock, layer }
 
 const today = Calendar.make(2026, 4, 16)
-const init_ = init(today)
-
-const initialModel: Model = {
-  route: ApplicationRoute.Home(),
-  uiModel: init_.model,
-}
-
 const urlOrThrow = (raw: string) =>
   Option.getOrThrowWith(
     fromString(raw),
@@ -28,97 +20,101 @@ const urlOrThrow = (raw: string) =>
 
 describe('update', () => {
   describe('routing', () => {
-    test('the root URL resolves to Home', () => {
-      story(
-        update,
-        given(initialModel),
-        message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
-        model(model => {
+    it.effect('the root URL resolves to Home', () =>
+      Story.story(
+        application,
+        Story.init({ today }, urlOrThrow('http://localhost/')),
+        Story.message(
+          Message.ChangedUrl({ url: urlOrThrow('http://localhost/') }),
+        ),
+        Story.model(model => {
           expect(model.route._tag).toBe('Home')
         }),
-      )
-    })
+      ),
+    )
 
-    test('/button resolves to Button', () => {
-      story(
-        update,
-        given(initialModel),
-        message(
+    it.effect('/button resolves to Button', () =>
+      Story.story(
+        application,
+        Story.init({ today }, urlOrThrow('http://localhost/')),
+        Story.message(
           Message.ChangedUrl({ url: urlOrThrow('http://localhost/button') }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.route._tag).toBe('Button')
         }),
-      )
-    })
+      ),
+    )
 
-    test('/calendar resolves to Calendar', () => {
-      story(
-        update,
-        given(initialModel),
-        message(
-          Message.ChangedUrl({ url: urlOrThrow('http://localhost/calendar') }),
+    it.effect('/calendar resolves to Calendar', () =>
+      Story.story(
+        application,
+        Story.init({ today }, urlOrThrow('http://localhost/')),
+        Story.message(
+          Message.ChangedUrl({
+            url: urlOrThrow('http://localhost/calendar'),
+          }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.route._tag).toBe('Calendar')
         }),
-      )
-    })
+      ),
+    )
 
-    test('/date-picker resolves to DatePicker', () => {
-      story(
-        update,
-        given(initialModel),
-        message(
+    it.effect('/date-picker resolves to DatePicker', () =>
+      Story.story(
+        application,
+        Story.init({ today }, urlOrThrow('http://localhost/')),
+        Story.message(
           Message.ChangedUrl({
             url: urlOrThrow('http://localhost/date-picker'),
           }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.route._tag).toBe('DatePicker')
         }),
-      )
-    })
+      ),
+    )
 
-    test('an unknown path resolves to NotFound', () => {
-      story(
-        update,
-        given(initialModel),
-        message(
+    it.effect('an unknown path resolves to NotFound', () =>
+      Story.story(
+        application,
+        Story.init({ today }, urlOrThrow('http://localhost/')),
+        Story.message(
           Message.ChangedUrl({ url: urlOrThrow('http://localhost/unknown') }),
         ),
-        model(model => {
+        Story.model(model => {
           if (model.route._tag === 'NotFound') {
             expect(model.route.path).toBe('/unknown')
           } else {
             throw new Error('Expected NotFound')
           }
         }),
-      )
-    })
+      ),
+    )
   })
 
   describe('mobile menu', () => {
-    test('navigating to a new URL closes the mobile menu dialog', () => {
-      story(
-        update,
-        given(initialModel),
-        message(Message.ClickedOpenMobileMenu()),
-        Command.resolve(
+    it.effect('navigating to a new URL closes the mobile menu dialog', () =>
+      Story.story(
+        application,
+        Story.init({ today }, urlOrThrow('http://localhost/')),
+        Story.message(Message.ClickedOpenMobileMenu()),
+        Story.Command.resolve(
           Dialog.test.ShowDialog,
-          DialogBlock.Message.SucceededShowDialog(),
+          Dialog.DialogBlock.Message.SucceededShowDialog(),
         ),
-        message(
+        Story.message(
           Message.ChangedUrl({ url: urlOrThrow('http://localhost/button') }),
         ),
-        Command.resolve(
+        Story.Command.resolve(
           Dialog.test.CloseDialog,
-          DialogBlock.Message.CompletedCloseDialog(),
+          Dialog.DialogBlock.Message.CompletedCloseDialog(),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.uiModel.mobileMenuDialog.isOpen).toBe(false)
         }),
-      )
-    })
+      ),
+    )
   })
 })

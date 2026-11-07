@@ -4,7 +4,6 @@
 import { defineMessageUnion } from 'foldkit/message'
 
 import { Tabs } from '@foldkit/ui'
-import type { RenderInfo as TabsRenderInfo } from '@foldkit/ui/tabs'
 
 const Framework = Schema.Literals(['Foldkit', 'React', 'Elm'])
 type Framework = typeof Framework.Type
@@ -30,7 +29,7 @@ const view = TabsExampleComposition.makeView((model, h) => {
     tablist,
     tabs,
     activeIndex,
-  }: TabsRenderInfo<Framework>) =>
+  }: Tabs.RenderInfo<Framework>) =>
     h.div(
       [h.Class('flex')],
       [

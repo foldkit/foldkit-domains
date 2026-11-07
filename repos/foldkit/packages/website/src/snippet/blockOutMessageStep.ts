@@ -5,12 +5,17 @@ import { defineMessageUnion } from 'foldkit/message'
 const OutMessage = defineMessageUnion({ Removed: {} })
 type OutMessage = typeof OutMessage.Type
 
-const EntryDefinition = Block.makeDefinition('Entry', {
+export const EntryKey = Symbol('Entry')
+const EntryBlock = Block.make('Entry', {
+  key: EntryKey,
+  InitArgs: Schema.Tuple([]),
+  isMessageFree: true,
+
   Model: Schema.Struct({ id: Schema.String }),
   Message: Schema.Never,
   OutMessage,
 })
 
-const { makeOutMessageStep } = EntryDefinition
+const { makeOutMessageStep } = EntryBlock
 
-export const reportRemovedStep = makeOutMessageStep(() => OutMessage.Removed())
+export const reportRemoved = makeOutMessageStep(() => OutMessage.Removed())

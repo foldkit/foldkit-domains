@@ -1,36 +1,38 @@
+import { Effect, Layer } from 'effect'
+
 // composition.ts
 import { Dialog, Menu } from '@foldkit/ui'
 
-import { ApplicationDefinition } from './definition'
+import {
+  ApplicationBlock,
+  makeRequiredFieldBinding,
+  makeComposition,
+} from './block'
 
-export const DialogBinding = ApplicationDefinition.makeBinding(
-  Dialog.DialogBlock,
-  {
-    field: 'dialog',
-  },
-).withOutMessagePolicy({ fold: foldDialogOutMessage })
+export const DialogBinding = makeRequiredFieldBinding(Dialog.DialogBlock, {
+  field: 'dialog',
+}).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
 export const ApplicationMenu = Menu.makeBlock<string>()
 
-export const MenuBinding = ApplicationDefinition.makeBinding(ApplicationMenu, {
+export const MenuBinding = makeRequiredFieldBinding(ApplicationMenu, {
   field: 'menu',
 }).withOutMessagePolicy({ fold: foldMenuOutMessage })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [DialogBinding, MenuBinding],
 })
 
 // update.ts
-import { ApplicationComposition } from './composition'
-
-export const update = ApplicationComposition.makeUpdate({})
-
-// view.ts
 import {
   ApplicationComposition,
   DialogBinding,
   MenuBinding,
 } from './composition'
+
+export const update = ApplicationComposition.makeUpdate({})
+
+// view.ts
 
 export const view = ApplicationComposition.makeView((model, h) => ({
   title: 'Account',
@@ -55,35 +57,38 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-// block.ts
-import { Block } from 'foldkit'
+// layer.ts
+import { Block, Program, Runtime } from 'foldkit'
 
-import { ApplicationComposition } from './composition'
 import { init } from './init'
 import type { Model } from './model'
 import { update } from './update'
 import { view } from './view'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ApplicationComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Layer.mergeAll(Dialog.layer, Menu.layer)))
 
 // entry.ts
-import { Program, Runtime } from 'foldkit'
 
 import { ApplicationBlock } from './block'
 
 const program = Program.make({
   block: ApplicationBlock,
+  layer,
   container: document.getElementById('root'),
   devTools: { dispatch: true },
 })
 
 Runtime.run(program)
+
+export { ApplicationBlock } from './block'

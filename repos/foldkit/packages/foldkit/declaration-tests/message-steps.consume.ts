@@ -8,14 +8,16 @@ import {
   OutMessage,
   Save,
   contextualUpdate,
-  incrementAndSaveStep,
-  modelAwareChildReportStep,
-  modelAwareContextualChildReportStep,
-  modelAwareContextualIncrementStep,
-  modelAwareContextualReportStep,
+  incrementAndSave,
+  incrementWithoutMessages,
+  makeMessageFreeFieldsStep,
+  modelAwareChildReport,
+  modelAwareContextualChildReport,
+  modelAwareContextualIncrement,
+  modelAwareContextualReport,
   modelAwareContextualUpdate,
-  modelAwareIncrementStep,
-  modelAwareReportStep,
+  modelAwareIncrement,
+  modelAwareReport,
   modelAwareUpdate,
   setModelAwareString,
   setString,
@@ -24,7 +26,7 @@ import {
 import { ChildBinding } from './record-update.accepted.js'
 
 const model = Model.make({ count: 1 })
-incrementAndSaveStep(model, Message.RequestedIncrement({ amount: 2 }))
+incrementAndSave(model, Message.RequestedIncrement({ amount: 2 }))
 update(model, Message.RequestedIncrement({ amount: 2 }))
 update(Message.RequestedReport({ label: 'current' }))(model)
 contextualUpdate(model, Message.RequestedIncrement({ amount: 2 }))
@@ -55,7 +57,7 @@ type Equal<Left, Right> =
 type Expect<Value extends true> = Value
 export type ExactRequirements = Expect<
   Equal<
-    Update.RequirementsOf<typeof incrementAndSaveStep>,
+    Update.RequirementsOf<typeof incrementAndSave>,
     Command.HandlerOf<typeof Save>
   >
 >
@@ -67,7 +69,7 @@ export type ExactOutMessage = Expect<
 >
 export type ExactModelAwareRequirements = Expect<
   Equal<
-    Update.RequirementsOf<typeof modelAwareIncrementStep>,
+    Update.RequirementsOf<typeof modelAwareIncrement>,
     Command.HandlerOf<typeof Save>
   >
 >
@@ -79,26 +81,26 @@ export type ExactModelAwareSilentRequirements = Expect<
 >
 export type ExactModelAwareOutMessage = Expect<
   Equal<
-    Exclude<ReturnType<typeof modelAwareReportStep>['outMessage'], undefined>,
+    Exclude<ReturnType<typeof modelAwareReport>['outMessage'], undefined>,
     typeof OutMessage.Type
   >
 >
 export type ExactModelAwareRegistration = Expect<
   Equal<
-    Update.RegistrationEvidenceOf<ReturnType<typeof modelAwareChildReportStep>>,
+    Update.RegistrationEvidenceOf<ReturnType<typeof modelAwareChildReport>>,
     Block.RequirementOfBinding<typeof ChildBinding>
   >
 >
 export type ExactContextualRequirements = Expect<
   Equal<
-    Update.RequirementsOf<typeof modelAwareContextualIncrementStep>,
+    Update.RequirementsOf<typeof modelAwareContextualIncrement>,
     Command.HandlerOf<typeof Save>
   >
 >
 export type ExactContextualOutMessage = Expect<
   Equal<
     Exclude<
-      ReturnType<typeof modelAwareContextualReportStep>['outMessage'],
+      ReturnType<typeof modelAwareContextualReport>['outMessage'],
       undefined
     >,
     typeof OutMessage.Type
@@ -115,8 +117,23 @@ export type ExactContextualSilentRequirements = Expect<
 export type ExactContextualRegistration = Expect<
   Equal<
     Update.RegistrationEvidenceOf<
-      ReturnType<typeof modelAwareContextualChildReportStep>
+      ReturnType<typeof modelAwareContextualChildReport>
     >,
     Block.RequirementOfBinding<typeof ChildBinding>
   >
 >
+
+export const incrementedMessageFree = incrementWithoutMessages({ count: 0 })
+export const unchangedMessageFree = makeMessageFreeFieldsStep(() => ({}))({
+  count: 0,
+})
+export type ExactMessageFreeRequirements = Expect<
+  Equal<Update.RequirementsOf<typeof incrementWithoutMessages>, never>
+>
+export type ExactMessageFreeModel = Expect<
+  Equal<typeof incrementedMessageFree.model, Readonly<{ count: number }>>
+>
+// @ts-expect-error Message-free helper exports retain the owning field contract.
+makeMessageFreeFieldsStep(() => ({ count: () => 'wrong' }))
+// @ts-expect-error Message-free Steps still require the owning Model.
+incrementWithoutMessages({ count: 'wrong' })

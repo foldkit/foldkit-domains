@@ -1,12 +1,9 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, Message, update,
-// and view definitions.
 import { Effect, Schema } from 'effect'
 import { Mount } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { AnchorConfig, anchorSetup } from '@foldkit/ui/anchor'
+import { Anchor } from '@foldkit/ui'
 
 // Every Mount Definition declares at least one result Message. Name it after
 // the Definition, the way a Command's result Message is named after the
@@ -24,13 +21,13 @@ type Message = typeof Message.Type
 // Construct the resource inside the acquire body, never before it, or it leaks
 // on interruption:
 const AnchorPanel = Mount.define('AnchorPanel', {
-  args: { buttonId: Schema.String, anchor: AnchorConfig },
+  args: { buttonId: Schema.String, anchor: Anchor.AnchorConfig },
   messages: [Message.CompletedAnchorPanel],
   handler: function* () {
     return ({ element, buttonId, anchor }) =>
       Effect.gen(function* () {
         yield* Effect.acquireRelease(
-          Effect.sync(() => anchorSetup(element, { buttonId, anchor })),
+          Effect.sync(() => Anchor.anchorSetup(element, { buttonId, anchor })),
           cleanup => Effect.sync(cleanup),
         )
         return Message.CompletedAnchorPanel()

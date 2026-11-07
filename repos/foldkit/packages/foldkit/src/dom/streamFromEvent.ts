@@ -143,8 +143,8 @@ type PreventDefaultEventListenerOptions = Omit<
  * those events, or reach for `streamFromEventFilterMapPreventDefault`, which does
  * so for you.
  *
- * The output type is inferred from the mapper. A Block definition's
- * `subscriptions` method checks that the final Stream emits the Block's
+ * The output type is inferred from the mapper. The owning Block's
+ * `makeSubscriptions` method checks that the final Stream emits the Block's
  * Message type.
  */
 export type StreamFromEventConfig<
@@ -185,8 +185,8 @@ export type StreamFromEventConfig<
  * `options: { passive: false }` explicitly when cancelling those events, or
  * reach for `streamFromEventFilterMapPreventDefault`, which does so for you.
  *
- * The output type is inferred from the mapper. A Block definition's
- * `subscriptions` method checks that the final Stream emits the Block's
+ * The output type is inferred from the mapper. The owning Block's
+ * `makeSubscriptions` method checks that the final Stream emits the Block's
  * Message type.
  */
 export type StreamFromEventFilterMapConfig<
@@ -267,8 +267,8 @@ const listen = <EventType extends Event, Output>(
  * rejects `passive: true`; the runtime guard also throws for unchecked
  * JavaScript inputs.
  *
- * The output type is inferred from the mapper. A Block definition's
- * `subscriptions` method checks that the final Stream emits the Block's
+ * The output type is inferred from the mapper. The owning Block's
+ * `makeSubscriptions` method checks that the final Stream emits the Block's
  * Message type.
  */
 export type StreamFromEventFilterMapPreventDefaultConfig<
@@ -328,8 +328,14 @@ export type StreamFromEventFilterMapPreventDefaultConfig<
  *
  * @example
  * ```typescript
- * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
- * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
+ * const ExampleKey = Symbol('Example')
+ * const ExampleBlock = Block.make('Example', {
+ *   key: ExampleKey,
+ *   Model,
+ *   Message,
+ *   InitArgs: Schema.Tuple([]),
+ * })
+ * const subscriptions = ExampleBlock.makeSubscriptions(entry => ({
  *   escapeKey: entry(
  *     'EscapeKey',
  *     { isListening: Schema.Boolean },
@@ -395,8 +401,14 @@ export const streamFromEventFilterMap = <
  *
  * @example
  * ```typescript
- * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
- * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
+ * const ExampleKey = Symbol('Example')
+ * const ExampleBlock = Block.make('Example', {
+ *   key: ExampleKey,
+ *   Model,
+ *   Message,
+ *   InitArgs: Schema.Tuple([]),
+ * })
+ * const subscriptions = ExampleBlock.makeSubscriptions(entry => ({
  *   shortcut: entry(
  *     'KeyboardShortcut',
  *     { isListening: Schema.Boolean },
@@ -471,8 +483,14 @@ export const streamFromEvent = <
  *
  * @example
  * ```typescript
- * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
- * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
+ * const ExampleKey = Symbol('Example')
+ * const ExampleBlock = Block.make('Example', {
+ *   key: ExampleKey,
+ *   Model,
+ *   Message,
+ *   InitArgs: Schema.Tuple([]),
+ * })
+ * const subscriptions = ExampleBlock.makeSubscriptions(entry => ({
  *   wheelLock: entry(
  *     'WheelLock',
  *     { isModalOpen: Schema.Boolean },

@@ -22,10 +22,20 @@ import { isScopedEntry, isScopedInvocation } from '../block/scope.js'
 import type { Scoped } from '../block/scope.js'
 import { CommandDefinitionTypeId } from '../command/index.js'
 import type { InterruptDefinitionNoArgs } from '../command/interruptible/index.js'
-import { type MountDefinition, MountDefinitionTypeId } from '../mount/index.js'
+import {
+  type MountDefinition,
+  MountDefinitionTypeId,
+  type MountRegistration,
+  MountRegistrationTypeId,
+  type StreamMountAction,
+  type StreamMountDefinition,
+} from '../mount/index.js'
 import {
   type Subscription,
   type MessageDeclaration as SubscriptionMessageDeclaration,
+  __keyedSelection,
+  __keyedTemplate,
+  __selectFromTemplate,
   __messageMappers as subscriptionMessageMappers,
 } from '../subscription/subscription.js'
 import {
@@ -34,6 +44,21 @@ import {
   isBindingCommandMatcher,
   sameOperation,
 } from './bindingMatcher.js'
+
+/** Deferred initializer arguments for a Block-aware Story or Scene. */
+export interface InitStep<Args extends ReadonlyArray<unknown>> {
+  readonly _tag: 'BlockInitStep'
+  readonly args: Readonly<Args>
+}
+
+/**
+ * Selects a Block's initializer without running it. The test constructs its
+ * graph first, then retains the initializer's Model and Commands.
+ * Arguments are checked against the Block passed to `story` or `scene`.
+ */
+export const init = <const Args extends ReadonlyArray<unknown>>(
+  ...args: Args
+): InitStep<Args> => ({ _tag: 'BlockInitStep', args })
 
 /** A Command in a test simulation. Carries `name` and optionally the `args`
  *  the runtime captured at construction. Instance matchers (Command values
@@ -158,6 +183,8 @@ export type PendingMount = Readonly<{
   [InvocationIdentityTypeId]?: DefinitionIdentity | undefined
   /** @internal The original Mount name before placement prefixes. */
   [InvocationNameTypeId]?: string | undefined
+  /** @internal Immutable lifecycle kind and declared result Schemas. */
+  [MountRegistrationTypeId]?: MountRegistration
   name: string
   args?: Record<string, unknown>
   occurrence: number
@@ -180,6 +207,21 @@ export type AnyMount = Readonly<{
  *  Two modes only: definition identity or identity + full args. Partial-args matching is
  *  intentionally unsupported, mirroring `CommandMatcher`. */
 export type MountMatcher = MountDefinition<string, unknown> | AnyMount
+
+/** A continuous Mount Definition or action selected for a later emission. */
+export type StreamMountMatcher =
+  | StreamMountDefinition<string, unknown, any>
+  | StreamMountAction<unknown, any, any>
+
+/** The result Message declared by a selected continuous Mount. */
+export type StreamMountMessage<Matcher extends StreamMountMatcher> =
+  Matcher extends (...args: Array<any>) => infer Action
+    ? Action extends StreamMountAction<infer Message, any, any>
+      ? Message
+      : never
+    : Matcher extends StreamMountAction<infer Message, any, any>
+      ? Message
+      : never
 
 const isMountDefinitionMatcher = (
   matcher: MountMatcher,
@@ -629,6 +671,25 @@ export const assertExactCommands = (
   }
 }
 
+/** Throws if the pending Commands don't match the given matchers exactly in
+ *  dispatch order. Uses the same source identity, args and scoped occurrence
+ *  matching as the other Command assertions. */
+export const assertExactCommandsInOrder = (
+  commands: ReadonlyArray<AnyCommand>,
+  matchers: ReadonlyArray<CommandMatcher>,
+): void => {
+  const hasMismatch = pipe(
+    Array.zip(commands, matchers),
+    Array.some(([command, matcher]) => !commandMatches(matcher, command)),
+  )
+
+  if (commands.length !== matchers.length || hasMismatch) {
+    throw new Error(
+      `Expected exactly these Commands in order:\n\n${formatMatcherList(matchers)}\n\nBut found:\n\n${formatCommandList(commands)}`,
+    )
+  }
+}
+
 /** Throws if there are any pending Commands. */
 export const assertZeroCommands = (
   commands: ReadonlyArray<AnyCommand>,
@@ -718,15 +779,19 @@ export const formatMountList = (mounts: ReadonlyArray<PendingMount>): string =>
   })
 
 /** Resolves the first pending Mount that matches the given matcher and feeds
- *  its result through update, folding the matched Mount's Block-boundary
- *  chain over `resultMessage` first. Returns `undefined` when no pending Mount
- *  matches. Definition matchers select the source; Instance matchers also
- *  select their bound path and args. */
+ *  its result through update using the acquisition's delivery function when
+ *  supplied, or its captured Block-boundary chain otherwise. Returns `undefined`
+ *  when no pending Mount matches. Definition matchers select the source;
+ *  Instance matchers also select their bound path and args. */
 export const resolveMountByMatcher = <Model, Message>(
   internal: BaseInternal<Model, Message, unknown>,
   pendingMounts: ReadonlyArray<PendingMount>,
   matcher: MountMatcher,
   resultMessage: unknown,
+  deliver?: (
+    mount: PendingMount,
+    message: unknown,
+  ) => ReadonlyArray<unknown> | undefined,
 ):
   | Readonly<{
       internal: BaseInternal<Model, Message, unknown>
@@ -741,27 +806,14 @@ export const resolveMountByMatcher = <Model, Message>(
         pendingMounts,
         Array.get(index),
         Option.map(matchedMount => {
-          /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-          const resolverMessage = foldMessageMappers(
-            matchedMount.messageMappers,
-            resultMessage,
-          ) as Message
           const remaining = Array.remove(pendingMounts, index)
-          const messageUpdate = internal.updateFn(
-            internal.model,
-            resolverMessage,
-          )
           return {
-            internal: {
-              ...internal,
-              model: messageUpdate.model,
-              message: resolverMessage,
-              commands: Array.appendAll(
-                internal.commands,
-                messageUpdate.commands ?? [],
-              ),
-              outMessage: messageUpdate.outMessage,
-            },
+            internal: applyMountMessage(
+              internal,
+              matchedMount,
+              resultMessage,
+              deliver,
+            ),
             pendingMounts: remaining,
           }
         }),
@@ -769,6 +821,40 @@ export const resolveMountByMatcher = <Model, Message>(
     ),
     Option.getOrUndefined,
   )
+
+/** Applies one root Message from a Mount's delivery function or mapper fallback. */
+export const applyMountMessage = <Model, Message, OutMessage>(
+  internal: BaseInternal<Model, Message, OutMessage>,
+  mount: PendingMount,
+  resultMessage: unknown,
+  deliver?: (
+    mount: PendingMount,
+    message: unknown,
+  ) => ReadonlyArray<unknown> | undefined,
+): BaseInternal<Model, Message, OutMessage> => {
+  const messages = deliver?.(mount, resultMessage) ?? [
+    foldMessageMappers(mount.messageMappers, resultMessage),
+  ]
+  if (messages.length === 0) {
+    return internal
+  }
+  if (messages.length !== 1) {
+    throw new Error(
+      '[foldkit] A Mount result must dispatch exactly one root Message.',
+    )
+  }
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  const message = messages[0] as Message
+  const messageUpdate = internal.updateFn(internal.model, message)
+
+  return {
+    ...internal,
+    model: messageUpdate.model,
+    message,
+    commands: Array.appendAll(internal.commands, messageUpdate.commands ?? []),
+    outMessage: messageUpdate.outMessage,
+  }
+}
 
 /** Throws if any of the given matchers are missing from the pending mount
  *  list. Definition matchers select the source; Instance matchers also
@@ -915,23 +1001,25 @@ export const assertAllUnmountsAcknowledged = (
 type UnscopedSubscriptionRequirements<Requirements> =
   Requirements extends Scoped<any, infer Contract> ? Contract : Requirements
 
+interface SubscriptionStream<Requirements> {
+  readonly dependenciesToStream: (
+    ...args: ReadonlyArray<any>
+  ) => Stream.Stream<any, never, Requirements>
+}
+
+type SubscriptionRequirements<Entry> =
+  Entry extends SubscriptionStream<infer Requirements> ? Requirements : never
+
 /** The entry values a test may pass to emit a registered Subscription entry:
  *  the entry itself, or the child entry it was lifted from. */
 export type SubscriptionEmissionSource<Entry> =
-  Entry extends Readonly<{
-    dependenciesToStream: (
-      ...args: ReadonlyArray<any>
-    ) => Stream.Stream<any, never, infer Requirements>
-  }>
-    ?
-        | Subscription<any, any, any, Requirements>
-        | Subscription<
-            any,
-            any,
-            any,
-            UnscopedSubscriptionRequirements<Requirements>
-          >
-    : never
+  | Entry
+  | Subscription<
+      any,
+      any,
+      any,
+      UnscopedSubscriptionRequirements<SubscriptionRequirements<Entry>>
+    >
 
 const applySubscriptionMappers = (
   declaration: SubscriptionMessageDeclaration,
@@ -948,6 +1036,16 @@ export const sourceSubscriptionDeclarationsOf = (
   declarations: ReadonlyArray<SubscriptionMessageDeclaration>,
   entry: unknown,
 ): ReadonlyArray<SubscriptionMessageDeclaration> => {
+  const keyedSelection = __keyedSelection(entry)
+  if (keyedSelection !== undefined) {
+    return sourceSubscriptionDeclarationsOf(
+      declarations,
+      keyedSelection.source,
+    ).filter(declaration => {
+      const template = __keyedTemplate(declaration.entry)
+      return template?.binding === keyedSelection.binding
+    })
+  }
   const exactDeclarations = Array.filter(
     declarations,
     declaration => declaration.entry === entry,
@@ -990,6 +1088,34 @@ export const sourceSubscriptionDeclarationsOf = (
   return sourceDeclarations
 }
 
+const selectSubscriptionDeclaration = (
+  declaration: SubscriptionMessageDeclaration,
+  source: unknown,
+): SubscriptionMessageDeclaration => {
+  const selection = __keyedSelection(source)
+  if (selection === undefined) {
+    if (__keyedTemplate(declaration.entry) !== undefined) {
+      throw new Error(
+        '[foldkit] A keyed child Subscription requires an occurrence selected with Scene.Subscription.at(Binding, key, entry).',
+      )
+    }
+    return declaration
+  }
+
+  const selected = __selectFromTemplate(declaration.entry, selection.key)
+  if (selected === undefined) {
+    throw new Error(
+      '[foldkit] Scene.Subscription.at selected a Subscription that is not registered for this keyed Binding.',
+    )
+  }
+
+  return {
+    ...declaration,
+    entry: selected.entry,
+    messageMappers: subscriptionMessageMappers(selected.entry),
+  }
+}
+
 /** Resolves one selected registration for a Subscription source. */
 export const resolveSubscriptionDeclaration = (
   stepName: string,
@@ -1022,7 +1148,7 @@ export const resolveSubscriptionDeclaration = (
         )
       }
 
-      return declaration
+      return selectSubscriptionDeclaration(declaration, entry)
     },
   })
 }
@@ -1065,7 +1191,10 @@ export const resolveSubscriptionMessage = (
         )
       }
 
-      return applySubscriptionMappers(declaration, message)
+      return applySubscriptionMappers(
+        selectSubscriptionDeclaration(declaration, entry),
+        message,
+      )
     },
   })
 }

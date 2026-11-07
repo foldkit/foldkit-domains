@@ -1,9 +1,9 @@
 import type { Block } from 'foldkit'
 
-import { ApplicationDefinition } from './definition'
+import { makeComposition } from './block'
 import { MountMap } from './mount'
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   mounts: [MountMap],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

@@ -18,29 +18,30 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Schema.String]),
   Model,
   Message,
 })
 
-const { makeStep, makeFieldsStep } = ApplicationDefinition
+const { makeStep, makeFieldsStep, makeRequiredFieldBinding, makeComposition } =
+  ApplicationBlock
 
-const CounterBinding = ApplicationDefinition.makeBinding(CounterBlock, {
+const CounterBinding = makeRequiredFieldBinding(CounterBlock, {
   field: 'counter',
   init: { contextToArgs: () => [0] },
 })
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [CounterBinding],
 })
 
-const clearDraftStep = makeFieldsStep(() => ({
+const clearDraft = makeFieldsStep(() => ({
   draft: () => '',
 }))
-const resetStep = Update.combineSteps([
-  clearDraftStep,
-  CounterBinding.requestReset(),
-])
-const restoreBaselineStep = makeStep(model =>
+const reset = Update.combineSteps([clearDraft, CounterBinding.requestReset()])
+const restoreBaseline = makeStep(model =>
   CounterBinding.init({
     args: [0],
     toParentModel: counter =>
@@ -51,12 +52,10 @@ const restoreBaselineStep = makeStep(model =>
   }),
 )
 
-export const init = ApplicationComposition.makeInit(
-  (applicationId: string) => ({
-    model: { applicationId, draft: '' },
-  }),
-)
+export const init = ApplicationComposition.makeInit(applicationId => ({
+  model: { applicationId, draft: '' },
+}))
 export const update = ApplicationComposition.makeUpdate({
-  ClickedReset: resetStep,
-  ClickedRestoreBaseline: restoreBaselineStep,
+  ClickedReset: reset,
+  ClickedRestoreBaseline: restoreBaseline,
 })

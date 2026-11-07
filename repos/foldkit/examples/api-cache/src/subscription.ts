@@ -1,12 +1,12 @@
 import { Duration, Effect, Schema, Stream } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import { ApplicationDefinition } from './definition'
+import { makeSubscriptions } from './block'
 import { Message } from './message'
 
 const STATS_REFETCH_INTERVAL = Duration.seconds(5)
 
-export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
+export const subscriptions = makeSubscriptions(entry => ({
   statsRevalidationTicks: entry(
     'StatsRevalidationTicks',
     { isObservingStats: Schema.Boolean },

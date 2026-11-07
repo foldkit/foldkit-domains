@@ -13,9 +13,9 @@ import {
   PlainBinding,
   PlainBlock,
   RestContextBlock,
-  combinedMixedConnectedStep,
-  deferredMixedConnectedStep,
-  initPlainStep,
+  combinedMixedConnected,
+  deferredMixedConnected,
+  initPlain,
   initialParentModel,
   mixedConnectedSteps,
 } from './composition-safety.accepted.js'
@@ -30,12 +30,12 @@ const rejectRawMixedConnectedSteps = () => {
   // @ts-expect-error A predeclared tuple retains the connected graph requirement.
   Update.combineSteps(initialParentModel, mixedConnectedSteps)
   // @ts-expect-error A deferred combination still requires its registered Composition.
-  deferredMixedConnectedStep(initialParentModel)
+  deferredMixedConnected(initialParentModel)
 }
 const rejectReadableMixedRecipe = (
-  model: Parameters<typeof combinedMixedConnectedStep>[0],
+  model: Parameters<typeof combinedMixedConnected>[0],
 ) => {
-  const combined = combinedMixedConnectedStep(model)
+  const combined = combinedMixedConnected(model)
 
   // @ts-expect-error A connected combination remains opaque before composition.
   combined.model
@@ -49,15 +49,15 @@ declare const useSecondField: boolean
 
 // @ts-expect-error An accessor init projection must always supply one stable parent Model field.
 // oxfmt-ignore
-CompositionSafetyParentDefinition.makeBinding(PlainBlock, { placement: 'unstableProjected', read: model => Option.some(model.first), write: (model, nextChild) => Struct.modifyFields(model, { first: () => nextChild }), init: { contextToArgs: () => [], toParentFields: child => useSecondField ? { second: child } : { first: child } } })
+CompositionSafetyParentDefinition.makeCustomBinding(PlainBlock, { placement: 'unstableProjected', read: model => Option.some(model.first), write: (model, nextChild) => Struct.modifyFields(model, { first: () => nextChild }), init: { contextToArgs: () => [], toParentFields: child => useSecondField ? { second: child } : { first: child } } })
 
 // @ts-expect-error An optional update context still requires an explicit delivery context mapper.
 // oxfmt-ignore
-CompositionSafetyParentDefinition.makeBinding(OptionalContextBlock, { field: 'optionalContext' })
+CompositionSafetyParentDefinition.makeRequiredFieldBinding(OptionalContextBlock, { field: 'optionalContext' })
 
 // @ts-expect-error A required rest update context requires an explicit delivery context mapper.
 // oxfmt-ignore
-CompositionSafetyParentDefinition.makeBinding(RestContextBlock, { field: 'restContext' })
+CompositionSafetyParentDefinition.makeRequiredFieldBinding(RestContextBlock, { field: 'restContext' })
 
 // @ts-expect-error A connected Binding initializer requires its parent configuration.
 PlainBinding.init()
@@ -111,11 +111,11 @@ declare const unknownParentCommandRequirements: Update.Commands<
 PlainBinding.init({ args: [], toParentModel: child => Struct.modifyFields(initialParentModel, { plain: () => child }), commands: unknownParentCommandRequirements })
 
 // @ts-expect-error Foldkit's explicit Step cannot erase connected registration evidence.
-const erasedConnectedStep: Update.Step<
+const erasedConnected: Update.Step<
   typeof ParentModel.Type,
   typeof ParentMessage.Type
-> = initPlainStep
-void erasedConnectedStep
+> = initPlain
+void erasedConnected
 
 const MissingPlainBindingComposition =
   CompositionSafetyParentDefinition.makeComposition({
@@ -123,7 +123,7 @@ const MissingPlainBindingComposition =
   })
 MissingPlainBindingComposition.makeInit(() =>
   // @ts-expect-error A connected initializer cannot run without its registered Binding capability.
-  initPlainStep(initialParentModel),
+  initPlain(initialParentModel),
 )
 
 const directConnectedInit = MissingPlainBindingComposition.makeInit(() =>

@@ -70,13 +70,13 @@ const forwardSettingsOutMessage = (
       ParentOutMessage.SelectedSettingsTheme({ theme }),
   })
 
-const rawRefreshStep = SettingsBinding.refresh(
+const rawRefresh = SettingsBinding.refresh(
   CurrentUser.make({ accountId: 'raw-completion' }),
 )
 const uncompletedRawRefreshUpdate = (
-  model: Parameters<typeof rawRefreshStep>[0],
+  model: Parameters<typeof rawRefresh>[0],
   _message: typeof ParentMessage.Type,
-) => rawRefreshStep(model)
+) => rawRefresh(model)
 
 ParentComposition.prepareBlock({
   init: parentInit,
@@ -92,35 +92,30 @@ SettingsComposition.prepareBlock({
   EffectsLayer: Layer.empty,
 })
 
-ParentDefinition.makeBinding(SettingsBlock, {
-  // @ts-expect-error A direct child with required dispatch context needs a delivery context mapper.
+// @ts-expect-error A direct child with required dispatch context needs a delivery context mapper.
+ParentDefinition.makeRequiredFieldBinding(SettingsBlock, {
   field: 'settings',
-  // @ts-expect-error The invalid Binding configuration has no placement domain.
   placement: 'settingsWithoutContext',
 }).withOutMessagePolicy({ forward: forwardSettingsOutMessage })
 
-ParentDefinition.makeBinding(SettingsBlock, {
-  // @ts-expect-error Generated delivery requires the child's exact CurrentUser context tuple.
+// @ts-expect-error Generated delivery requires the child's exact CurrentUser context tuple.
+ParentDefinition.makeRequiredFieldBinding(SettingsBlock, {
   field: 'settings',
-  // @ts-expect-error The invalid Binding configuration has no placement domain.
   placement: 'settingsWithoutCompleteContext',
-  // @ts-expect-error The empty tuple omits the child's required CurrentUser context.
   delivery: { toUpdateContext: () => [] },
 }).withOutMessagePolicy({ forward: forwardSettingsOutMessage })
 
-ParentDefinition.makeBinding(SettingsBlock, {
-  // @ts-expect-error Generated delivery does not reinsert the child Message or extra arguments.
+// @ts-expect-error Generated delivery accepts only the child's required CurrentUser context.
+ParentDefinition.makeRequiredFieldBinding(SettingsBlock, {
   field: 'settings',
-  // @ts-expect-error The invalid Binding configuration has no placement domain.
   placement: 'settingsWithExtraContext',
-  // @ts-expect-error Generated delivery accepts only the child's required CurrentUser context.
   delivery: {
     toUpdateContext: model => [model.currentUser, model.currentUser],
   },
 }).withOutMessagePolicy({ forward: forwardSettingsOutMessage })
 
 // @ts-expect-error A generated general keyed Binding requires an exact key Schema.
-ParentDefinition.makeBinding(RoomBlock, {
+ParentDefinition.makeCustomKeyedBinding(RoomBlock, {
   placement: 'roomWithoutKeySchema',
   readAll: model => Option.toArray(model.maybeRoom),
   key: room => room.id,
@@ -135,7 +130,7 @@ ParentDefinition.makeBinding(RoomBlock, {
 })
 
 // @ts-expect-error A keyed child with required dispatch context needs a delivery context mapper.
-ParentDefinition.makeBinding(RoomBlock, {
+ParentDefinition.makeCustomKeyedBinding(RoomBlock, {
   placement: 'roomWithoutContext',
   readAll: model => Option.toArray(model.maybeRoom),
   key: room => room.id,
@@ -145,7 +140,7 @@ ParentDefinition.makeBinding(RoomBlock, {
     ParentModel.make({ ...model, maybeRoom: Option.some(nextRoom) }),
 })
 
-ParentDefinition.makeBinding(RoomBlock, {
+ParentDefinition.makeCustomKeyedBinding(RoomBlock, {
   placement: 'roomWithWrongKeySchema',
   readAll: model => Option.toArray(model.maybeRoom),
   key: room => room.id,
@@ -157,7 +152,7 @@ ParentDefinition.makeBinding(RoomBlock, {
   delivery: { toUpdateContext: (_model, roomId) => [{ roomId }] },
 })
 
-ParentDefinition.makeBinding(RoomBlock, {
+ParentDefinition.makeCustomKeyedBinding(RoomBlock, {
   placement: 'roomWithWrongContext',
   readAll: model => Option.toArray(model.maybeRoom),
   key: room => room.id,
@@ -172,72 +167,68 @@ ParentDefinition.makeBinding(RoomBlock, {
 })
 
 // @ts-expect-error A Binding config must select one supported storage shape.
-ParentDefinition.makeBinding(StatusBlock, {})
+ParentDefinition.makeRequiredFieldBinding(StatusBlock, {})
 
 // @ts-expect-error A valid Binding config cannot add an unknown field.
-ParentDefinition.makeBinding(StatusBlock, {
+ParentDefinition.makeRequiredFieldBinding(StatusBlock, {
   field: 'status',
   unknownConfigField: true,
 })
 
-ParentDefinition.makeBinding(StatusBlock, {
+ParentDefinition.makeCustomKeyedBinding(StatusBlock, {
   // @ts-expect-error A direct field Binding cannot also declare general keyed storage.
   field: 'status',
   readAll: model => [model.status],
 })
 
 // @ts-expect-error A general keyed Binding requires its complete storage and generated delivery contract.
-ParentDefinition.makeBinding(RoomBlock, {
+ParentDefinition.makeCustomKeyedBinding(RoomBlock, {
   readAll: model => Option.toArray(model.maybeRoom),
 })
 
-ParentDefinition.makeBinding(StatusBlock, {
-  // @ts-expect-error A Binding init policy cannot add an unknown field.
+// @ts-expect-error A Binding init policy cannot add an unknown field.
+ParentDefinition.makeRequiredFieldBinding(StatusBlock, {
   field: 'status',
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   init: { contextToArgs: () => [], unknownInitField: true },
 })
 
-// @ts-expect-error Authored incoming Message routes are no longer accepted by makeBinding.
-ParentDefinition.makeBinding(StatusBlock, {
+// @ts-expect-error Explicit relationship constructors do not accept authored incoming Message routes.
+ParentDefinition.makeRequiredFieldBinding(StatusBlock, {
   field: 'status',
   fromParentMessage: false,
 })
 
-ParentDefinition.makeBinding(StatusBlock, {
-  // @ts-expect-error An invalid accessor init projection prevents the overload.
+ParentDefinition.makeCustomBinding(StatusBlock, {
   placement: 'statusWithMultipleProjectionFields',
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   read: model => Option.some(model.status),
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   write: (model, nextStatus) =>
     ParentModel.make({ ...model, status: nextStatus }),
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   init: {
     contextToArgs: () => [],
+    // @ts-expect-error An accessor init projection cannot write a second parent field.
     toParentFields: status => ({ status, secondaryStatus: status }),
   },
 })
 
-ParentDefinition.makeBinding(StatusBlock, {
-  // @ts-expect-error An invalid accessor init projection prevents the overload.
+// @ts-expect-error An accessor init projection cannot write an undeclared parent field.
+ParentDefinition.makeCustomBinding(StatusBlock, {
   placement: 'statusWithUndeclaredProjectionField',
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   read: model => Option.some(model.status),
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   write: (model, nextStatus) =>
     ParentModel.make({ ...model, status: nextStatus }),
-  // @ts-expect-error The invalid Binding config is uninhabitable.
   init: {
     contextToArgs: () => [],
     toParentFields: status => ({ status, undeclaredStatus: status }),
   },
 })
 
-const DuplicateStatusBinding = ParentDefinition.makeBinding(StatusBlock, {
-  field: 'status',
-  placement: 'status',
-})
+const DuplicateStatusBinding = ParentDefinition.makeRequiredFieldBinding(
+  StatusBlock,
+  {
+    field: 'status',
+    placement: 'status',
+  },
+)
 
 // @ts-expect-error Two generated child channels cannot use the same placement.
 ParentDefinition.makeComposition({
@@ -303,10 +294,13 @@ ParentComposition.makeUpdate({
   }),
 })
 
-const UnregisteredStatusBinding = ParentDefinition.makeBinding(StatusBlock, {
-  field: 'status',
-  placement: 'unregisteredAlternativeStatus',
-})
+const UnregisteredStatusBinding = ParentDefinition.makeRequiredFieldBinding(
+  StatusBlock,
+  {
+    field: 'status',
+    placement: 'unregisteredAlternativeStatus',
+  },
+)
 const UnregisteredComposition = ParentDefinition.makeComposition({
   bindings: [
     SettingsBinding,
@@ -350,7 +344,7 @@ type RefreshStep = ReturnType<typeof SettingsBinding.refresh>
 type DirectRefreshRequirements = Update.RequirementsOf<RefreshStep>
 type SettingsRegistration = Block.RequirementOfBinding<typeof SettingsBinding>
 
-const exactRefreshStep: (
+const exactRefresh: (
   model: Parameters<RefreshStep>[0],
 ) => Update.ResultRecipe<
   typeof ParentModel.Type,
@@ -360,7 +354,7 @@ const exactRefreshStep: (
   SettingsRegistration
 > = SettingsBinding.refresh(CurrentUser.make({ accountId: 'exact-erasure' }))
 
-const changedThemeStep = ParentDefinition.makeStep(
+const changedTheme = ParentDefinition.makeStep(
   () => (model: Parameters<typeof SettingsBinding.fold>[0]) =>
     SettingsBinding.fold(
       model,
@@ -368,7 +362,7 @@ const changedThemeStep = ParentDefinition.makeStep(
       CurrentUser.make({ accountId: 'emitting-policy' }),
     ),
 )
-type ChangedThemeStep = typeof changedThemeStep
+type ChangedThemeStep = typeof changedTheme
 type ChangedThemeRequirements = Update.RequirementsOf<ChangedThemeStep>
 
 // @ts-expect-error Init cannot consume a Step whose selected handler forwards an OutMessage.
@@ -379,11 +373,11 @@ ParentComposition.makeInit((childInitContext: ParentChildInitContext) => ({
     route: childInitContext.route,
     maybeRoom: Option.none(),
   },
-  steps: [changedThemeStep],
+  steps: [changedTheme],
 }))
 
 // @ts-expect-error A recipe cannot erase its selected handler's forwarded OutMessage policy while retaining only direct registration.
-const erasedChangedThemeStep: (
+const erasedChangedTheme: (
   model: Parameters<ChangedThemeStep>[0],
 ) => Update.ResultRecipe<
   typeof ParentModel.Type,
@@ -391,9 +385,9 @@ const erasedChangedThemeStep: (
   never,
   ChangedThemeRequirements,
   SettingsRegistration
-> = changedThemeStep
+> = changedTheme
 
-const widenedRefreshStep: (
+const widenedRefresh: (
   model: Parameters<RefreshStep>[0],
 ) => Update.ResultRecipe<
   typeof ParentModel.Type,
@@ -403,12 +397,12 @@ const widenedRefreshStep: (
   unknown
 > = SettingsBinding.refresh(CurrentUser.make({ accountId: 'unknown-erasure' }))
 
-const combinedWidenedRefreshStep = Update.combineSteps([
-  widenedRefreshStep,
+const combinedWidenedRefresh = Update.combineSteps([
+  widenedRefresh,
   ParentDefinition.makeStep(model => ({ model })),
 ])
 
-const erasedAnyRefreshStep: (
+const erasedAnyRefresh: (
   model: Parameters<RefreshStep>[0],
 ) => Update.ResultRecipe<
   typeof ParentModel.Type,
@@ -427,7 +421,7 @@ ParentComposition.makeInit((childInitContext: ParentChildInitContext) => ({
     route: childInitContext.route,
     maybeRoom: Option.none(),
   },
-  steps: [widenedRefreshStep],
+  steps: [widenedRefresh],
 }))
 
 // @ts-expect-error Combining Steps cannot erase their policy obligations.
@@ -438,21 +432,21 @@ ParentComposition.makeInit((childInitContext: ParentChildInitContext) => ({
     route: childInitContext.route,
     maybeRoom: Option.none(),
   },
-  steps: [combinedWidenedRefreshStep],
+  steps: [combinedWidenedRefresh],
 }))
 
 ParentComposition.makeUpdate({
   // @ts-expect-error Update rejects unknown-erased policy obligations.
-  OpenedDashboard: (model, _message) => widenedRefreshStep(model),
+  OpenedDashboard: (model, _message) => widenedRefresh(model),
 })
 ParentComposition.makeUpdate({
   // @ts-expect-error Update rejects any-erased policy obligations.
-  OpenedDashboard: (model, _message) => erasedAnyRefreshStep(model),
+  OpenedDashboard: (model, _message) => erasedAnyRefresh(model),
 })
 
 void exactRefreshInit
-void exactRefreshStep
-void erasedChangedThemeStep
+void exactRefresh
+void erasedChangedTheme
 
 // @ts-expect-error The removed command authoring name has no compatibility alias.
 ParentDefinition.command

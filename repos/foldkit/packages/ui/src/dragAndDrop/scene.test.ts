@@ -1,19 +1,23 @@
-import { Option, Schema } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
-import type { Attribute, ChildAttribute } from 'foldkit/html'
+import type { ChildAttribute, TaggedAttribute } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
 import { expectTypeOf } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import { DragAndDropBlock, type RenderInfo } from './block.js'
+import { DragAndDropBlock, type RenderInfo, layer } from './block.js'
 
-const DragAndDropSceneDefinition = Block.makeDefinition('DragAndDropScene', {
-  Model: DragAndDropBlock.Model,
+const DragAndDropSceneKey = Symbol('DragAndDropScene')
+const DragAndDropSceneBlock = Block.make('DragAndDropScene', {
+  key: DragAndDropSceneKey,
+  InitArgs: Block.makeInputContract<readonly []>(),
+  Model: Schema.Struct({ dragAndDrop: DragAndDropBlock.Model }),
   Message: Schema.Never,
+  view: { kind: 'Element' },
 })
 
-const foldDragAndDropOutMessage = DragAndDropSceneDefinition.makeOutMessageFold(
+const foldDragAndDropOutMessage = DragAndDropSceneBlock.makeOutMessageFold(
   DragAndDropBlock,
   {
     StartedKeyboardDrag: () => model => ({ model }),
@@ -23,18 +27,19 @@ const foldDragAndDropOutMessage = DragAndDropSceneDefinition.makeOutMessageFold(
   },
 )
 
-const DragAndDropBinding = DragAndDropSceneDefinition.makeBinding(
+const DragAndDropBinding = DragAndDropSceneBlock.makeRequiredFieldBinding(
   DragAndDropBlock,
   {
-    read: model => Option.some(model),
-    write: (_model, nextDragAndDrop) => nextDragAndDrop,
+    field: 'dragAndDrop',
+    init: { contextToArgs: () => [{ id: 'board' }] },
   },
 ).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
 
-const DragAndDropSceneComposition = DragAndDropSceneDefinition.makeComposition({
+const DragAndDropSceneComposition = DragAndDropSceneBlock.makeComposition({
   bindings: [DragAndDropBinding],
 })
 
+const init = DragAndDropSceneComposition.makeInit(() => ({ model: {} }))
 const update = DragAndDropSceneComposition.makeUpdate({})
 
 const view = DragAndDropSceneComposition.makeView((model, h) =>
@@ -44,7 +49,7 @@ const view = DragAndDropSceneComposition.makeView((model, h) =>
       h.block(
         DragAndDropBinding.embedView({
           slotId: 'drag-and-drop',
-          model,
+          model: model.dragAndDrop,
           viewInputs: {
             toView: ({ draggable, droppable }) =>
               h.div(
@@ -66,13 +71,28 @@ const view = DragAndDropSceneComposition.makeView((model, h) =>
           },
         }),
       ),
-      h.p([h.Id('drag-state')], [model.dragState._tag]),
+      h.p([h.Id('drag-state')], [model.dragAndDrop.dragState._tag]),
     ],
   ),
 )
 
-const initialModel = DragAndDropBlock.init({ id: 'board' }).model
 const card = Scene.selector('#card')
+
+const dragAndDropScene = {
+  block: DragAndDropSceneBlock,
+  layer: DragAndDropSceneBlock.makeLayer(
+    Effect.gen(function* () {
+      const children = yield* DragAndDropSceneComposition.acquireChildren()
+
+      return {
+        children,
+        init,
+        update,
+        view: view,
+      }
+    }),
+  ).pipe(Layer.provide(layer)),
+}
 
 describe('DragAndDrop view', () => {
   it('publishes child attributes rather than raw local Message attributes', () => {
@@ -80,18 +100,20 @@ describe('DragAndDrop view', () => {
       ReadonlyArray<ChildAttribute>
     >()
     expectTypeOf<ReturnType<RenderInfo['draggable']>>().not.toMatchTypeOf<
-      ReadonlyArray<Attribute<never>>
+      ReadonlyArray<TaggedAttribute<never>>
     >()
   })
 
-  it('routes consumer-placed handlers through the embedded Block boundary', () => {
-    Scene.scene(
-      { update, view },
-      Scene.given(initialModel),
-      Scene.expect(card).toHaveAttr('data-draggable-id', 'card-1'),
-      Scene.expect(card).toHaveHandler('pointerdown'),
-      Scene.pointerDown(card, { screenX: 40, screenY: 60 }),
-      Scene.expect(Scene.selector('#drag-state')).toHaveText('Pending'),
-    )
-  })
+  it.effect(
+    'routes consumer-placed handlers through the embedded Block boundary',
+    () =>
+      Scene.scene(
+        dragAndDropScene,
+        Scene.init(),
+        Scene.expect(card).toHaveAttr('data-draggable-id', 'card-1'),
+        Scene.expect(card).toHaveHandler('pointerdown'),
+        Scene.pointerDown(card, { screenX: 40, screenY: 60 }),
+        Scene.expect(Scene.selector('#drag-state')).toHaveText('Pending'),
+      ),
+  )
 })

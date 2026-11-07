@@ -1,12 +1,8 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 import { Tooltip } from '@foldkit/ui'
-import type { RenderInfo as TooltipRenderInfo } from '@foldkit/ui/tooltip'
 
 // Add a field to your Model for the Tooltip Block:
 const Model = Schema.Struct({
@@ -18,21 +14,34 @@ type Model = typeof Model.Type
 const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
-const TooltipExampleDefinition = Block.makeDefinition('TooltipExample', {
+export const TooltipExampleKey = Symbol('TooltipExample')
+export const TooltipExampleBlock = Block.make('TooltipExample', {
+  key: TooltipExampleKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = TooltipExampleDefinition
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = TooltipExampleBlock
 
 // At module scope, fold the OutMessage into your own Model. `Shown` and
 // `Hidden` mark the visibility transitions. Fire analytics or coordinate with
 // the rest of your UI from the parent. Each arm returns an Update.Step over
 // the parent Model, which already has the next Tooltip Model written back.
-// The parent Definition checks every named child variant:
-const foldTooltipOutMessage = TooltipExampleDefinition.makeOutMessageFold(
-  Tooltip.TooltipBlock,
-  {
+// The parent Block checks every named child variant:
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const TooltipBinding = makeRequiredFieldBinding(Tooltip.TooltipBlock, {
+  field: 'tooltip',
+  init: { contextToArgs: () => [{ id: 'save-button' }] },
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(Tooltip.TooltipBlock, {
     // The child has emitted `Shown`. In this arm the parent can update its
     // own state or dispatch its own Commands, for example log analytics,
     // prefetch content, or trigger a downstream Command.
@@ -41,21 +50,10 @@ const foldTooltipOutMessage = TooltipExampleDefinition.makeOutMessageFold(
     // own state or dispatch its own Commands, for example clear ephemeral
     // state, fire analytics, or trigger a downstream Command.
     Hidden: makeNoopStep,
-  },
-)
+  }),
+})
 
-// The Binding wires the completed child Block into the parent: it runs Tooltip.TooltipBlock.update,
-// writes the next Tooltip Model back, routes generated delivery and Command
-// results, and hands any OutMessage to the OutMessage fold.
-const TooltipBinding = TooltipExampleDefinition.makeBinding(
-  Tooltip.TooltipBlock,
-  {
-    field: 'tooltip',
-    init: { contextToArgs: () => Tuple.make({ id: 'save-button' }) },
-  },
-).withOutMessagePolicy({ fold: foldTooltipOutMessage })
-
-const TooltipExampleComposition = TooltipExampleDefinition.makeComposition({
+const TooltipExampleComposition = makeComposition({
   bindings: [TooltipBinding],
 })
 
@@ -74,7 +72,7 @@ const update = TooltipExampleComposition.makeUpdate({})
 // label element instead when one exists.) The attribute is only emitted when
 // provided, so the trigger never carries a dangling `aria-labelledby`.
 const view = TooltipExampleComposition.makeView((model, h) => {
-  const tooltipView = ({ trigger, panel, isVisible }: TooltipRenderInfo) =>
+  const tooltipView = ({ trigger, panel, isVisible }: Tooltip.RenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -111,3 +109,16 @@ const view = TooltipExampleComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = TooltipExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* TooltipExampleComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Tooltip.layer))

@@ -97,14 +97,14 @@ const childView = ChildComposition.makeView((model, h) =>
 )
 
 const childUpdate = ChildComposition.makeUpdate({
-  RequestedRead: model => refreshStep(model),
+  RequestedRead: model => refresh(model),
   CompletedRead: (model, { value }) => ({
     model: ChildModel.make({ value }),
   }),
   CompletedMeasure: model => ({ model }),
 })
 
-const refreshStep = ChildDefinition.makeStep(model => ({
+const refresh = ChildDefinition.makeStep(model => ({
   model,
   commands: [ReadCount()],
 }))
@@ -266,13 +266,13 @@ export const StreamDirectValue =
   })
 
 export const directUpdate = DeclarationTestsDirectComposition.makeUpdate({
-  RequestedReadDirectValue: model => refreshDirectValueStep(model),
+  RequestedReadDirectValue: model => refreshDirectValue(model),
   CompletedReadDirectValue: (model, { value }) => ({
     model: DirectModel.make({ value }),
   }),
 })
 
-export const refreshDirectValueStep = DeclarationTestsDirectDefinition.makeStep(
+export const refreshDirectValue = DeclarationTestsDirectDefinition.makeStep(
   model => ({
     model,
     commands: [ReadDirectValue()],
@@ -351,7 +351,7 @@ const DeclarationTestsDirectInitDefinition = Block.makeDefinition(
   },
 )
 export const DirectInitChildBinding =
-  DeclarationTestsDirectInitDefinition.makeBinding(ChildBlock, {
+  DeclarationTestsDirectInitDefinition.makeCustomBinding(ChildBlock, {
     placement: 'direct-init-child',
     read: model => Option.some(model),
     write: (_model, nextChild) => nextChild,
@@ -403,7 +403,7 @@ const DeclarationTestsParentDefinition = Block.makeNamespace(
   Message: ParentMessage,
 })
 
-export const ChildBinding = DeclarationTestsParentDefinition.makeBinding(
+export const ChildBinding = DeclarationTestsParentDefinition.makeCustomBinding(
   ChildBlock,
   {
     placement: 'child',
@@ -412,13 +412,11 @@ export const ChildBinding = DeclarationTestsParentDefinition.makeBinding(
   },
 )
 
-export const DirectChildBinding = DeclarationTestsParentDefinition.makeBinding(
-  ChildBlock,
-  {
+export const DirectChildBinding =
+  DeclarationTestsParentDefinition.makeRequiredFieldBinding(ChildBlock, {
     field: 'child',
     init: false,
-  },
-)
+  })
 
 export const childInspection = Block.inspectBinding(ChildBinding)
 
@@ -505,10 +503,10 @@ export const parentArrayViewHelper = (
 ) => labels.map(label => h.span([], [label]))
 
 export const parentUpdate = ParentComposition.makeUpdate({
-  RequestedRefresh: model => refreshChildStep(model),
+  RequestedRefresh: model => refreshChild(model),
 })
 
-const refreshChildStep = DeclarationTestsParentDefinition.makeStep(() =>
+const refreshChild = DeclarationTestsParentDefinition.makeStep(() =>
   ChildBinding.refresh(),
 )
 
@@ -517,10 +515,9 @@ export const RefreshContext = Schema.Struct({
 })
 export type RefreshContext = typeof RefreshContext.Type
 
-export const contextualRefreshChildStep =
-  DeclarationTestsParentDefinition.makeStep(
-    (_model, _context?: RefreshContext) => ChildBinding.refresh(),
-  )
+export const contextualRefreshChild = DeclarationTestsParentDefinition.makeStep(
+  (_model, _context?: RefreshContext) => ChildBinding.refresh(),
+)
 
 const prepareParent = () =>
   ParentComposition.prepareBlock({
@@ -576,7 +573,7 @@ const makeChoiceParts = <const Values extends ReadonlyArray<string>>(
     Message,
     OutMessage,
   })
-  const finishStep = ChoiceDefinition.makeStep((_model, value: Value) => ({
+  const finish = ChoiceDefinition.makeStep((_model, value: Value) => ({
     model: Model.make({ value }),
     outMessage: OutMessage.make({ value }),
   }))
@@ -589,7 +586,7 @@ const makeChoiceParts = <const Values extends ReadonlyArray<string>>(
       }),
     ),
     update: DeclarationTestsChoiceComposition.makeUpdate({
-      SelectedValue: (model, message) => finishStep(model, message.value),
+      SelectedValue: (model, message) => finish(model, message.value),
     }),
     operations: {
       finish: (value: Values[number]) => Tuple.make(Message.make({ value })),
@@ -650,11 +647,15 @@ const DeclarationTestsChoiceParentDefinition = Block.makeDefinition(
 )
 const ChoiceParent = DeclarationTestsChoiceParentDefinition
 
-export const RefinedChoiceBinding = ChoiceParent.makeBinding(RefinedChoice, {
-  placement: 'refined-choice',
-  read: model => Option.some(model.choice),
-  write: (_model, nextChoice) => ChoiceParentModel.make({ choice: nextChoice }),
-}).withOutMessagePolicy({
+export const RefinedChoiceBinding = ChoiceParent.makeCustomBinding(
+  RefinedChoice,
+  {
+    placement: 'refined-choice',
+    read: model => Option.some(model.choice),
+    write: (_model, nextChoice) =>
+      ChoiceParentModel.make({ choice: nextChoice }),
+  },
+).withOutMessagePolicy({
   fold: outMessage => ChoiceParent.makeStep(model => ({ model, outMessage })),
 })
 

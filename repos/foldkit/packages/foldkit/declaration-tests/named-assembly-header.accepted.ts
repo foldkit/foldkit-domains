@@ -149,9 +149,12 @@ const ApplicationDefinition = Block.makeDefinition('Application', {
   Model: ApplicationModel,
   Message: ApplicationMessage,
 })
-const ChildBinding = ApplicationDefinition.makeBinding(ViewedBlock, {
-  field: 'child',
-})
+const ChildBinding = ApplicationDefinition.makeRequiredFieldBinding(
+  ViewedBlock,
+  {
+    field: 'child',
+  },
+)
 const ApplicationComposition = ApplicationDefinition.makeComposition({
   bindings: [ChildBinding],
 })
@@ -187,7 +190,7 @@ export const applicationModel = ApplicationBlock.init().model
 export const applicationMessage = ApplicationMessage.RequestedRefresh({
   count: 2,
 })
-const applicationStep = ApplicationBlock.update(applicationMessage)
+const applyApplicationMessage = ApplicationBlock.update(applicationMessage)
 
 export type ApplicationBoundaryAssertions = [
   Expect<Equal<typeof ApplicationBlock.Model, typeof ApplicationModel>>,
@@ -203,13 +206,13 @@ export type ApplicationBoundaryAssertions = [
   >,
   Expect<
     Equal<
-      Parameters<typeof applicationStep>,
+      Parameters<typeof applyApplicationMessage>,
       [model: typeof ApplicationModel.Type]
     >
   >,
   Expect<
     Equal<
-      ReturnType<typeof applicationStep>,
+      ReturnType<typeof applyApplicationMessage>,
       ReturnType<typeof ApplicationBlock.update>
     >
   >,

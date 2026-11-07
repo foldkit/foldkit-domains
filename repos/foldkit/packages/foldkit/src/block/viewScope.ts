@@ -1,3 +1,5 @@
+import { Context, Predicate } from 'effect'
+
 import type { AnyAuthoredView } from '../html/block.js'
 import {
   clearRuntime,
@@ -5,7 +7,45 @@ import {
   pushFrame,
 } from '../html/runtimeSingleton.js'
 import type { NamedIdentity, ViewIdentity } from './identity.js'
+import {
+  type ActiveInstance,
+  CurrentInstance,
+  type InstanceCursor,
+  type InstanceKey,
+} from './instanceContext.js'
 import { invocationContext } from './scope.js'
+
+declare const EmbeddedViewPlanTypeId: unique symbol
+
+/** @internal A passive view whose selected executable graph is authenticated before embedding. */
+export interface EmbeddedViewPlan<OwnerValue> {
+  readonly [EmbeddedViewPlanTypeId]: (owner: OwnerValue) => OwnerValue
+}
+
+const embeddedViewCompilers = new WeakMap<object, (block: object) => object>()
+
+/** @internal Registers compilation through the selected child's actual Composition. */
+export const registerEmbeddedViewCompiler = (
+  view: object,
+  compile: (block: object) => object,
+): void => {
+  embeddedViewCompilers.set(view, compile)
+}
+
+/** @internal Resolves passive view plans before the native child boundary is installed. */
+export const resolveEmbeddedView = <View>(block: object, view: View): View => {
+  const compile =
+    Predicate.isObject(view) || Predicate.isFunction(view)
+      ? embeddedViewCompilers.get(view)
+      : undefined
+
+  if (compile === undefined) {
+    return view
+  }
+
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return compile(block) as View
+}
 
 const viewsWithInputs = new WeakSet<object>()
 
@@ -74,12 +114,47 @@ export const scopeView = <View extends AnyAuthoredView>(
   view: View,
   identity?: ViewIdentity,
 ): View => {
+  type CachedContext = Readonly<{
+    cursor: InstanceCursor | undefined
+    node: ActiveInstance | undefined
+    generation: number | undefined
+    key: InstanceKey | undefined
+    resources: Context.Context<never> | undefined
+    scoped: Context.Context<any>
+  }>
+  const cachedContexts = new WeakMap<Context.Context<never>, CachedContext>()
+
   const scopedView = (...args: ReadonlyArray<any>) => {
     const frame = getCurrentFrame()
+    const cursor = Context.get(frame.runtimeContext, CurrentInstance)
+    const node = cursor?.node
+    const cached = cachedContexts.get(frame.runtimeContext)
+    const isCachedContextCurrent =
+      cached !== undefined &&
+      cached.cursor === cursor &&
+      cached.node === node &&
+      cached.generation === node?.generation &&
+      cached.key === node?.key &&
+      cached.resources === node?.resources
+    const scopedRuntimeContext = isCachedContextCurrent
+      ? cached.scoped
+      : invocationContext(segment, frame.runtimeContext)
+
+    if (!isCachedContextCurrent) {
+      cachedContexts.set(frame.runtimeContext, {
+        cursor,
+        node,
+        generation: node?.generation,
+        key: node?.key,
+        resources: node?.resources,
+        scoped: scopedRuntimeContext,
+      })
+    }
+
     pushFrame({
       ...frame,
       ...(identity === undefined ? {} : { viewIdentity: identity }),
-      runtimeContext: invocationContext(segment, frame.runtimeContext),
+      runtimeContext: scopedRuntimeContext,
       effectPath: [...(frame.effectPath ?? []), segment],
     })
     try {

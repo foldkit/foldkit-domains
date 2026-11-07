@@ -1,20 +1,9 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Effect, Match, Option, Schema, Tuple } from 'effect'
+import { Effect, Layer, Match, Option, Schema } from 'effect'
 import { Block, Calendar } from 'foldkit'
 import type { ChildAttribute, Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { DatePicker } from '@foldkit/ui'
-import type {
-  CalendarAttributes as UiCalendarCalendarAttributes,
-  DaysModeAttributes as UiCalendarDaysModeAttributes,
-  MonthsModeAttributes as UiCalendarMonthsModeAttributes,
-  Week as UiCalendarWeek,
-  YearsModeAttributes as UiCalendarYearsModeAttributes,
-} from '@foldkit/ui/calendar'
-import { triggerId as DatePickerTriggerId } from '@foldkit/ui/datePicker'
+import { Calendar as UiCalendar, DatePicker } from '@foldkit/ui'
 
 // Add a field to your Model for the DatePicker Block, plus a field the
 // parent owns for the selected date. The picker no longer stores the
@@ -42,13 +31,23 @@ const flags = Effect.gen(function* () {
 const Message = defineMessageUnion({})
 type Message = typeof Message.Type
 
-const DatePickerExampleDefinition = Block.makeDefinition('DatePickerExample', {
+export const DatePickerExampleKey = Symbol('DatePickerExample')
+export const DatePickerExampleBlock = Block.make('DatePickerExample', {
+  key: DatePickerExampleKey,
+  InitArgs: Schema.Tuple([Flags]),
+  view: { kind: 'Element' },
   Model,
   Message,
   ChildInitContext: Flags,
 })
 
-const { makeFieldsStep, makeNoopStep } = DatePickerExampleDefinition
+const {
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = DatePickerExampleBlock
 
 // At module scope, fold the OutMessage into your own Model. `SelectedDate`
 // carries the committed date. The popover has already closed by the time it
@@ -57,10 +56,26 @@ const { makeFieldsStep, makeNoopStep } = DatePickerExampleDefinition
 // `ChangedViewMonth` fires when calendar navigation shifts the visible month
 // without selecting a date. Each arm returns an Update.Step over the parent
 // Model, which already has the next DatePicker Model written back. Pass the
-// completed child Block so the parent Definition infers both contracts:
-const foldDatePickerOutMessage = DatePickerExampleDefinition.makeOutMessageFold(
+// completed child Block so the parent Block infers both contracts:
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const DatePickerDemoBinding = makeRequiredFieldBinding(
   DatePicker.DatePickerBlock,
   {
+    field: 'datePickerDemo',
+    init: {
+      contextToArgs: flags => [
+        {
+          id: 'date-picker-demo',
+          today: flags.today,
+          minDate: flags.today,
+          maxDate: Calendar.addMonths(flags.today, 3),
+        },
+      ],
+    },
+  },
+).withOutMessagePolicy({
+  fold: makeOutMessageFold(DatePicker.DatePickerBlock, {
     // The child has emitted `SelectedDate`. This is where the parent lifts
     // the committed date into its own field, which is then passed back to
     // the picker as `maybeSelectedDate`, so the parent stays the single
@@ -78,40 +93,19 @@ const foldDatePickerOutMessage = DatePickerExampleDefinition.makeOutMessageFold(
     // update its own state or dispatch its own Commands, for example
     // prefetch month data, fire analytics, or trigger a downstream Command.
     ChangedViewMonth: makeNoopStep,
-  },
-)
+  }),
+})
 
-// The Binding wires the completed child Block into the parent: it delegates navigation,
-// focus, and popover messages to DatePicker.DatePickerBlock.update, writes the next DatePicker
-// Model back, routes generated delivery and Command results, and hands
-// any OutMessage to the OutMessage fold.
-const DatePickerBinding = DatePickerExampleDefinition.makeBinding(
-  DatePicker.DatePickerBlock,
-  {
-    field: 'datePickerDemo',
-    init: {
-      contextToArgs: flags =>
-        Tuple.make({
-          id: 'date-picker-demo',
-          today: flags.today,
-          minDate: flags.today,
-          maxDate: Calendar.addMonths(flags.today, 3),
-        }),
-    },
-  },
-).withOutMessagePolicy({ fold: foldDatePickerOutMessage })
-
-const DatePickerExampleComposition =
-  DatePickerExampleDefinition.makeComposition({
-    bindings: [DatePickerBinding],
-  })
+const DatePickerExampleComposition = makeComposition({
+  bindings: [DatePickerDemoBinding],
+})
 type DatePickerExampleViewBuilder = Block.ViewBuilderFor<
   typeof DatePickerExampleComposition
 >
 
 // Pass the flags-resolved date through the child init context. The Composition
-// supplies it to DatePickerBinding and initializes the bound Model.
-const init = DatePickerExampleComposition.makeInit((flags: Flags) => ({
+// supplies it to DatePickerDemoBinding and initializes the bound Model.
+const init = DatePickerExampleComposition.makeInit(flags => ({
   childInitContext: flags,
   model: {
     maybeSelectedDate: Option.none(),
@@ -164,7 +158,7 @@ const navButton = (
 // Months, Months into Years). Pair the text with a chevron so the button reads
 // as interactive at rest.
 const headingButton = (
-  heading: UiCalendarDaysModeAttributes['heading'],
+  heading: UiCalendar.DaysModeAttributes['heading'],
   attributes: ReadonlyArray<ChildAttribute>,
   h: DatePickerExampleViewBuilder,
 ): Html =>
@@ -175,7 +169,10 @@ const headingButton = (
 
 // Each Week carries its own row attributes and seven day cells, and each cell
 // is a gridcell wrapping a button.
-const weekRow = (week: UiCalendarWeek, h: DatePickerExampleViewBuilder): Html =>
+const weekRow = (
+  week: UiCalendar.Week,
+  h: DatePickerExampleViewBuilder,
+): Html =>
   h.div(
     [...week.attributes, h.Class(rowClassName)],
     week.cells.map(cell =>
@@ -194,7 +191,7 @@ const weekRow = (week: UiCalendarWeek, h: DatePickerExampleViewBuilder): Html =>
 // One view function per view mode. Each receives the attribute group for its
 // own grid, so the fields it reads are exactly the fields that exist.
 const daysView = (
-  days: UiCalendarDaysModeAttributes,
+  days: UiCalendar.DaysModeAttributes,
   h: DatePickerExampleViewBuilder,
 ): Html =>
   h.div(
@@ -229,7 +226,7 @@ const daysView = (
 // The months grid renders 12 cells (one per month). Clicking the heading again
 // drills further into the years grid.
 const monthsView = (
-  months: UiCalendarMonthsModeAttributes,
+  months: UiCalendar.MonthsModeAttributes,
   h: DatePickerExampleViewBuilder,
 ): Html =>
   h.div(
@@ -260,7 +257,7 @@ const monthsView = (
 // 12-year windows; clicking a year drills back to the months grid for that
 // year. Years is terminal, so its heading is text rather than a button.
 const yearsView = (
-  years: UiCalendarYearsModeAttributes,
+  years: UiCalendar.YearsModeAttributes,
   h: DatePickerExampleViewBuilder,
 ): Html =>
   h.div(
@@ -312,11 +309,11 @@ const view = DatePickerExampleComposition.makeView((model, h) => {
     [h.Class('flex flex-col gap-1.5')],
     [
       h.label(
-        [h.Id(labelId), h.For(DatePickerTriggerId('date-picker-demo'))],
+        [h.Id(labelId), h.For(DatePicker.triggerId('date-picker-demo'))],
         ['Date'],
       ),
       h.block(
-        DatePickerBinding.embedView({
+        DatePickerDemoBinding.embedView({
           slotId: 'date-picker-demo',
           model: model.datePickerDemo,
           viewInputs: {
@@ -331,7 +328,7 @@ const view = DatePickerExampleComposition.makeView((model, h) => {
                 onSome: date =>
                   h.span([], [`${date.year}-${date.month}-${date.day}`]),
               }),
-            toCalendarView: Match.type<UiCalendarCalendarAttributes>().pipe(
+            toCalendarView: Match.type<UiCalendar.CalendarAttributes>().pipe(
               Match.tagsExhaustive({
                 Days: days => daysView(days, h),
                 Months: months => monthsView(months, h),
@@ -346,3 +343,16 @@ const view = DatePickerExampleComposition.makeView((model, h) => {
     ],
   )
 })
+
+export const layer = DatePickerExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* DatePickerExampleComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(DatePicker.layer))

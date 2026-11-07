@@ -1,7 +1,7 @@
+import { makeStep, makeRequiredFieldBinding } from './block'
 import { ChildBlock } from './child'
-import { ApplicationDefinition, makeStep } from './definition'
 
-const ChildBinding = ApplicationDefinition.makeBinding(ChildBlock, {
+const ChildBinding = makeRequiredFieldBinding(ChildBlock, {
   field: 'child',
 })
 
@@ -14,4 +14,4 @@ const badAliasRouting = () => requestSave()
 
 // ✅ Good
 // The parent invokes the operation projected by its child Binding.
-const goodRoutingStep = makeStep(() => ChildBinding.requestSave())
+const goodRouting = makeStep(() => ChildBinding.requestSave())

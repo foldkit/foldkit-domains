@@ -1,10 +1,10 @@
 import { Option } from 'effect'
 import { Update } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
+import { initAndSet } from 'foldkit/binding'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeStep } from '../block'
 import { PlaygroundBinding, UiPagesBinding } from '../composition'
-import { makeStep } from '../definition'
 import { findActiveSectionKeyForRoute } from '../docsNav'
 import type { Message, ThemePreference } from '../message'
 import { initialSidebarGroups } from '../sidebarStorage'
@@ -15,7 +15,7 @@ type CompletedLoadBrowserEnvironmentMessage =
 
 type CompletedLoadBrowserEnvironment = CompletedLoadBrowserEnvironmentMessage
 
-export const handleCompletedLoadBrowserEnvironmentStep = makeStep.fromMessage(
+export const handleCompletedLoadBrowserEnvironment = makeStep.fromMessage(
   ({
     maybeThemePreference,
     maybeSidebarState,
@@ -30,7 +30,7 @@ export const handleCompletedLoadBrowserEnvironmentStep = makeStep.fromMessage(
     )
     const resolvedTheme = resolveTheme(themePreference, systemTheme)
 
-    const applyBrowserEnvironmentStep = makeStep(model => ({
+    const applyBrowserEnvironment = makeStep(model => ({
       model: modifyFields(model, {
         currentYear: () => currentYear,
         maybeIsPlaygroundSupported: () => Option.some(isPlaygroundSupported),
@@ -46,14 +46,14 @@ export const handleCompletedLoadBrowserEnvironmentStep = makeStep.fromMessage(
       commands: [ApplyTheme({ theme: resolvedTheme })],
     }))
 
-    const initUiPagesStep = makeStep(model =>
+    const initUiPages = makeStep(model =>
       initAndSet(UiPagesBinding, model, { args: [today] }),
     )
 
     return Update.combineSteps([
-      applyBrowserEnvironmentStep,
-      PlaygroundBinding.informSupport({ isSupported: isPlaygroundSupported }),
-      initUiPagesStep,
+      applyBrowserEnvironment,
+      PlaygroundBinding.informOfSupport({ isSupported: isPlaygroundSupported }),
+      initUiPages,
     ])
   },
 )

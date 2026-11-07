@@ -21,7 +21,7 @@ Effectful work lives at boundaries managed by the Runtime. Depending on the boun
 
 ### Synchronous DOM Event Work
 
-Effects, Streams, and Layers do nothing until the Runtime starts them. One narrow exception stays inside its boundary: a DOM-event mapper may need to perform synchronous browser work before returning a value. Use [`Dom.streamFromEventFilterMapPreventDefault`](/core/dom#filtered-events-and-synchronous-cancellation) when handling an event should also cancel its default action. The helper runs `filterMapEvent` and calls `preventDefault()` inside the browser's dispatch, while a downstream `Stream` operator runs too late to cancel the event. `FeatureDefinition.makeSubscriptions` checks that the final Stream emits Messages.
+Effects, Streams, and Layers do nothing until the Runtime starts them. One narrow exception stays inside its boundary: a DOM-event mapper may need to perform synchronous browser work before returning a value. Use [`Dom.streamFromEventFilterMapPreventDefault`](/core/dom#filtered-events-and-synchronous-cancellation) when handling an event should also cancel its default action. The helper runs `filterMapEvent` and calls `preventDefault()` inside the browser's dispatch, while a downstream `Stream` operator runs too late to cancel the event. `FeatureBlock.makeSubscriptions` checks that the final Stream emits Messages.
 
 ### CustomElement Boundaries
 
@@ -80,4 +80,4 @@ The pure version returns `GenerateApplePosition`. Its Effect generates the coord
 
 `RequestedApple` now returns the same Model and Command every time. Only the result handler writes the generated position into the Model.
 
-See the [Snake example](https://github.com/foldkit/foldkit/blob/main/examples/snake/src/application.ts#L220-L245) for a complete implementation of this pattern.
+See the [Snake example](https://github.com/foldkit/foldkit/blob/main/examples/snake/src/block.ts#L220-L245) for a complete implementation of this pattern.

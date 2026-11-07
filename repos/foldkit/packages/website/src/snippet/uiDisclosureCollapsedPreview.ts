@@ -1,7 +1,4 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -20,10 +17,18 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const ArticlePreviewComposition = Block.makeDefinition('ArticlePreview', {
+export const ArticlePreviewKey = Symbol('ArticlePreview')
+export const ArticlePreviewBlock = Block.make('ArticlePreview', {
+  key: ArticlePreviewKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = ArticlePreviewBlock
+
+const ArticlePreviewComposition = makeComposition()
 
 // In your init function, start it closed:
 const init = ArticlePreviewComposition.makeInit(() => ({
@@ -111,3 +116,14 @@ const view = ArticlePreviewComposition.makeView((model, h) => {
     h,
   )
 })
+
+export const layer = ArticlePreviewBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)

@@ -1,6 +1,6 @@
 import { Schema } from 'effect'
 
-import * as Tabs from '@foldkit/ui/tabs'
+import { Tabs } from '@foldkit/ui'
 
 import { postQuery, postsQuery, statsQuery } from './query'
 

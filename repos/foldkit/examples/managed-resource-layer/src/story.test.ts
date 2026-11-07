@@ -1,15 +1,18 @@
 import { Option } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import {
+  ApplicationBlock,
   Compute,
   EngineState,
   Message,
   type Model,
-  update,
-} from './application'
+  layer,
+} from './block'
 
 const offModel: Model = {
   engine: EngineState.Off(),
@@ -25,92 +28,103 @@ const readyModel: Model = {
 
 describe('update', () => {
   describe('engine lifecycle', () => {
-    test('ClickedStartEngine requests the engine by entering Booting', () => {
-      story(
-        update,
-        given(offModel),
-        message(Message.ClickedStartEngine()),
-        model(model => {
-          expect(model.engine._tag).toBe('Booting')
-        }),
-      )
-    })
+    it.effect(
+      'ClickedStartEngine requests the engine by entering Booting',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(offModel),
+          Story.message(Message.ClickedStartEngine()),
+          Story.model(model => {
+            expect(model.engine._tag).toBe('Booting')
+          }),
+        ),
+    )
 
-    test('StartedEngine marks the engine ready with its id', () => {
-      story(
-        update,
-        given(modifyFields(offModel, { engine: () => EngineState.Booting() })),
-        message(Message.StartedEngine({ engineId: 'engine-7' })),
-        model(model => {
+    it.effect('StartedEngine marks the engine ready with its id', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(
+          modifyFields(offModel, { engine: () => EngineState.Booting() }),
+        ),
+        Story.message(Message.StartedEngine({ engineId: 'engine-7' })),
+        Story.model(model => {
           expect(model.engine).toStrictEqual(
             EngineState.Ready({ engineId: 'engine-7' }),
           )
         }),
-      )
-    })
+      ),
+    )
 
-    test('ClickedStopEngine releases the engine by entering Off', () => {
-      story(
-        update,
-        given(readyModel),
-        message(Message.ClickedStopEngine()),
-        model(model => {
+    it.effect('ClickedStopEngine releases the engine by entering Off', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(readyModel),
+        Story.message(Message.ClickedStopEngine()),
+        Story.model(model => {
           expect(model.engine._tag).toBe('Off')
         }),
-      )
-    })
+      ),
+    )
 
-    test('StoppedEngine is a no-op lifecycle ack', () => {
-      story(
-        update,
-        given(offModel),
-        message(Message.StoppedEngine()),
-        model(model => {
+    it.effect('StoppedEngine is a no-op lifecycle ack', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(offModel),
+        Story.message(Message.StoppedEngine()),
+        Story.model(model => {
           expect(model).toStrictEqual(offModel)
         }),
-      )
-    })
+      ),
+    )
 
-    test('FailedStartEngine records the failure reason', () => {
-      story(
-        update,
-        given(modifyFields(offModel, { engine: () => EngineState.Booting() })),
-        message(Message.FailedStartEngine({ reason: 'boot timeout' })),
-        model(model => {
+    it.effect('FailedStartEngine records the failure reason', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(
+          modifyFields(offModel, { engine: () => EngineState.Booting() }),
+        ),
+        Story.message(Message.FailedStartEngine({ reason: 'boot timeout' })),
+        Story.model(model => {
           expect(model.engine).toStrictEqual(
             EngineState.Failed({ reason: 'boot timeout' }),
           )
         }),
-      )
-    })
+      ),
+    )
   })
 
   describe('compute', () => {
-    test('ClickedCompute increments the counter and fires Compute with the next value', () => {
-      story(
-        update,
-        given(readyModel),
-        message(Message.ClickedCompute()),
-        model(model => {
-          expect(model.computeCount).toBe(3)
-        }),
-        Command.expectExact(Compute({ value: 3 })),
-        Command.resolve(Compute, Message.SucceededCompute({ result: 9 })),
-        model(model => {
-          expect(model.maybeSquareResult).toStrictEqual(Option.some(9))
-        }),
-      )
-    })
+    it.effect(
+      'ClickedCompute increments the counter and fires Compute with the next value',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(readyModel),
+          Story.message(Message.ClickedCompute()),
+          Story.model(model => {
+            expect(model.computeCount).toBe(3)
+          }),
+          Story.Command.expectExact(Compute({ value: 3 })),
+          Story.Command.resolve(
+            Compute,
+            Message.SucceededCompute({ result: 9 }),
+          ),
+          Story.model(model => {
+            expect(model.maybeSquareResult).toStrictEqual(Option.some(9))
+          }),
+        ),
+    )
 
-    test('FailedCompute leaves the model unchanged', () => {
-      story(
-        update,
-        given(readyModel),
-        message(Message.FailedCompute()),
-        model(model => {
+    it.effect('FailedCompute leaves the model unchanged', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(readyModel),
+        Story.message(Message.FailedCompute()),
+        Story.model(model => {
           expect(model).toStrictEqual(readyModel)
         }),
-      )
-    })
+      ),
+    )
   })
 })

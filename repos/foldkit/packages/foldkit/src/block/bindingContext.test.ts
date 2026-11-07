@@ -21,7 +21,7 @@ const ResetCounter = makeDefinition('ResetCounter', {
   Message: CounterMessage,
   OutMessage: CounterOutMessage,
 })
-const resetStep = ResetCounter.makeStep(model => ({
+const reset = ResetCounter.makeStep(model => ({
   model: modifyFields(model, { count: () => 0 }),
   outMessage: CounterOutMessage.Reset(),
 }))
@@ -30,7 +30,7 @@ const prepareBlock = () =>
   ResetCounterComposition.prepareBlock({
     init: (count: number) => ({ model: CounterModel.make({ count }) }),
     update: ResetCounterComposition.makeUpdate({
-      ClickedReset: (model, _message) => resetStep(model),
+      ClickedReset: (model, _message) => reset(model),
     }),
     operations: { reset: () => Tuple.make(CounterMessage.ClickedReset()) },
     EffectsLayer: Layer.empty,
@@ -68,7 +68,7 @@ const foldCounterOutMessage = (
       }),
     }),
   })
-const BoundCounterBinding = Parent.makeBinding(block, {
+const BoundCounterBinding = Parent.makeCustomBinding(block, {
   read: model => Option.some(model.counter),
   write: (model: Model, nextCounter: CounterModel) =>
     modifyFields(model, { counter: () => nextCounter }),
@@ -111,7 +111,7 @@ const keyedBaseConfig = {
     }),
   keySchema: Schema.Number,
 }
-const EntriesBinding = Parent.makeBinding(block, {
+const EntriesBinding = Parent.makeCustomKeyedBinding(block, {
   ...keyedBaseConfig,
 }).withOutMessagePolicy(keyedPolicy)
 const initialModel = Model.make({
@@ -141,14 +141,14 @@ const RecordCount = SequencedCounter.makeCommand('RecordCount', {
   args: { count: Schema.Number },
   messages: [SequencedCounterMessage.CompletedRecordCount],
 })
-const addStep = SequencedCounter.makeStep((model, amount: number) => ({
+const add = SequencedCounter.makeStep((model, amount: number) => ({
   model: modifyFields(model, { count: count => count + amount }),
 }))
-const recordStep = SequencedCounter.makeStep(model => ({
+const record = SequencedCounter.makeStep(model => ({
   model,
   commands: [RecordCount({ count: model.count })],
 }))
-const multiplyStep = SequencedCounter.makeStep((model, factor: number) => ({
+const multiply = SequencedCounter.makeStep((model, factor: number) => ({
   model: modifyFields(model, { count: count => count * factor }),
 }))
 const SequencedCounterComposition = SequencedCounter.makeComposition()
@@ -156,9 +156,9 @@ const prepareSequencedCounterBlock = () =>
   SequencedCounterComposition.prepareBlock({
     init: (count: number) => ({ model: { count } }),
     update: SequencedCounterComposition.makeUpdate({
-      RequestedAdd: (model, { amount }) => addStep(model, amount),
-      RequestedRecord: model => recordStep(model),
-      RequestedMultiply: (model, { factor }) => multiplyStep(model, factor),
+      RequestedAdd: (model, { amount }) => add(model, amount),
+      RequestedRecord: model => record(model),
+      RequestedMultiply: (model, { factor }) => multiply(model, factor),
       CompletedRecordCount: model => ({ model }),
     }),
     operations: {
@@ -185,7 +185,7 @@ const SequencedParent = makeDefinition('SequencedCounterParent', {
   Model: SequencedParentModel,
   Message: SequencedParentMessage,
 })
-const SequencedCounterBinding = SequencedParent.makeBinding(
+const SequencedCounterBinding = SequencedParent.makeCustomBinding(
   sequencedCounterBlock,
   {
     read: model => Option.some(model.child),
@@ -276,11 +276,14 @@ if (false) {
   // @ts-expect-error A keyed exposed operation requires its key.
   EntriesBinding.reset()
 
-  const MissingPolicyBinding = Parent.makeBinding(block, keyedBaseConfig)
+  const MissingPolicyBinding = Parent.makeCustomKeyedBinding(
+    block,
+    keyedBaseConfig,
+  )
   // @ts-expect-error A keyed child with OutMessages requires an explicit policy before Composition.
   Parent.makeComposition({ bindings: [MissingPolicyBinding] })
 
-  Parent.makeBinding(block, {
+  Parent.makeCustomKeyedBinding(block, {
     ...keyedBaseConfig,
   }).withOutMessagePolicy({
     // @ts-expect-error A keyed fold must accept the Binding's number key and parent Message context.
@@ -293,24 +296,24 @@ if (false) {
       (model: Model) => ({ model }),
   })
 
-  Parent.makeBinding(block, {
+  Parent.makeCustomKeyedBinding(block, {
     ...keyedBaseConfig,
   }).withOutMessagePolicy({
     // @ts-expect-error A forward policy must return the parent's OutMessage.
     forward: () => undefined,
   })
 
-  Parent.makeBinding(block, {
+  Parent.makeCustomKeyedBinding(block, {
     ...keyedBaseConfig,
   }).withOutMessagePolicy({
     // @ts-expect-error A forward policy cannot erase its output to unknown.
     forward: (): unknown => undefined,
   })
 
-  Parent.makeBinding(block, {
+  Parent.makeCustomKeyedBinding(block, {
     ...keyedBaseConfig,
     // oxlint-disable-next-line effecttsgo/any-unknown-in-error-context
-    // @ts-expect-error OutMessage remains invalid inside makeBinding configuration, including when erased to any.
+    // @ts-expect-error OutMessage remains invalid inside Binding configuration, including when erased to any.
     outMessage: { forward: (): any => undefined },
   })
 }

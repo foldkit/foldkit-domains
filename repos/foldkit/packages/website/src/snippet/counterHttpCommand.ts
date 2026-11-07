@@ -13,19 +13,30 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
+  effects: { services: [HttpClient.HttpClient] },
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep, makeNoopStep } = ApplicationDefinition
+const {
+  makeFieldsStep,
+  makeCommandsStep,
+  makeNoopStep,
+  makeComposition,
+  makeCommand,
+} = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = makeComposition()
 
 const CountResponse = Schema.Struct({ count: Schema.Int })
 type CountResponse = typeof CountResponse.Type
 
-export const FetchCount = ApplicationDefinition.makeCommand('FetchCount', {
+export const FetchCount = makeCommand('FetchCount', {
   messages: [Message.SucceededFetchCount, Message.FailedFetchCount],
   handler: function* () {
     const client = yield* HttpClient.HttpClient

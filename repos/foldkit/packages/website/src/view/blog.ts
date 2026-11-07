@@ -1,7 +1,7 @@
 import { Match, Option } from 'effect'
 import { Html, createKeyedLazy, inertHtml as ih } from 'foldkit/html'
 
-import { Shared } from '../component'
+import { SnippetCopyBlock, SnippetDisclosureBlock, UiBlock } from '../blocks'
 import type { ApplicationViewBuilder } from '../composition'
 import {
   SnippetCopyBinding,
@@ -9,16 +9,15 @@ import {
   UiPagesBinding,
 } from '../composition'
 import { Docs } from '../layout'
+import * as Site from '../layout/site'
 import { docPage } from '../markdown'
 import { Message } from '../message'
 import { type Model } from '../model'
-import { Blog, NotFound, UiBlock } from '../page'
+import { Blog, NotFound } from '../page'
 import * as Release0167 from '../page/blog/post/foldkit-0-167-0'
 import * as Prose from '../prose'
 import { type ApplicationRoute, homeRouter } from '../route'
-import { SnippetCopyBlock } from '../snippetCopy'
 import * as SnippetCopyRenderer from '../snippetCopyRenderer'
-import { SnippetDisclosureBlock } from '../snippetDisclosure'
 import * as SnippetDisclosureRenderer from '../snippetDisclosureRenderer'
 import * as Search from './search'
 import * as Sidebar from './sidebar'
@@ -109,7 +108,7 @@ export const view = (
   return h.div(
     [h.Class('flex flex-col min-h-screen')],
     [
-      Shared.skipNavLink,
+      Site.skipNavLink,
       Docs.headerView(model, h),
       Search.dialogView(model, h),
       Sidebar.mobileView(model, h),

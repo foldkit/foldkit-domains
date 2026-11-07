@@ -1,25 +1,35 @@
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
+import { Query } from 'foldkit/experimental'
+import { defineMessageUnion } from 'foldkit/message'
 
-const Model = Schema.Struct({
+import { postsQuery } from './queryDefine'
+
+export const Model = Schema.Struct({
   posts: postsQuery.Model,
 })
-type Model = typeof Model.Type
+export type Model = typeof Model.Type
 
-const Message = defineMessageUnion({
+export const Message = defineMessageUnion({
   ClickedRefreshPosts: {},
 })
-type Message = typeof Message.Type
+export type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const PostsBinding = ApplicationDefinition.makeBinding(postsQuery, {
+const { makeRequiredFieldBinding, makeComposition } = ApplicationBlock
+
+const PostsBinding = makeRequiredFieldBinding(postsQuery, {
   field: 'posts',
 })
 
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = makeComposition({
   bindings: [PostsBinding],
 })
 
@@ -33,3 +43,15 @@ const update = ApplicationComposition.makeUpdate({
   // Return the transition and Command for either missing or retained data.
   ClickedRefreshPosts: model => PostsBinding.requestRevalidationOrLoad()(model),
 })
+
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ApplicationComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+    }
+  }),
+).pipe(Layer.provide(Query.layer))

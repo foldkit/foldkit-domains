@@ -111,16 +111,17 @@ type Options = Readonly<{
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const workspaceRoot = resolve(packageRoot, '../..')
 const benchmarkScriptPath = fileURLToPath(import.meta.url)
-const definitionPath = 'packages/website/src/definition.ts'
+const blockPath = 'packages/website/src/block.ts'
 const compositionPath = 'packages/website/src/composition/composition.ts'
 const changedUrlPath = 'packages/website/src/update/handleChangedUrl.ts'
 const workspaceCompositionPath = 'examples/workspace/src/composition.ts'
 const workspaceInitializationPath =
-  'examples/workspace/src/update/initChildrenStep.ts'
+  'examples/workspace/src/update/initChildren.ts'
 const workspaceUpdatePath = Option.getOrElse(
   EffectArray.findFirst(
     [
       workspaceInitializationPath,
+      'examples/workspace/src/update/initChildrenStep.ts',
       'examples/workspace/src/update/initChildBlocksStep.ts',
       'examples/workspace/src/update/initializeRouteChildren.ts',
       'examples/workspace/src/update/initializeActiveChildren.ts',
@@ -130,15 +131,16 @@ const workspaceUpdatePath = Option.getOrElse(
   () => 'examples/workspace/src/update.ts',
 )
 const workspaceEntryPath = 'examples/workspace/src/entry.ts'
-const workspaceDetailUpdatePath = 'examples/workspace/src/issueDetail/update.ts'
-const workspaceBindingProbe = '\nIssueDetailBinding.init\n'
+const workspaceDetailUpdatePath =
+  'examples/workspace/src/blocks/issueDetail/update.ts'
+const workspaceBindingProbe = '\nIssueDetailsBinding.init\n'
 const workspaceBlockAccess = 'ApplicationBlock.Message.ClickedLink'
 const workspaceTitleWriter = 'title: () => value'
 const workspaceInvalidTitle = 'value.length'
 const serverMemorySamplingIntervalMs = 250
 const serverMemorySampleTimeoutMs = 1_000
 const runProcess = promisify(execFile)
-const bindingCall = 'SearchBinding.informRouteChanged()'
+const bindingCall = 'SearchBinding.informOfRouteChange()'
 export const searchBindingHover = {
   name: 'SearchBinding',
   owner: 'Search',
@@ -159,7 +161,7 @@ export const searchBindingHover = {
   ],
 }
 export const workspaceBindingHover = {
-  name: 'IssueDetailBinding',
+  name: 'IssueDetailsBinding',
   owner: 'IssueDetail',
   typeNames: ['Block.BindingWithoutOutMessagePolicy'],
   schemaHeaderFragments: [
@@ -586,13 +588,17 @@ const requestTarget = (
 })
 
 const bindingFactoryMarker = (text: string): string => {
-  if (text.includes('.makeBinding')) {
+  if (text.includes('makeRequiredFieldBinding(')) {
+    return 'makeRequiredFieldBinding'
+  } else if (text.includes('.makeBinding')) {
     return 'makeBinding'
   } else if (text.includes('.bindChild')) {
     return 'bindChild'
   }
 
-  return fail(`Could not find makeBinding or bindChild in Website composition.`)
+  return fail(
+    `Could not find a supported Binding constructor in Website composition.`,
+  )
 }
 
 const openDocument = async (
@@ -990,15 +996,15 @@ const runScenario = async (
 
 const hoverScenario = (timeoutMs: number): Promise<ScenarioResult> =>
   runScenario(timeoutMs, async client => {
-    const definition = document(definitionPath)
+    const block = document(blockPath)
     const composition = document(compositionPath)
-    await openDocument(client, definition)
+    await openDocument(client, block)
     await openDocument(client, composition)
 
     const definitionTarget = requestTarget(
       { method: 'textDocument/hover' },
-      definition,
-      'ApplicationDefinition',
+      block,
+      'ApplicationBlock',
     )
     const bindingTarget = requestTarget(
       { method: 'textDocument/hover' },
@@ -1046,6 +1052,7 @@ const definitionScenario = (timeoutMs: number): Promise<ScenarioResult> =>
       { method: 'textDocument/definition' },
       composition,
       marker,
+      'SearchBinding',
     )
     const measurements = [
       ...(await measurePair(
@@ -1117,7 +1124,7 @@ const completionScenario = (timeoutMs: number): Promise<ScenarioResult> =>
 
 const bindingCompletionTarget = (source: SourceDocument): RequestTarget => ({
   method: 'textDocument/completion',
-  expectedLabels: ['informRouteChanged', 'embedView'],
+  expectedLabels: ['informOfRouteChange', 'embedView'],
   source,
   position: positionAt(
     source.text,
@@ -1512,15 +1519,15 @@ const workspaceBindingHoverScenario = (
     'workspace.bindingHover',
     workspaceCompositionPath,
     source => {
-      uniqueOccurrence(source.text, 'export const IssueDetailBinding')
+      uniqueOccurrence(source.text, 'export const IssueDetailsBinding')
       return requestTarget(
         {
           method: 'textDocument/hover',
           expectedBinding: workspaceBindingHover,
         },
         source,
-        'IssueDetailBinding',
-        'export const IssueDetailBinding',
+        'IssueDetailsBinding',
+        'export const IssueDetailsBinding',
       )
     },
   )
@@ -1534,7 +1541,7 @@ export const workspaceBindingCompletionTarget = (
   position: positionAt(
     source.text,
     uniqueOccurrence(source.text, workspaceBindingProbe) +
-      '\nIssueDetailBinding.'.length,
+      '\nIssueDetailsBinding.'.length,
   ),
 })
 
@@ -1555,13 +1562,7 @@ export const workspaceBlockCompletionTarget = (
   source: SourceDocument,
 ): RequestTarget => ({
   method: 'textDocument/completion',
-  expectedLabels: [
-    'Model',
-    'Message',
-    'init',
-    'makeView',
-    'replaceEffectsLayer',
-  ],
+  expectedLabels: ['Model', 'Message', 'makeComposition', 'makeLayer'],
   source,
   position: positionAt(
     source.text,
@@ -1912,14 +1913,14 @@ const main = async (): Promise<void> => {
     workload: {
       ...(options.scenario === 'all'
         ? {
-            hoverFirst: `${definitionPath}#ApplicationDefinition`,
+            hoverFirst: `${blockPath}#ApplicationBlock`,
             hoverAfterEdit: `${compositionPath}#SearchBinding`,
             definitionFirst: `${compositionPath}#${bindingFactoryMarker(
               readFileSync(join(workspaceRoot, compositionPath), 'utf8'),
             )}`,
             completion: `${changedUrlPath}#previousRoute.`,
-            bindingCompletion: `${changedUrlPath}#SearchBinding.|informRouteChanged()`,
-            changedUrlHover: `${changedUrlPath}#SearchBinding at informRouteChanged()`,
+            bindingCompletion: `${changedUrlPath}#SearchBinding.|informOfRouteChange()`,
+            changedUrlHover: `${changedUrlPath}#SearchBinding at informOfRouteChange()`,
             bindingHoverValidation: searchBindingHover,
             changedUrlDiagnostics: {
               source: changedUrlPath,
@@ -1932,17 +1933,16 @@ const main = async (): Promise<void> => {
       ...(options.scenario === 'workspace'
         ? {
             workspace: {
-              bindingHover: `${workspaceCompositionPath}#IssueDetailBinding`,
+              bindingHover: `${workspaceCompositionPath}#IssueDetailsBinding`,
               bindingHoverValidation: workspaceBindingHover,
-              bindingCompletion: `${workspaceUpdatePath}#appended in-memory IssueDetailBinding.|init probe`,
+              bindingCompletion: `${workspaceUpdatePath}#appended in-memory IssueDetailsBinding.|init probe`,
               expectedBindingMembers: ['requestSave', 'embedView', 'init'],
               blockCompletion: `${workspaceEntryPath}#ApplicationBlock.|Message.ClickedLink`,
               expectedBlockMembers: [
                 'Model',
                 'Message',
-                'init',
-                'makeView',
-                'replaceEffectsLayer',
+                'makeComposition',
+                'makeLayer',
               ],
               titleDiagnostics: {
                 source: workspaceDetailUpdatePath,

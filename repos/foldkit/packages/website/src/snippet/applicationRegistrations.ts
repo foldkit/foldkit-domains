@@ -1,17 +1,21 @@
-import { ApplicationDefinition } from '../definition'
-import { Home, Products } from '../page'
+import {
+  ApplicationBlock,
+  makeRequiredFieldBinding,
+  makeComposition,
+} from '../block'
+import { Home, Products } from '../blocks'
 
-export const HomeBinding = ApplicationDefinition.makeBinding(Home.HomeBlock, {
+export const HomeBinding = makeRequiredFieldBinding(Home.HomeBlock, {
   field: 'home',
 })
 
-export const ProductsBinding = ApplicationDefinition.makeBinding(
+export const ProductsBinding = makeRequiredFieldBinding(
   Products.ProductsBlock,
   {
     field: 'products',
   },
 )
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = makeComposition({
   bindings: [HomeBinding, ProductsBinding],
 })

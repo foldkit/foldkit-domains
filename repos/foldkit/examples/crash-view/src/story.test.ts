@@ -1,11 +1,23 @@
-import { describe, expect, test } from 'vitest'
+import { Effect, Exit } from 'effect'
+import { Story } from 'foldkit'
+import { describe, expect } from 'vitest'
 
-import { Message, update } from './application'
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, Message, layer } from './block'
 
 describe('update', () => {
-  test('handling any Message throws to trigger the crash view', () => {
-    expect(() => update(null, Message.ClickedCrash())).toThrow(
-      'This is a simulated crash!',
-    )
-  })
+  it.effect('handling any Message throws to trigger the crash view', () =>
+    Effect.gen(function* () {
+      const outcome = yield* Effect.exit(
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.init(),
+          Story.message(Message.ClickedCrash()),
+        ),
+      )
+
+      expect(outcome).toEqual(Exit.die(new Error('This is a simulated crash!')))
+    }),
+  )
 })

@@ -1,7 +1,7 @@
 import { clsx } from 'clsx'
 import type { Html } from 'foldkit/html'
 
-import type { Nav } from '@foldkit/ui'
+import { Nav } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 

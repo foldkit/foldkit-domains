@@ -220,7 +220,7 @@ const RootBaseDefinition = Block.makeDefinition('Application', {
   Model: RootModel,
   Message: RootMessage,
 })
-const EntriesBinding = RootBaseDefinition.makeBinding(itemBlock, {
+const EntriesBinding = RootBaseDefinition.makeKeyedArrayBinding(itemBlock, {
   field: 'entries',
   key: 'id',
 })
@@ -233,7 +233,7 @@ const rootInit = () => ({
     entries: [firstEntry, itemBlock.init(2, 'other').model],
   },
 })
-const addReplacementStep = RootBaseDefinition.makeStep(model =>
+const addReplacement = RootBaseDefinition.makeStep(model =>
   EntriesBinding.init({
     key: 1,
     args: [1, 'new'],
@@ -243,7 +243,7 @@ const addReplacementStep = RootBaseDefinition.makeStep(model =>
       }),
   }),
 )
-const restoreFirstStep = RootBaseDefinition.makeFieldsStep(() => ({
+const restoreFirst = RootBaseDefinition.makeFieldsStep(() => ({
   entries: current => [...current, firstEntry],
 }))
 const rootUpdate = root.makeUpdate({
@@ -251,8 +251,8 @@ const rootUpdate = root.makeUpdate({
     RootBaseDefinition.makeFieldsStep(() => ({
       entries: Array.filter(entry => entry.id !== 1),
     }))(model),
-  ClickedAddReplacement: model => addReplacementStep(model),
-  ClickedRestoreFirst: model => restoreFirstStep(model),
+  ClickedAddReplacement: model => addReplacement(model),
+  ClickedRestoreFirst: model => restoreFirst(model),
 })
 const lazyEntries = createKeyedLazy()
 const entryRenderCounts = new Map<number, number>()
@@ -456,6 +456,22 @@ describe('keyed Block occurrences', () => {
       typeof RootModel,
       typeof prepare
     > = Block.assemble(prepare)
+    expect(Object.keys(completedBlock.subscriptions)).toEqual([
+      'CollectionItem/activePulse',
+    ])
+    expect(Object.keys(completedBlock.managedResources)).toEqual([
+      'CollectionItem/value',
+    ])
+    expect(() =>
+      completedBlock.subscriptions[
+        'CollectionItem/activePulse'
+      ].modelToDependencies(rootInit().model),
+    ).toThrow('passive template')
+    expect(() =>
+      completedBlock.managedResources[
+        'CollectionItem/value'
+      ].modelToMaybeRequirements(rootInit().model),
+    ).toThrow('passive template')
     const application = Program.makeElement({
       block: completedBlock,
       container,
@@ -483,7 +499,7 @@ describe('keyed Block occurrences', () => {
         expect(mountsStopped).toEqual(['old'])
         expect(mountsStarted).toEqual(['old', 'other', 'new'])
       })
-      expect(interrupted).toEqual([])
+      expect(interrupted).toEqual(['old'])
       staleDispatch(ItemMessage.ClickedReadValue())
       expect(reads).toEqual(['old', 'other'])
       subscriptionEmitters.get('new')!('fresh pulse')

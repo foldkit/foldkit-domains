@@ -2,6 +2,10 @@ import type { Schema } from 'effect'
 
 import type { BindChild, BindChildConstructorResult } from './bindChild.js'
 import type { BindableBlock, BindingStorageEvidence } from './binding.js'
+import type {
+  MapRelationship,
+  MapRelationshipField,
+} from './bindingRelationshipTypes.js'
 import type { InstanceKey } from './instanceContext.js'
 import type {
   KeyedMapField,
@@ -38,7 +42,8 @@ type ChildUpdateContext<BlockValue extends BindableBlock> =
     ? Context
     : readonly []
 
-type MapBindingConfigKey =
+/** @internal The supported storage and delivery fields of a map Binding. */
+export type MapBindingConfigKey =
   | 'field'
   | 'childField'
   | 'placement'
@@ -65,7 +70,8 @@ type KeySchemaFor<ParentModelSchema extends AnySchema, Field extends string> =
       : never
     : never
 
-type KeyFor<
+/** @internal The exact decoded key of a map Binding's parent storage. */
+export type KeyFor<
   ParentModelSchema extends AnySchema,
   Field extends string,
 > = Extract<KeySchemaFor<ParentModelSchema, Field>['Type'], InstanceKey>
@@ -106,13 +112,17 @@ type DeliveryContext<BlockValue extends BindableBlock, ParentModel, Key> = [
       ) => ChildUpdateContext<BlockValue>
     }>
 
-type DeliveryRequirement<BlockValue extends BindableBlock, ParentModel, Key> = [
-  ChildUpdateContext<BlockValue>,
-] extends [readonly []]
+/** @internal Requires dispatch context only when the child declares it. */
+export type DeliveryRequirement<
+  BlockValue extends BindableBlock,
+  ParentModel,
+  Key,
+> = [ChildUpdateContext<BlockValue>] extends [readonly []]
   ? Readonly<{ delivery?: DeliveryContext<BlockValue, ParentModel, Key> }>
   : Readonly<{ delivery: DeliveryContext<BlockValue, ParentModel, Key> }>
 
-type ContextualProperties<
+/** @internal Contextual storage and delivery inference shared by constructor authoring. */
+export type ContextualProperties<
   Keys extends MapBindingConfigKey,
   BlockValue extends BindableBlock,
   ParentModelSchema extends AnySchema,
@@ -156,7 +166,8 @@ type ValidateKeys<Config> =
         }>
       >
 
-type ValidField<
+/** @internal Restricts selection to exact or explicitly wrapped child storage. */
+export type ValidField<
   BlockValue extends BindableBlock,
   ParentModelSchema extends AnySchema,
   Keys,
@@ -177,7 +188,8 @@ type ValidateMessageMapping<BlockValue extends BindableBlock, Keys> = [
     : InvalidConfig<'A Message-free child cannot configure Message delivery'>
   : readonly []
 
-type ValidateConfig<BlockValue extends BindableBlock, Keys, Config> =
+/** @internal Rejects erased, ambiguous, or unsupported map configuration. */
+export type ValidateConfig<BlockValue extends BindableBlock, Keys, Config> =
   IsAny<Config> extends true
     ? InvalidConfig<'Map Binding config cannot use any'>
     : IsUnknown<Config> extends true
@@ -188,7 +200,8 @@ type ValidateConfig<BlockValue extends BindableBlock, Keys, Config> =
           ? ValidateMessageMapping<BlockValue, Keys>
           : ValidateKeys<Config>
 
-type ValidateConcrete<BlockValue extends BindableBlock> =
+/** @internal Rejects unresolved child graph requirements before binding. */
+export type ValidateConcrete<BlockValue extends BindableBlock> =
   unknown extends ValidateConcreteComposition<BlockValue>
     ? readonly []
     : readonly [error: ValidateConcreteComposition<BlockValue>]
@@ -198,7 +211,8 @@ type FieldOfSource<Source, Fallback extends string> =
     ? Field
     : Fallback
 
-type ResultConfig<
+/** @internal Retains storage, key Schema, and placement evidence after inference. */
+export type MapBindingResultConfig<
   Source,
   ParentModelSchema extends AnySchema,
   Field extends string,
@@ -227,13 +241,33 @@ type ResultConfig<
     }>
   >
 
-/** Call signature for `Definition.makeMapBinding`. See {@link Definition} for
- * the owned constructor's storage and initialization contract. */
+/** Shared call contract for parent-owned Record and HashMap Binding constructors.
+ *
+ * `makeRecordBinding` selects a required `Schema.Record` field whose keys decode
+ * to strings. `makeHashMapBinding` selects a required `Schema.HashMap` field whose
+ * keys decode to strings or numbers; numeric occurrence values must be finite.
+ * The container key supplies occurrence identity, independently of child data.
+ * `childField` projects an exact child Model from a closed parent-owned wrapper;
+ * writes preserve its metadata and replace only existing entries.
+ *
+ * Parents own membership and ordering. Removing an entry ends its occurrence.
+ * Direct child values support `initAndInsert` and `makeInitIfMissingStep` from
+ * `foldkit/binding`. Wrappers and custom parent changes use `Binding.init` with
+ * explicit `toParentModel` placement. Use `makeCustomKeyedBinding` for custom
+ * writers, enumeration, or separate storage and primitive occurrence keys.
+ *
+ * @example
+ * ```ts
+ * const { makeRecordBinding } = ParentBlock
+ * const EditorsBinding = makeRecordBinding(EditorBlock, { field: 'editors' })
+ * ```
+ */
 export interface MakeMapBinding<
   ParentModelSchema extends AnySchema,
   ParentMessageSchema extends AnySchema,
   ParentOutMessageSchema extends AnySchema | undefined,
   ParentChildInitContext = never,
+  Relationship extends MapRelationship = 'Implicit',
 > {
   <
     const BlockValue extends BindableBlock,
@@ -254,6 +288,7 @@ export interface MakeMapBinding<
       > &
       Readonly<{
         field: Field &
+          MapRelationshipField<ParentModelSchema, Relationship, Field> &
           ValidField<BlockValue, ParentModelSchema, Keys, ChildField>
         childField?: ChildField
       }> &
@@ -273,7 +308,7 @@ export interface MakeMapBinding<
     ParentModelSchema,
     ParentMessageSchema,
     ParentOutMessageSchema,
-    ResultConfig<Source, ParentModelSchema, Field>,
+    MapBindingResultConfig<Source, ParentModelSchema, Field>,
     ParentChildInitContext
   >
 }

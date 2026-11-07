@@ -1,8 +1,9 @@
-import { Array, Effect, Fiber, Schema } from 'effect'
-import { Block, Program } from 'foldkit'
+import { Array, Effect, Fiber, Layer, Schema } from 'effect'
+import { Block, Program, Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import * as TerminalDialogParent from '../test/apps/dialogTerminal.js'
 import * as Dialog from './block.js'
 
 const dialogId = 'preserved-dialog'
@@ -11,17 +12,21 @@ const DialogEvent = Schema.Literals(['Opened', 'Closed'])
 type DialogEvent = typeof DialogEvent.Type
 
 const Model = Schema.Struct({
-  dialog: Dialog.Model,
+  dialog: Dialog.DialogBlock.Model,
   dialogEvents: Schema.Array(DialogEvent),
 })
 type Model = typeof Model.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+const ApplicationKey = Symbol('DialogRuntimeApplication')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message: Schema.Never,
 })
 
-const foldDialogOutMessage = ApplicationDefinition.makeOutMessageFold(
+const foldDialogOutMessage = ApplicationBlock.makeOutMessageFold(
   Dialog.DialogBlock,
   {
     Opened: () => model => ({
@@ -38,12 +43,15 @@ const foldDialogOutMessage = ApplicationDefinition.makeOutMessageFold(
   },
 )
 
-const DialogBinding = ApplicationDefinition.makeBinding(Dialog.DialogBlock, {
-  field: 'dialog',
-  init: { contextToArgs: () => [{ id: dialogId }] },
-}).withOutMessagePolicy({ fold: foldDialogOutMessage })
+const DialogBinding = ApplicationBlock.makeRequiredFieldBinding(
+  Dialog.DialogBlock,
+  {
+    field: 'dialog',
+    init: { contextToArgs: () => [{ id: dialogId }] },
+  },
+).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [DialogBinding],
 })
 
@@ -89,24 +97,37 @@ const preservedModel = (dialogModel: Dialog.Model): Model => ({
   dialogEvents: [],
 })
 
-const preservedOpenModel = (config: Dialog.InitConfig): Dialog.Model =>
-  Dialog.update(Dialog.init(config).model, Dialog.Message.RequestedOpen()).model
+const preservedOpenModel = (config: Dialog.InitConfig) =>
+  Story.withBlock(
+    Dialog.DialogBlock,
+    dialog =>
+      dialog.inMessageUpdate(
+        dialog.init(config).model,
+        Dialog.InMessage.RequestedOpen(),
+      ).model,
+  ).pipe(Effect.provide(Dialog.layer))
 
-const makeDialogProgram = (container: HTMLElement) => {
-  const prepare = () =>
-    ApplicationComposition.prepareBlock({
-      init,
-      update,
-      view,
-    })
-  const block: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
-    Block.assemble(prepare)
+const application = {
+  block: ApplicationBlock,
+  layer: ApplicationBlock.makeLayer(
+    Effect.gen(function* () {
+      const children = yield* ApplicationComposition.acquireChildren()
 
-  return Program.makeElement({
-    block,
+      return {
+        children,
+        init,
+        update,
+        view,
+      }
+    }),
+  ).pipe(Layer.provide(Dialog.layer)),
+}
+
+const makeDialogProgram = (container: HTMLElement) =>
+  Program.makeElement({
+    ...application,
     container,
   })
-}
 
 describe('Dialog runtime lifecycle', () => {
   beforeEach(() => {
@@ -117,9 +138,98 @@ describe('Dialog runtime lifecycle', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
     document.body.innerHTML = ''
   })
+
+  for (const action of ['cancel', 'replace', 'reopen']) {
+    it(`drops the old close result when ${action} occurs during native cleanup`, async () => {
+      const container = document.createElement('div')
+      container.id = `terminal-dialog-${action}`
+      document.body.appendChild(container)
+      const program = Program.makeElement({
+        block: TerminalDialogParent.TerminalDialogParentBlock,
+        layer: TerminalDialogParent.layer,
+        container,
+      })
+      const runtime = Effect.runFork(program.start())
+      const click = (id: string) => {
+        const button = document.getElementById(id)
+
+        if (!(button instanceof HTMLButtonElement)) {
+          throw new Error(`Expected button ${id}`)
+        }
+
+        button.click()
+      }
+
+      try {
+        await vi.waitFor(() => {
+          expect(document.getElementById('terminal-open')).not.toBeNull()
+        })
+        click('terminal-open')
+        await vi.waitFor(() => {
+          expect(
+            document.getElementById('first')?.getAttribute('aria-modal'),
+          ).toBe('true')
+          expect(document.documentElement.style.overflow).toBe('hidden')
+        })
+
+        const nativeClose = HTMLDialogElement.prototype.close
+        const close = vi
+          .spyOn(HTMLDialogElement.prototype, 'close')
+          .mockImplementationOnce(function (this: HTMLDialogElement) {
+            expect(this.id).toBe('first')
+            if (action === 'reopen') {
+              click('terminal-cancel')
+              click('terminal-open')
+            } else {
+              click(`terminal-${action}`)
+            }
+            nativeClose.call(this)
+          })
+        const closeButton = document.querySelector('#first button')
+
+        if (!(closeButton instanceof HTMLButtonElement)) {
+          throw new Error('Expected the current Dialog close button')
+        }
+
+        closeButton.click()
+        await vi.waitFor(() => {
+          expect(close).toHaveBeenCalled()
+          expect(
+            document.getElementById('terminal-completed')?.textContent,
+          ).toBe('')
+
+          if (action === 'cancel') {
+            expect(document.getElementById('first')).toBeNull()
+            expect(document.documentElement.style.overflow).not.toBe('hidden')
+          } else {
+            expect(
+              document
+                .getElementById(action === 'replace' ? 'second' : 'first')
+                ?.getAttribute('aria-modal'),
+            ).toBe('true')
+          }
+        })
+        await Effect.runPromise(Effect.yieldNow)
+        expect(document.getElementById('terminal-completed')?.textContent).toBe(
+          '',
+        )
+
+        if (action !== 'cancel') {
+          expect(
+            document
+              .getElementById(action === 'replace' ? 'second' : 'first')
+              ?.getAttribute('aria-modal'),
+          ).toBe('true')
+        }
+      } finally {
+        await Effect.runPromise(Fiber.interrupt(runtime))
+      }
+    })
+  }
 
   it('reacquires modal resources for a preserved open Model', async () => {
     const background = document.createElement('main')
@@ -133,7 +243,11 @@ describe('Dialog runtime lifecycle', () => {
     const program = makeDialogProgram(container)
     const encodedOpenModel = Schema.encodeUnknownSync(
       Schema.toCodecJson(Model),
-    )(preservedModel(preservedOpenModel({ id: dialogId })))
+    )(
+      preservedModel(
+        await Effect.runPromise(preservedOpenModel({ id: dialogId })),
+      ),
+    )
     const freshRuntime = Effect.runFork(program.start())
     let restoredRuntime: Fiber.Fiber<void, never> | undefined
 
@@ -191,7 +305,13 @@ describe('Dialog runtime lifecycle', () => {
     const program = makeDialogProgram(container)
     const encodedEnteringModel = Schema.encodeUnknownSync(
       Schema.toCodecJson(Model),
-    )(preservedModel(preservedOpenModel({ id: dialogId, isAnimated: true })))
+    )(
+      preservedModel(
+        await Effect.runPromise(
+          preservedOpenModel({ id: dialogId, isAnimated: true }),
+        ),
+      ),
+    )
     const runtime = Effect.runFork(program.start(encodedEnteringModel))
 
     try {
@@ -224,9 +344,13 @@ describe('Dialog runtime lifecycle', () => {
     trigger.focus()
 
     const program = makeDialogProgram(container)
-    const dialogClose = Dialog.update(
+    const openModel = await Effect.runPromise(
       preservedOpenModel({ id: dialogId, isAnimated: true }),
-      Dialog.Message.RequestedClose(),
+    )
+    const dialogClose = await Effect.runPromise(
+      Story.withBlock(Dialog.DialogBlock, dialog =>
+        dialog.inMessageUpdate(openModel, Dialog.InMessage.RequestedClose()),
+      ).pipe(Effect.provide(Dialog.layer)),
     )
     const leavingModel = modifyFields(dialogClose.model, {
       animation: animation =>

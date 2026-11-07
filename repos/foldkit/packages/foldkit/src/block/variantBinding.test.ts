@@ -9,7 +9,9 @@ import {
   Tuple,
 } from 'effect'
 import assert from 'node:assert/strict'
-import { it } from 'vitest'
+import {} from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import * as Message from '../message/public.js'
 import {
@@ -20,13 +22,187 @@ import type {
   ResolvedSlowPhaseConfig,
   SlowSubscriptionDependenciesContext,
 } from '../runtime/slowPhase.js'
+import { withBlock } from '../story/public.js'
 import * as Struct from '../struct/public.js'
 import type { BindableBlock } from './binding.js'
 import { canonicalBindingOf } from './composition.js'
 import { type ActiveInstance, CurrentInstance } from './instanceContext.js'
 import * as Block from './public.js'
 import { qualifyLayer } from './scope.js'
-import { makeVariantBinding } from './variantBinding.js'
+
+const invokeVariantBinding = (
+  definition: object,
+  child: object,
+  config?: unknown,
+) =>
+  Reflect.apply(
+    Reflect.get(definition, 'makeVariantBinding'),
+    definition,
+    config === undefined ? [child] : [child, config],
+  )
+
+it('uses each child id as the default placement for whole-variant relationships', () => {
+  const ActiveKey = Symbol('DefaultActiveVariant')
+  const ActiveDefinition = Block.makeDefinition('DefaultActiveVariant', {
+    key: ActiveKey,
+    Model: Active,
+    Message: Schema.Never,
+    InitArgs: Schema.Tuple([]),
+    isMessageFree: true,
+  })
+  const InactiveKey = Symbol('DefaultInactiveVariant')
+  const InactiveDefinition = Block.makeDefinition('DefaultInactiveVariant', {
+    key: InactiveKey,
+    Model: Inactive,
+    Message: Schema.Never,
+    InitArgs: Schema.Tuple([]),
+    isMessageFree: true,
+  })
+  const ParentKey = Symbol('DefaultVariantPlacements')
+  const ParentDefinition = Block.makeDefinition('DefaultVariantPlacements', {
+    key: ParentKey,
+    Model: ParentModel,
+    Message: Schema.Never,
+    InitArgs: Schema.Tuple([]),
+    isMessageFree: true,
+  })
+  const ActiveBinding = ParentDefinition.makeVariantBinding(
+    ActiveDefinition.contract,
+  )
+  const InactiveBinding = ParentDefinition.makeVariantBinding(
+    InactiveDefinition.contract,
+  )
+
+  assert.doesNotThrow(() =>
+    ParentDefinition.makeComposition({
+      bindings: [ActiveBinding, InactiveBinding],
+    }),
+  )
+})
+
+it.effect(
+  'connects a Layer-owned whole-variant child without changing parent membership',
+  () => {
+    const ChildKey = Symbol('ConstructedVariantChild')
+    const ChildDefinition = Block.makeDefinition('ConstructedVariantChild', {
+      key: ChildKey,
+      Model: Active,
+      Message: ChildMessage,
+      OutMessage: ChildOutMessage,
+      InitArgs: Schema.Tuple([Schema.Number]),
+      operations: {
+        setCount: (count: number) =>
+          Tuple.make(ChildMessage.UpdatedCount({ count })),
+        notify: {
+          message: ChildMessage.RequestedNotify,
+          outMessage: ChildOutMessage.NotifiedCount,
+        },
+      },
+    })
+    const ChildComposition = ChildDefinition.makeComposition()
+    const ChildBlock = ChildDefinition.makeBlock(
+      Effect.gen(function* () {
+        return {
+          children: [],
+          init: ChildComposition.makeInit(count => ({
+            model: Active.make({ _tag: 'Active', count }),
+          })),
+          update: ChildComposition.makeUpdate({
+            UpdatedCount: ChildDefinition.makeFieldsStep.fromMessage(
+              ({ count }) => ({ count: () => count }),
+            ),
+            CompletedInitialization: ChildDefinition.makeNoopStep(),
+            RequestedNotify: ChildDefinition.makeOutMessageStep(model =>
+              ChildOutMessage.NotifiedCount({ count: model.count }),
+            ),
+          }),
+        }
+      }),
+    )
+
+    const ParentKey = Symbol('ConstructedVariantParent')
+    const ParentOutMessage = Message.defineMessageUnion({
+      Notified: { count: Schema.Number },
+    })
+    const ParentDefinition = Block.makeDefinition('ConstructedVariantParent', {
+      key: ParentKey,
+      Model: ParentModel,
+      Message: ParentMessage,
+      OutMessage: ParentOutMessage,
+      InitArgs: Schema.Tuple([Schema.Number]),
+    })
+    const ChildBinding = ParentDefinition.makeVariantBinding(
+      ChildDefinition.contract,
+    ).withOutMessagePolicy({
+      fold: ParentDefinition.makeOutMessageFold(ChildDefinition.contract, {
+        NotifiedCount: ({ count }) =>
+          ParentDefinition.makeOutMessageStep(() =>
+            ParentOutMessage.Notified({ count }),
+          ),
+      }),
+    })
+    const ParentComposition = ParentDefinition.makeComposition({
+      bindings: [ChildBinding],
+    })
+    const ParentBlock = ParentDefinition.makeBlock(
+      Effect.gen(function* () {
+        const child = yield* ChildBinding
+
+        return {
+          children: [child],
+          init: ParentComposition.makeInit(count =>
+            ChildBinding.init({
+              args: [count],
+              toParentModel: child => child,
+            }),
+          ),
+          update: ParentComposition.makeUpdate({
+            RequestedSetCount: (model, { count }) =>
+              ChildBinding.setCount(count)(model),
+            RequestedNotify: ChildBinding.notify(),
+          }),
+        }
+      }),
+    ).provide(ChildBlock.layer)
+
+    return withBlock(ParentBlock, block => {
+      const parentInit = block.init(3)
+      assert.deepEqual(
+        parentInit.model,
+        Active.make({ _tag: 'Active', count: 3 }),
+      )
+
+      const setCount = block.update(
+        parentInit.model,
+        ParentMessage.RequestedSetCount({ count: 8 }),
+      )
+      assert.deepEqual(
+        setCount.model,
+        Active.make({ _tag: 'Active', count: 8 }),
+      )
+
+      const notify = block.update(
+        setCount.model,
+        ParentMessage.RequestedNotify(),
+      )
+      assert.deepEqual(notify.model, Active.make({ _tag: 'Active', count: 8 }))
+      assert.deepEqual(
+        notify.outMessage,
+        ParentOutMessage.Notified({ count: 8 }),
+      )
+
+      const inactive = Inactive.make({
+        _tag: 'Inactive',
+        reason: 'Signed out',
+      })
+      assert.equal(
+        block.update(inactive, ParentMessage.RequestedSetCount({ count: 4 }))
+          .model,
+        inactive,
+      )
+    })
+  },
+)
 
 const Active = Schema.Struct({
   _tag: Schema.Literal('Active'),
@@ -140,11 +316,11 @@ const ParentDefinition = Block.makeDefinition('VariantParent', {
 const foldChildOutMessage = ParentDefinition.makeOutMessageFold(ChildBlock, {
   NotifiedCount: ParentDefinition.makeNoopStep,
 })
-const UnselectedBinding = makeVariantBinding(ParentDefinition, ChildBlock)
+const UnselectedBinding = ParentDefinition.makeVariantBinding(ChildBlock)
 const ChildBinding = UnselectedBinding.withOutMessagePolicy({
   fold: foldChildOutMessage,
 })
-const GatedBinding = makeVariantBinding(ParentDefinition, ChildBlock, {
+const GatedBinding = ParentDefinition.makeVariantBinding(ChildBlock, {
   placement: 'gatedActive',
   subscriptions: { when: model => model._tag === 'Active' && model.count > 0 },
   delivery: { when: model => model._tag === 'Active' && model.count > 0 },
@@ -414,8 +590,7 @@ it('rejects erased ineligible Schemas and mixed configuration', () => {
       Message: Schema.Never,
     })
     assert.throws(
-      () =>
-        Reflect.apply(makeVariantBinding, undefined, [definition, ChildBlock]),
+      () => invokeVariantBinding(definition, ChildBlock),
       /Variant Binding/,
       `invalid parent ${index}`,
     )
@@ -425,17 +600,12 @@ it('rejects erased ineligible Schemas and mixed configuration', () => {
     { write: (model: unknown) => model },
     { field: 'child' },
     { key: 'id' },
-    { presentWhen: () => false },
+    { activeWhen: () => false },
     { init: { args: [0] } },
     { subscriptions: { when: { missing: () => true } } },
   ]) {
     assert.throws(
-      () =>
-        Reflect.apply(makeVariantBinding, undefined, [
-          ParentDefinition,
-          ChildBlock,
-          config,
-        ]),
+      () => invokeVariantBinding(ParentDefinition, ChildBlock, config),
       /Variant Binding|Subscription/,
       `invalid config ${Object.keys(config)}`,
     )
@@ -456,8 +626,7 @@ it('rejects erased ineligible Schemas and mixed configuration', () => {
       Message: Schema.Never,
     })
     assert.throws(
-      () =>
-        Reflect.apply(makeVariantBinding, undefined, [definition, ChildBlock]),
+      () => invokeVariantBinding(definition, ChildBlock),
       /include the child Block.Model Schema itself/,
     )
   }
@@ -509,7 +678,7 @@ const ContextChild: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof Active,
   typeof prepareContextChild
 > = Block.assemble(prepareContextChild)
-const ContextBinding = makeVariantBinding(ParentDefinition, ContextChild, {
+const ContextBinding = ParentDefinition.makeVariantBinding(ContextChild, {
   delivery: {
     toUpdateContext: model =>
       Tuple.make(model._tag === 'Active' ? model.count : 0),
@@ -568,12 +737,7 @@ it('rejects erased malformed nested option records', () => {
       { delivery: invalid },
     ]) {
       assert.throws(
-        () =>
-          Reflect.apply(makeVariantBinding, undefined, [
-            ParentDefinition,
-            ChildBlock,
-            config,
-          ]),
+        () => invokeVariantBinding(ParentDefinition, ChildBlock, config),
         /Variant Binding.*object record/,
       )
     }
@@ -590,12 +754,7 @@ it('rejects erased malformed nested option records', () => {
     { delivery: { toUpdateContext: 1 } },
   ]) {
     assert.throws(
-      () =>
-        Reflect.apply(makeVariantBinding, undefined, [
-          ParentDefinition,
-          ChildBlock,
-          config,
-        ]),
+      () => invokeVariantBinding(ParentDefinition, ChildBlock, config),
       /Variant Binding/,
     )
   }

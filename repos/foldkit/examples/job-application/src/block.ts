@@ -1,20 +1,28 @@
+import { Schema } from 'effect'
+import { SecureRandom } from 'effect/crypto'
 import { Block } from 'foldkit'
 
-import { EffectsLayer } from './command'
-import { ApplicationComposition } from './composition'
-import { init } from './init'
-import type { Model } from './model'
-import { update } from './update'
-import { view } from './view/view'
+import { Flags } from './flags'
+import { Message } from './message'
+import { Model } from './model'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([Flags]),
+  view: { kind: 'Document' },
+  effects: { services: [SecureRandom.SecureRandom] },
+  Model,
+  Message,
+  ChildInitContext: Flags,
+})
+
+export const {
+  makeRequiredFieldBinding,
+  makeCommand,
+  makeComposition,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageFold,
+  makeStep,
+} = ApplicationBlock

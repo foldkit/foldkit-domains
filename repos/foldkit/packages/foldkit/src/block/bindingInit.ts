@@ -10,9 +10,15 @@ import type {
   RequirementOfBinding,
   StorageOfBinding,
 } from './binding.js'
+import { bindingResolverOf } from './bindingConnection.js'
 import { runtimeBindingOf } from './composition.js'
 import type { OutgoingMessageOfBinding } from './delivery.js'
-import type { BindingInitRecipe } from './initRecipe.js'
+import {
+  type BindingInitRecipe,
+  isBindingInitRecipe,
+  makeBindingInitRecipe,
+  runBindingInitRecipe,
+} from './initRecipe.js'
 import type { InitialEvidenceOfBinding } from './initialization.js'
 import type { Qualify } from './scope.js'
 
@@ -44,6 +50,21 @@ type InitialRegistrationOf<BindingValue> =
   }>
     ? Registration
     : never
+
+const snapshotConfig = (config: unknown): unknown => {
+  if (!Predicate.isObject(config)) {
+    return config
+  }
+
+  const args = Reflect.get(config, 'args')
+
+  return Object.freeze({
+    ...config,
+    ...(globalThis.Array.isArray(args)
+      ? { args: Object.freeze([...args]) }
+      : {}),
+  })
+}
 
 type ValidateConcreteField<Field extends string> =
   true extends IsUnion<Field>
@@ -166,6 +187,28 @@ export function initAndSet(
   config: unknown,
   ..._validation: ReadonlyArray<unknown>
 ): unknown {
+  const resolveBinding = bindingResolverOf(binding)
+
+  if (resolveBinding !== undefined) {
+    const capturedConfig = snapshotConfig(config)
+
+    return makeBindingInitRecipe(binding, environment => {
+      const recipe = Reflect.apply(initAndSet, undefined, [
+        resolveBinding(environment),
+        model,
+        capturedConfig,
+      ])
+
+      if (!isBindingInitRecipe(recipe)) {
+        throw new Error(
+          '[foldkit] Child replacement did not produce an initialization recipe.',
+        )
+      }
+
+      return runBindingInitRecipe(recipe, environment)
+    })
+  }
+
   const { initial, storage, isParentModel } = runtimeBindingOf(binding)
 
   if (
@@ -246,7 +289,7 @@ type ValidateAppendBinding<BindingValue extends AnyBinding> =
         : IsKeyedBinding<BindingValue> extends true
           ? [InitialEvidenceOfBinding<BindingValue>] extends [never]
             ? readonly [
-                error: 'initAndAppend requires keyed array init.instances and init.toItem',
+                error: 'initAndAppend requires keyed array initialization',
               ]
             : InitialEvidenceOfBinding<BindingValue> extends Readonly<{
                   field: infer Field extends string
@@ -267,8 +310,9 @@ type ValidateAppendBinding<BindingValue extends AnyBinding> =
 /**
  * Creates a passive initialization recipe that appends one absent keyed child
  * to the supplied parent Model. The Binding must already declare keyed array
- * startup initialization with `init.instances` and `init.toItem`; the same
- * `toItem` function owns wrapper construction for startup and dynamic creation.
+ * startup initialization with `init.instances`. Direct child Model arrays use
+ * identity storage by default. Wrapped arrays also require `init.toItem`; the
+ * same function owns wrapper construction for startup and dynamic creation.
  * Do not add an otherwise unnecessary startup policy just to use this helper.
  *
  * Call this from a parent Step or update handler with its current Model and
@@ -304,12 +348,34 @@ export function initAndAppend(
   config: unknown,
   ..._validation: ReadonlyArray<unknown>
 ): unknown {
+  const resolveBinding = bindingResolverOf(binding)
+
+  if (resolveBinding !== undefined) {
+    const capturedConfig = snapshotConfig(config)
+
+    return makeBindingInitRecipe(binding, environment => {
+      const recipe = Reflect.apply(initAndAppend, undefined, [
+        resolveBinding(environment),
+        model,
+        capturedConfig,
+      ])
+
+      if (!isBindingInitRecipe(recipe)) {
+        throw new Error(
+          '[foldkit] Child append did not produce an initialization recipe.',
+        )
+      }
+
+      return runBindingInitRecipe(recipe, environment)
+    })
+  }
+
   const runtime = runtimeBindingOf(binding)
   const { initial, isParentModel } = runtime
 
   if (initial?.kind !== 'WrappedKeyed') {
     throw new Error(
-      '[foldkit] initAndAppend requires keyed array init.instances and init.toItem.',
+      '[foldkit] initAndAppend requires keyed array initialization.',
     )
   }
 

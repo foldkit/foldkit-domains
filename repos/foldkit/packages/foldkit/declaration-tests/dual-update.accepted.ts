@@ -155,13 +155,13 @@ type OutMessageReturn = Expect<
 >
 
 const changedCount = Message.ChangedCount({ amount: 2 })
-const changedCountStep = update(changedCount)
+const applyChangedCount = update(changedCount)
 
 type CurriedStepParameters = Expect<
-  Equal<Parameters<typeof changedCountStep>, [model: Model]>
+  Equal<Parameters<typeof applyChangedCount>, [model: Model]>
 >
 type CurriedStepReturn = Expect<
-  Equal<ReturnType<typeof changedCountStep>, ReturnType<typeof update>>
+  Equal<ReturnType<typeof applyChangedCount>, ReturnType<typeof update>>
 >
 
 const prepareCounterBlock = () =>
@@ -269,15 +269,13 @@ type UpdateRequirements = Expect<
   Equal<Update.RequirementsOf<typeof update>, Command.HandlerOf<typeof Save>>
 >
 
-const incrementAgainStep = CounterDefinition.makeStep(
-  (model, amount: number) => ({
-    model: modifyFields(model, { count: count => count + amount }),
-  }),
-)
+const incrementAgain = CounterDefinition.makeStep((model, amount: number) => ({
+  model: modifyFields(model, { count: count => count + amount }),
+}))
 
 const combined = Update.combineSteps(Model.make({ count: 0 }), [
-  changedCountStep,
-  stepModel => incrementAgainStep(stepModel, 3),
+  applyChangedCount,
+  stepModel => incrementAgain(stepModel, 3),
 ])
 
 const combineGenericSteps = <Model, Message, R>(
@@ -317,7 +315,7 @@ const FullChannelBlock: Block.FromAssemblyWithOutMessage<
   typeof Model,
   typeof prepareFullChannelBlock
 > = Block.assemble(prepareFullChannelBlock)
-const fullChannelStep = FullChannelBlock.update(changedCount)
+const applyFullChannelMessage = FullChannelBlock.update(changedCount)
 
 type FullChannelParameters = Expect<
   Equal<
@@ -327,7 +325,7 @@ type FullChannelParameters = Expect<
 >
 type FullChannelStepParameters = Expect<
   Equal<
-    Parameters<typeof fullChannelStep>,
+    Parameters<typeof applyFullChannelMessage>,
     [model: Model, context: DispatchContext]
   >
 >
@@ -372,11 +370,11 @@ type RequiredCanonicalParameters = Expect<
   >
 >
 
-const requiredContextStep = requiredContextUpdate(changedCount)
+const applyContextualMessage = requiredContextUpdate(changedCount)
 
 type RequiredCurriedParameters = Expect<
   Equal<
-    Parameters<typeof requiredContextStep>,
+    Parameters<typeof applyContextualMessage>,
     [model: Model, context: DispatchContext]
   >
 >
@@ -384,7 +382,7 @@ type RequiredCurriedParameters = Expect<
 const requiredCombined = Update.combineSteps(Model.make({ count: 0 }), [
   stepModel =>
     requiredContextUpdate(changedCount)(stepModel, { multiplier: 2 }),
-  stepModel => incrementAgainStep(stepModel, 1),
+  stepModel => incrementAgain(stepModel, 1),
 ])
 
 const optionalContextUpdate = ContextualComposition.makeUpdate.withContext(
@@ -594,14 +592,17 @@ const GraphFullSaveLayer = GraphFullSave.toLayer<
     )
   }),
 )
-const GraphFullChildBinding = GraphFullDefinition.makeBinding(ChildBlock, {
-  field: 'child',
-})
+const GraphFullChildBinding = GraphFullDefinition.makeRequiredFieldBinding(
+  ChildBlock,
+  {
+    field: 'child',
+  },
+)
 // oxlint-disable-next-line foldkit/block-name-matches-variable -- This fixture deliberately uses a distinct literal Block identity for type coverage.
 const GraphFullComposition = GraphFullDefinition.makeComposition({
   bindings: [GraphFullChildBinding],
 })
-const saveGraphFullStep = GraphFullDefinition.makeStep(
+const saveGraphFull = GraphFullDefinition.makeStep(
   (model, context: DispatchContext) => {
     const nextModel = modifyFields(model, {
       count: count => count + context.multiplier,
@@ -616,13 +617,13 @@ const saveGraphFullStep = GraphFullDefinition.makeStep(
     }
   },
 )
-const ignoreGraphFullRequestStep = GraphFullDefinition.makeNoopStep()
+const ignoreGraphFullRequest = GraphFullDefinition.makeNoopStep()
 const graphFullUpdate = GraphFullComposition.makeUpdate.withContext(
   (context: DispatchContext) => ({
     ChangedCount: (model, { amount }) =>
       GraphFullChildBinding.requestChangeCount({ amount })(model),
-    CompletedSave: model => saveGraphFullStep(model, context),
-    IgnoredRequest: model => ignoreGraphFullRequestStep(model),
+    CompletedSave: model => saveGraphFull(model, context),
+    IgnoredRequest: model => ignoreGraphFullRequest(model),
   }),
 )
 const prepareGraphFullBlock = () =>
@@ -638,7 +639,7 @@ const GraphFullBlock: Block.FromAssemblyWithOutMessage<
   typeof prepareGraphFullBlock
 > = Block.assemble(prepareGraphFullBlock)
 const graphFullMessage = GraphFullMessage.ChangedCount({ amount: 2 })
-const graphFullStep = GraphFullBlock.update(graphFullMessage)
+const applyGraphMessage = GraphFullBlock.update(graphFullMessage)
 
 type GraphFullAuthoredRegistration = Expect<
   Equal<
@@ -664,7 +665,7 @@ type GraphFullParameters = Expect<
 >
 type GraphFullStepParameters = Expect<
   Equal<
-    Parameters<typeof graphFullStep>,
+    Parameters<typeof applyGraphMessage>,
     [model: GraphFullModel, context: DispatchContext]
   >
 >
@@ -699,7 +700,7 @@ const ParentDefinition = Block.makeDefinition('DualUpdatePrototypeParent', {
   Model: ParentModel,
   Message: ParentMessage,
 })
-const ChildBinding = ParentDefinition.makeBinding(ChildBlock, {
+const ChildBinding = ParentDefinition.makeRequiredFieldBinding(ChildBlock, {
   field: 'child',
 })
 // oxlint-disable-next-line foldkit/block-name-matches-variable -- This fixture deliberately uses a distinct literal Block identity for type coverage.
@@ -721,13 +722,13 @@ const parentModel = ParentModel.make({
   updates: 0,
 })
 const parentMessage = ParentMessage.ChangedLabel({ label: 'Primary' })
-const countParentUpdateStep = ParentDefinition.makeStep(model => ({
+const countParentUpdate = ParentDefinition.makeStep(model => ({
   model: modifyFields(model, { updates: updates => updates + 1 }),
 }))
 
 const graphCombined = Update.combineSteps(parentModel, [
   parentUpdate(parentMessage),
-  countParentUpdateStep,
+  countParentUpdate,
 ])
 
 const prepareParentBlock = () =>
@@ -739,10 +740,10 @@ const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof ParentModel,
   typeof prepareParentBlock
 > = Block.assemble(prepareParentBlock)
-const completedParentStep = ParentBlock.update(parentMessage)
+const completedParent = ParentBlock.update(parentMessage)
 const completedGraphCombined = Update.combineSteps(parentModel, [
-  completedParentStep,
-  countParentUpdateStep,
+  completedParent,
+  countParentUpdate,
 ])
 
 type CompletedParentParameters = Expect<
@@ -752,7 +753,7 @@ type CompletedParentParameters = Expect<
   >
 >
 type CompletedParentStepParameters = Expect<
-  Equal<Parameters<typeof completedParentStep>, [model: ParentModel]>
+  Equal<Parameters<typeof completedParent>, [model: ParentModel]>
 >
 type CompletedRegistrationIsInstalled = Expect<
   Equal<
@@ -887,11 +888,11 @@ export {
   combined,
   combineGenericSteps,
   completedGraphCombined,
-  completedParentStep,
+  completedParent as completedParentStep,
   defaultContextUpdate,
   earlyReturnUpdate,
   FullChannelBlock,
-  fullChannelStep,
+  applyFullChannelMessage as fullChannelStep,
   graphCombined,
   GraphFullBlock,
   GraphFullChildBinding,
@@ -901,7 +902,7 @@ export {
   GraphFullOutMessage,
   GraphFullSave,
   graphFullMessage,
-  graphFullStep,
+  applyGraphMessage as graphFullStep,
   graphFullUpdate,
   optionalContextUpdate,
   parentModel,

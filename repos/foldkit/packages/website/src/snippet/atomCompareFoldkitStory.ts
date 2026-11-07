@@ -1,16 +1,21 @@
-import { AsyncData } from 'foldkit'
-import { Command, given, message, model, story } from 'foldkit/story'
-import { expect, test } from 'vitest'
+import { AsyncData, Story } from 'foldkit'
+import { expect } from 'vitest'
 
-test('loading a user: the Command fires, resolves, the Model lands on Success', () => {
-  story(
-    update,
-    given({ user: AsyncData.Idle() }),
-    message(ClickedLoadUser()),
-    Command.expectExact(FetchUser),
-    Command.resolve(FetchUser, SucceededLoadUser({ user: ada })),
-    model(model => {
-      expect(model.user).toStrictEqual(AsyncData.Success({ data: ada }))
-    }),
-  )
-})
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, layer } from './block'
+
+it.effect(
+  'loading a user: the Command fires, resolves, the Model lands on Success',
+  () =>
+    Story.story(
+      { block: ApplicationBlock, layer },
+      Story.given({ user: AsyncData.Idle() }),
+      Story.message(ClickedLoadUser()),
+      Story.Command.expectExact(FetchUser),
+      Story.Command.resolve(FetchUser, SucceededLoadUser({ user: ada })),
+      Story.model(model => {
+        expect(model.user).toStrictEqual(AsyncData.Success({ data: ada }))
+      }),
+    ),
+)

@@ -1,6 +1,7 @@
 import { Array, Number, Option, Result } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeCommandsStep, makeFieldsStep } from './block'
 import { GenerateAmbientParticle, GenerateBurstParticle } from './command'
 import { ApplicationComposition } from './composition'
 import {
@@ -29,7 +30,6 @@ import {
   TRAIL_LENGTH,
   TWO_PI,
 } from './constant'
-import { makeCommandsStep, makeFieldsStep } from './definition'
 import type {
   CompletedGenerateAmbientParticle,
   CompletedGenerateBurstParticle,
@@ -190,7 +190,7 @@ const spawnAmbientParticles = (particleCount: number) => {
   return Array.makeBy(clamped, () => GenerateAmbientParticle())
 }
 
-const appendGeneratedParticleStep = makeFieldsStep(
+const appendGeneratedParticle = makeFieldsStep(
   (
     model,
     generatedParticle:
@@ -241,9 +241,9 @@ export const update = ApplicationComposition.makeUpdate({
     }
   },
 
-  CompletedGenerateAmbientParticle: appendGeneratedParticleStep,
+  CompletedGenerateAmbientParticle: appendGeneratedParticle,
 
-  CompletedGenerateBurstParticle: appendGeneratedParticleStep,
+  CompletedGenerateBurstParticle: appendGeneratedParticle,
 
   PressedCanvas: makeCommandsStep((model, { x, y }) =>
     spawnBurstParticles(x, y, computeBurstHueAnchor(model.elapsedSeconds)),

@@ -1,26 +1,17 @@
-import {
-  Command,
-  Subscription,
-  click,
-  expect,
-  given,
-  role,
-  scene,
-  subscriptions as sceneSubscriptions,
-  text,
-} from 'foldkit/scene'
-import { describe, test } from 'vitest'
+import { Scene } from 'foldkit'
+import { describe } from 'vitest'
+
+import { it } from '@effect/vitest'
 
 import {
-  ApplicationComposition,
+  ApplicationBlock,
   DetermineStartTime,
   DetermineTickTime,
   Message,
   Model,
+  layer,
   subscriptions,
-  update,
-  view,
-} from './application'
+} from './block'
 
 const initialModel = Model.make({
   elapsedMs: 0,
@@ -29,109 +20,109 @@ const initialModel = Model.make({
 })
 
 describe('view', () => {
-  test('initial view shows the zeroed time and Start + Reset buttons', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      expect(text('00:00.00')).toExist(),
-      expect(role('button', { name: 'Start' })).toExist(),
-      expect(role('button', { name: 'Reset' })).toExist(),
-      expect(role('button', { name: 'Stop' })).toBeAbsent(),
-    )
-  })
-
-  test('clicking Start fires DetermineStartTime and switches to Stop', () => {
-    scene(
-      { update, view },
-      given(initialModel),
-      click(role('button', { name: 'Start' })),
-      Command.expectExact(DetermineStartTime({ elapsedMs: 0 })),
-      Command.resolve(
-        DetermineStartTime,
-        Message.CompletedDetermineStartTime({ startTime: 1000 }),
+  it.effect(
+    'initial view shows the zeroed time and Start + Reset buttons',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.expect(Scene.text('00:00.00')).toExist(),
+        Scene.expect(Scene.role('button', { name: 'Start' })).toExist(),
+        Scene.expect(Scene.role('button', { name: 'Reset' })).toExist(),
+        Scene.expect(Scene.role('button', { name: 'Stop' })).toBeAbsent(),
       ),
-      expect(role('button', { name: 'Stop' })).toExist(),
-      expect(role('button', { name: 'Start' })).toBeAbsent(),
-    )
-  })
+  )
 
-  test('clicking Stop while running switches back to Start', () => {
+  it.effect(
+    'clicking Start fires DetermineStartTime and switches to Stop',
+    () =>
+      Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(initialModel),
+        Scene.click(Scene.role('button', { name: 'Start' })),
+        Scene.Command.expectExact(DetermineStartTime({ elapsedMs: 0 })),
+        Scene.Command.resolve(
+          DetermineStartTime,
+          Message.CompletedDetermineStartTime({ startTime: 1000 }),
+        ),
+        Scene.expect(Scene.role('button', { name: 'Stop' })).toExist(),
+        Scene.expect(Scene.role('button', { name: 'Start' })).toBeAbsent(),
+      ),
+  )
+
+  it.effect('clicking Stop while running switches back to Start', () => {
     const runningModel = Model.make({
       elapsedMs: 1500,
       isRunning: true,
       startTime: 1000,
     })
 
-    scene(
-      { update, view },
-      given(runningModel),
-      expect(role('button', { name: 'Stop' })).toExist(),
-      click(role('button', { name: 'Stop' })),
-      expect(role('button', { name: 'Start' })).toExist(),
-      expect(role('button', { name: 'Stop' })).toBeAbsent(),
+    return Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(runningModel),
+      Scene.expect(Scene.role('button', { name: 'Stop' })).toExist(),
+      Scene.click(Scene.role('button', { name: 'Stop' })),
+      Scene.expect(Scene.role('button', { name: 'Start' })).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Stop' })).toBeAbsent(),
     )
   })
 
-  test('clicking Reset zeros the elapsed time', () => {
+  it.effect('clicking Reset zeros the elapsed time', () => {
     const runningModel = Model.make({
       elapsedMs: 12345,
       isRunning: true,
       startTime: 1000,
     })
 
-    scene(
-      { update, view },
-      given(runningModel),
-      expect(text('00:12.34')).toExist(),
-      click(role('button', { name: 'Reset' })),
-      expect(text('00:00.00')).toExist(),
-      expect(role('button', { name: 'Start' })).toExist(),
+    return Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(runningModel),
+      Scene.expect(Scene.text('00:12.34')).toExist(),
+      Scene.click(Scene.role('button', { name: 'Reset' })),
+      Scene.expect(Scene.text('00:00.00')).toExist(),
+      Scene.expect(Scene.role('button', { name: 'Start' })).toExist(),
     )
   })
 
-  test('a tick from the running Subscription advances the elapsed time', () => {
-    const startTime = 1000
-    const runningModel = Model.make({
-      elapsedMs: 0,
-      isRunning: true,
-      startTime,
-    })
+  it.effect(
+    'a tick from the running Subscription advances the elapsed time',
+    () => {
+      const startTime = 1000
+      const runningModel = Model.make({
+        elapsedMs: 0,
+        isRunning: true,
+        startTime,
+      })
 
-    scene(
-      {
-        update,
-        view,
-        subscriptions: sceneSubscriptions(
-          ApplicationComposition,
-          subscriptions,
+      return Scene.scene(
+        { block: ApplicationBlock, layer },
+        Scene.given(runningModel),
+        Scene.expect(Scene.text('00:00.00')).toExist(),
+        Scene.Subscription.expectActive(subscriptions.stopwatchTicks),
+        Scene.Subscription.emit(subscriptions.stopwatchTicks, Message.Ticked()),
+        Scene.Command.expectExact(DetermineTickTime({ startTime })),
+        Scene.Command.resolve(
+          DetermineTickTime,
+          Message.CompletedDetermineTickTime({ elapsedMs: 4320 }),
         ),
-      },
-      given(runningModel),
-      expect(text('00:00.00')).toExist(),
-      Subscription.expectActive(subscriptions.stopwatchTicks),
-      Subscription.emit(subscriptions.stopwatchTicks, Message.Ticked()),
-      Command.expectExact(DetermineTickTime({ startTime })),
-      Command.resolve(
-        DetermineTickTime,
-        Message.CompletedDetermineTickTime({ elapsedMs: 4320 }),
-      ),
-      expect(text('00:04.32')).toExist(),
-      click(role('button', { name: 'Stop' })),
-      Subscription.expectInactive(subscriptions.stopwatchTicks),
-    )
-  })
+        Scene.expect(Scene.text('00:04.32')).toExist(),
+        Scene.click(Scene.role('button', { name: 'Stop' })),
+        Scene.Subscription.expectInactive(subscriptions.stopwatchTicks),
+      )
+    },
+  )
 
-  test('elapsed time formats as MM:SS.cc', () => {
+  it.effect('elapsed time formats as MM:SS.cc', () => {
     const longRunModel = Model.make({
       elapsedMs: 67890,
       isRunning: false,
       startTime: 0,
     })
 
-    scene(
-      { update, view },
-      given(longRunModel),
-      expect(text('01:07.89')).toExist(),
+    return Scene.scene(
+      { block: ApplicationBlock, layer },
+      Scene.given(longRunModel),
+      Scene.expect(Scene.text('01:07.89')).toExist(),
     )
   })
 })

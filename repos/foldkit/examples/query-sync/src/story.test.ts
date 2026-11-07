@@ -1,20 +1,18 @@
 import { Option } from 'effect'
-import { Command, given, message, model, story } from 'foldkit/story'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
-import { toParentMessage } from 'foldkit/test'
 import { fromString } from 'foldkit/url'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
 
+import { it } from '@effect/vitest'
 import { Listbox } from '@foldkit/ui'
 
 import { ReplaceFilters } from './command'
 import { DietListboxBinding } from './composition'
+import { ApplicationBlock, layer } from './index'
 import { Message } from './message'
 import { DietListboxBlock, type Model, PeriodListboxBlock } from './model'
 import { ApplicationRoute, Sorting, browseRouter } from './route'
-import { update } from './update'
-
-type DietListboxMessage = typeof DietListboxBlock.Message.Type
 
 const browseModel: Model = {
   route: ApplicationRoute.Browse({
@@ -23,12 +21,45 @@ const browseModel: Model = {
     diet: Option.none(),
     period: Option.none(),
   }),
-  dietListbox: DietListboxBlock.init({ id: 'diet-filter' }).model,
-  periodListbox: PeriodListboxBlock.init({ id: 'period-filter' }).model,
+  dietListbox: DietListboxBlock.Model.make({
+    id: 'diet-filter',
+    isOpen: false,
+    isAnimated: false,
+    isModal: false,
+    orientation: 'Vertical',
+    animation: {
+      id: 'diet-filter' + '-listbox',
+      isShowing: false,
+      transitionState: 'Idle',
+      transitionGeneration: 0,
+    },
+    maybeActiveItemIndex: Option.none(),
+    activationTrigger: 'Keyboard',
+    searchQuery: '',
+    searchVersion: 0,
+    maybeLastPointerPosition: Option.none(),
+    maybeLastButtonPointerType: Option.none(),
+  }),
+  periodListbox: PeriodListboxBlock.Model.make({
+    id: 'period-filter',
+    isOpen: false,
+    isAnimated: false,
+    isModal: false,
+    orientation: 'Vertical',
+    animation: {
+      id: 'period-filter' + '-listbox',
+      isShowing: false,
+      transitionState: 'Idle',
+      transitionGeneration: 0,
+    },
+    maybeActiveItemIndex: Option.none(),
+    activationTrigger: 'Keyboard',
+    searchQuery: '',
+    searchVersion: 0,
+    maybeLastPointerPosition: Option.none(),
+    maybeLastButtonPointerType: Option.none(),
+  }),
 }
-
-const dietMessage = (message: DietListboxMessage) =>
-  toParentMessage(DietListboxBinding, message)
 
 const urlOrThrow = (raw: string) =>
   Option.getOrThrowWith(
@@ -37,7 +68,7 @@ const urlOrThrow = (raw: string) =>
   )
 
 describe('routing', () => {
-  test('prints sorting in the same format the parser accepts', () => {
+  it('prints sorting in the same format the parser accepts', () => {
     const path = browseRouter({
       search: Option.none(),
       sorting: Sorting.Ascending({ column: 'Length' }),
@@ -51,18 +82,18 @@ describe('routing', () => {
 
 describe('update', () => {
   describe('ChangedUrl', () => {
-    test('parses search, sorting, diet, and period from the URL', () => {
-      story(
-        update,
-        given(browseModel),
-        message(
+    it.effect('parses search, sorting, diet, and period from the URL', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(browseModel),
+        Story.message(
           Message.ChangedUrl({
             url: urlOrThrow(
               'http://localhost/?search=raptor&sorting=Length:Ascending&diet=Carnivore&period=Cretaceous',
             ),
           }),
         ),
-        model(model => {
+        Story.model(model => {
           if (model.route._tag !== 'Browse') {
             throw new Error('Expected Browse route')
           }
@@ -73,40 +104,45 @@ describe('update', () => {
           expect(model.route.diet).toStrictEqual(Option.some('Carnivore'))
           expect(model.route.period).toStrictEqual(Option.some('Cretaceous'))
         }),
-      )
-    })
+      ),
+    )
 
-    test('an unknown path falls through to NotFound', () => {
-      story(
-        update,
-        given(browseModel),
-        message(
+    it.effect('an unknown path falls through to NotFound', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(browseModel),
+        Story.message(
           Message.ChangedUrl({
             url: urlOrThrow('http://localhost/somewhere/else'),
           }),
         ),
-        model(model => {
+        Story.model(model => {
           expect(model.route._tag).toBe('NotFound')
         }),
-      )
-    })
+      ),
+    )
   })
 
   describe('ChangedSearchInput', () => {
-    test('typing search text fires a URL replacement with the new value', () => {
-      story(
-        update,
-        given(browseModel),
-        message(Message.ChangedSearchInput({ value: 'rex' })),
-        Command.expectHas(ReplaceFilters),
-        Command.resolve(ReplaceFilters, Message.CompletedReplaceFilters()),
-      )
-    })
+    it.effect(
+      'typing search text fires a URL replacement with the new value',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(browseModel),
+          Story.message(Message.ChangedSearchInput({ value: 'rex' })),
+          Story.Command.expectHas(ReplaceFilters),
+          Story.Command.resolve(
+            ReplaceFilters,
+            Message.CompletedReplaceFilters(),
+          ),
+        ),
+    )
 
-    test('clearing the search input fires a replacement', () => {
-      story(
-        update,
-        given(
+    it.effect('clearing the search input fires a replacement', () =>
+      Story.story(
+        { block: ApplicationBlock, layer },
+        Story.given(
           modifyFields(browseModel, {
             route: () =>
               ApplicationRoute.Browse({
@@ -117,53 +153,64 @@ describe('update', () => {
               }),
           }),
         ),
-        message(Message.ChangedSearchInput({ value: '' })),
-        Command.expectHas(ReplaceFilters),
-        Command.resolve(ReplaceFilters, Message.CompletedReplaceFilters()),
-      )
-    })
+        Story.message(Message.ChangedSearchInput({ value: '' })),
+        Story.Command.expectHas(ReplaceFilters),
+        Story.Command.resolve(
+          ReplaceFilters,
+          Message.CompletedReplaceFilters(),
+        ),
+      ),
+    )
   })
 
   describe('ClickedColumnHeader', () => {
-    test('first click on an Unsorted column produces an Ascending sort', () => {
-      story(
-        update,
-        given(browseModel),
-        message(Message.ClickedColumnHeader({ column: 'Name' })),
-        Command.expectHas(ReplaceFilters),
-        Command.resolve(ReplaceFilters, Message.CompletedReplaceFilters()),
-      )
-    })
+    it.effect(
+      'first click on an Unsorted column produces an Ascending sort',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(browseModel),
+          Story.message(Message.ClickedColumnHeader({ column: 'Name' })),
+          Story.Command.expectHas(ReplaceFilters),
+          Story.Command.resolve(
+            ReplaceFilters,
+            Message.CompletedReplaceFilters(),
+          ),
+        ),
+    )
   })
 
   describe('Listbox SelectedItem', () => {
-    test('selecting a diet refocuses the listbox button and replaces the URL', () => {
-      story(
-        update,
-        given(browseModel),
-        message(
-          dietMessage(
+    it.effect(
+      'selecting a diet refocuses the listbox button and replaces the URL',
+      () =>
+        Story.story(
+          { block: ApplicationBlock, layer },
+          Story.given(browseModel),
+          Story.messageIn(
+            DietListboxBinding,
             DietListboxBlock.Message.Opened({
               maybeActiveItemIndex: Option.none(),
             }),
           ),
-        ),
-        Command.resolve(
-          Listbox.test.FocusListboxItems,
-          DietListboxBlock.Message.CompletedFocusListboxItems(),
-        ),
-        message(
-          dietMessage(
+          Story.Command.resolve(
+            Listbox.test.FocusListboxItems,
+            DietListboxBlock.Message.CompletedFocusListboxItems(),
+          ),
+          Story.messageIn(
+            DietListboxBinding,
             DietListboxBlock.Message.SelectedItem({ item: 'Carnivore' }),
           ),
+          Story.Command.resolve(
+            Listbox.test.FocusListboxButton,
+            DietListboxBlock.Message.CompletedFocusListboxButton(),
+          ),
+          Story.Command.expectHas(ReplaceFilters),
+          Story.Command.resolve(
+            ReplaceFilters,
+            Message.CompletedReplaceFilters(),
+          ),
         ),
-        Command.resolve(
-          Listbox.test.FocusListboxButton,
-          DietListboxBlock.Message.CompletedFocusListboxButton(),
-        ),
-        Command.expectHas(ReplaceFilters),
-        Command.resolve(ReplaceFilters, Message.CompletedReplaceFilters()),
-      )
-    })
+    )
   })
 })

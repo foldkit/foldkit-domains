@@ -3,8 +3,6 @@ import { Block, Navigation, Route, Url } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineRouteUnion, int, literal, slash } from 'foldkit/route'
 
-// ROUTE
-
 const ApplicationRoute = defineRouteUnion({
   Home: {},
   Person: { personId: Schema.Number },
@@ -35,16 +33,20 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = ApplicationDefinition
+const { makeFieldsStep, makeNoopStep, makeComposition, makeCommand } =
+  ApplicationBlock
 
-const ApplicationComposition = ApplicationDefinition.makeComposition()
+const ApplicationComposition = makeComposition()
 
-const NavigateInternal = ApplicationDefinition.makeCommand('NavigateInternal', {
+const NavigateInternal = makeCommand('NavigateInternal', {
   args: { url: Schema.String },
   messages: [Message.CompletedNavigateInternal],
   handler: function* () {
@@ -55,7 +57,7 @@ const NavigateInternal = ApplicationDefinition.makeCommand('NavigateInternal', {
   },
 })
 
-const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
+const LoadExternal = makeCommand('LoadExternal', {
   args: { href: Schema.String },
   messages: [Message.CompletedLoadExternal],
   handler: function* () {

@@ -1,8 +1,8 @@
 import { type Html } from 'foldkit/html'
 
-import { type CodeBlock } from './component'
+import { SnippetCopyBlock } from './blocks'
 import type { SnippetCopyBinding } from './composition'
-import { SnippetCopyBlock } from './snippetCopy'
+import type * as CodeBlock from './markdown/codeBlock'
 
 type SnippetCopyBlockModel = typeof SnippetCopyBlock.Model.Type
 

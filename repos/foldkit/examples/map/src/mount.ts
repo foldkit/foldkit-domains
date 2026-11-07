@@ -2,7 +2,7 @@ import { Array, Effect, Queue, Schema, Stream } from 'effect'
 import type { Map as MapInstance } from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 
-import { ApplicationDefinition } from './definition'
+import { makeMountStream } from './block'
 import { featuredLocations } from './locations'
 import { MapRegistry } from './mapRegistry'
 import { Message } from './message'
@@ -90,7 +90,7 @@ const listenToMapMovesAndMarkerClicks = (
       }),
   )
 
-export const MountMap = ApplicationDefinition.makeMountStream('MountMap', {
+export const MountMap = makeMountStream('MountMap', {
   args: { hostId: Schema.String },
   messages: [
     Message.SucceededMountMap,
@@ -137,6 +137,7 @@ export const MountMap = ApplicationDefinition.makeMountStream('MountMap', {
               Effect.sync(() => map.remove()).pipe(
                 Effect.ensuring(maps.remove(hostId, map)),
               ),
+            { interruptible: true },
           )
           const { map, maplibre } = mapResource
 

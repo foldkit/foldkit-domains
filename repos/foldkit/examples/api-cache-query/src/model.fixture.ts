@@ -1,8 +1,10 @@
-import { Option, Result } from 'effect'
+import { Effect, Result } from 'effect'
+import { Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import type { Post, PostDetail, Stats } from './data'
-import { AppTabsBlock, Model, TABS_ID } from './model'
+import { ApplicationBlock, layer } from './index'
+import { Message } from './message'
 import { postQuery, postsQuery, statsQuery } from './query'
 
 export const FETCHED_AT = 1_750_000_000_000
@@ -36,105 +38,98 @@ export const fixtureStats: Stats = {
   cacheHitRatePercent: 97,
 }
 
-const loadingPostsQueryModel = postsQuery.requestRevalidationOrLoad(
-  postsQuery.init().model,
-).model
+const application = { block: ApplicationBlock, layer }
 
-export const loadingPostsModel = Model.make({
-  tabs: AppTabsBlock.init({ id: TABS_ID }).model,
-  activeTab: 'Posts',
-  posts: loadingPostsQueryModel,
-  postDetails: postQuery.init().model,
-  maybeSelectedPostId: Option.none(),
-  stats: statsQuery.init().model,
-})
+const loadedPostsModel = Story.story(
+  application,
+  Story.init(),
+  Story.Command.resolve(
+    postsQuery.Fetch,
+    postsQuery.Message.CompletedFetch({
+      generation: 1,
+      result: Result.succeed({ posts: fixturePosts, fetchedAt: FETCHED_AT }),
+    }),
+  ),
+)
 
-const loadedPostsQueryModel = postsQuery.update(
-  loadingPostsQueryModel,
-  postsQuery.Message.CompletedFetch({
-    generation: loadingPostsQueryModel.generation,
-    result: Result.succeed({ posts: fixturePosts, fetchedAt: FETCHED_AT }),
-  }),
-).model
-
-export const loadedPostsModel = modifyFields(loadingPostsModel, {
-  posts: () => loadedPostsQueryModel,
-})
-
-const failedPostsQueryModel = postsQuery.update(
-  loadingPostsQueryModel,
-  postsQuery.Message.CompletedFetch({
-    generation: loadingPostsQueryModel.generation,
-    result: Result.fail('The server is down.'),
-  }),
-).model
-
-export const failedPostsModel = modifyFields(loadingPostsModel, {
-  posts: () => failedPostsQueryModel,
-})
+const failedPostsModel = Story.story(
+  application,
+  Story.init(),
+  Story.Command.resolve(
+    postsQuery.Fetch,
+    postsQuery.Message.CompletedFetch({
+      generation: 1,
+      result: Result.fail('The server is down.'),
+    }),
+  ),
+)
 
 const firstPostArgs = { postId: 'first-post' }
-const loadingFirstPostQueryModel = postQuery.requestLoadIfMissing(
-  postQuery.init().model,
-  firstPostArgs,
-).model
-const loadedFirstPostQueryModel = postQuery.update(
-  loadingFirstPostQueryModel,
-  postQuery.Message.CompletedFetch({
-    args: firstPostArgs,
-    generation: loadingFirstPostQueryModel.generation,
-    requestKey: FIRST_POST_REQUEST_KEY,
-    result: Result.succeed({
-      post: firstPostDetail,
-      fetchedAt: FETCHED_AT,
-    }),
-  }),
-).model
 
-export const cachedFirstPostModel = modifyFields(loadedPostsModel, {
-  postDetails: () => loadedFirstPostQueryModel,
+const cachedFirstPostModel = Effect.gen(function* () {
+  const loadedPosts = yield* loadedPostsModel
+
+  return yield* Story.story(
+    application,
+    Story.given(loadedPosts),
+    Story.message(Message.ClickedPost(firstPostArgs)),
+    Story.Command.resolve(
+      postQuery.Fetch,
+      postQuery.Message.CompletedFetch({
+        args: firstPostArgs,
+        generation: 1,
+        requestKey: FIRST_POST_REQUEST_KEY,
+        result: Result.succeed({
+          post: firstPostDetail,
+          fetchedAt: FETCHED_AT,
+        }),
+      }),
+    ),
+    Story.message(Message.ClickedBackToPosts()),
+  )
 })
 
-const failedFirstPostQueryModel = postQuery.update(
-  loadingFirstPostQueryModel,
-  postQuery.Message.CompletedFetch({
-    args: firstPostArgs,
-    generation: loadingFirstPostQueryModel.generation,
-    requestKey: FIRST_POST_REQUEST_KEY,
-    result: Result.fail('The connection dropped.'),
-  }),
-).model
+const failedFirstPostModel = Effect.gen(function* () {
+  const loadedPosts = yield* loadedPostsModel
 
-export const failedFirstPostModel = modifyFields(loadedPostsModel, {
-  postDetails: () => failedFirstPostQueryModel,
+  return yield* Story.story(
+    application,
+    Story.given(loadedPosts),
+    Story.message(Message.ClickedPost(firstPostArgs)),
+    Story.Command.resolve(
+      postQuery.Fetch,
+      postQuery.Message.CompletedFetch({
+        args: firstPostArgs,
+        generation: 1,
+        requestKey: FIRST_POST_REQUEST_KEY,
+        result: Result.fail('The connection dropped.'),
+      }),
+    ),
+    Story.message(Message.ClickedBackToPosts()),
+  )
 })
 
-const loadingStatsQueryModel = statsQuery.requestRevalidationOrLoad(
-  statsQuery.init().model,
-).model
+const loadedStatsModel = Effect.gen(function* () {
+  const loadedPosts = yield* loadedPostsModel
 
-export const loadingStatsModel = modifyFields(loadedPostsModel, {
-  activeTab: () => 'Stats',
-  stats: () => loadingStatsQueryModel,
+  return yield* Story.story(
+    application,
+    Story.given(modifyFields(loadedPosts, { activeTab: () => 'Stats' })),
+    Story.message(Message.ClickedRefreshStats()),
+    Story.Command.resolve(
+      statsQuery.Fetch,
+      statsQuery.Message.CompletedFetch({
+        generation: 1,
+        result: Result.succeed({ stats: fixtureStats, fetchedAt: FETCHED_AT }),
+      }),
+    ),
+  )
 })
 
-const loadedStatsQueryModel = statsQuery.update(
-  loadingStatsQueryModel,
-  statsQuery.Message.CompletedFetch({
-    generation: loadingStatsQueryModel.generation,
-    result: Result.succeed({ stats: fixtureStats, fetchedAt: FETCHED_AT }),
-  }),
-).model
-
-export const loadedStatsModel = modifyFields(loadedPostsModel, {
-  activeTab: () => 'Stats',
-  stats: () => loadedStatsQueryModel,
-})
-
-const refreshingStatsQueryModel = statsQuery.requestRevalidation(
-  loadedStatsQueryModel,
-).model
-
-export const refreshingStatsModel = modifyFields(loadedStatsModel, {
-  stats: () => refreshingStatsQueryModel,
-})
+export const fixtureEffects = {
+  loadedPostsModel,
+  failedPostsModel,
+  cachedFirstPostModel,
+  failedFirstPostModel,
+  loadedStatsModel,
+}

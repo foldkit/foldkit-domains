@@ -1,6 +1,6 @@
 import { DateTime } from 'effect'
 
-import * as Button from '@foldkit/ui/button'
+import { Button } from '@foldkit/ui'
 
 import type { ApplicationViewBuilder } from '../composition'
 import { Message } from '../message'

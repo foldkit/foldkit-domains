@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Context, Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
@@ -22,18 +22,44 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const EditorDefinition = Block.makeDefinition('Editor', { Model, Message })
+export class EditorStorage extends Context.Service<
+  EditorStorage,
+  Readonly<{ saveDocument: (contents: string) => Effect.Effect<void, Error> }>
+>()('EditorStorage') {}
 
-const { makeFieldsStep } = EditorDefinition
+export const EditorStartup = Schema.Struct({ contents: Schema.String })
+export type EditorStartup = typeof EditorStartup.Type
 
-const EditorComposition = EditorDefinition.makeComposition()
-
-const SaveDocument = EditorDefinition.makeCommand('SaveDocument', {
-  args: { contents: Schema.String },
-  messages: [Message.SucceededSaveDocument, Message.FailedSaveDocument],
+export const EditorKey = Symbol('Editor')
+export const EditorBlock = Block.make('Editor', {
+  key: EditorKey,
+  Model,
+  Message,
+  InitArgs: Schema.Tuple([EditorStartup]),
+  view: { kind: 'Element' },
+  effects: { services: [EditorStorage] },
 })
 
-const init = EditorComposition.makeInit((contents: string) => ({
+const { makeFieldsStep, makeComposition, makeCommand } = EditorBlock
+const EditorComposition = makeComposition()
+
+export const SaveDocument = makeCommand('SaveDocument', {
+  args: { contents: Schema.String },
+  messages: [Message.SucceededSaveDocument, Message.FailedSaveDocument],
+  handler: function* () {
+    const storage = yield* EditorStorage
+
+    return ({ contents }) =>
+      storage.saveDocument(contents).pipe(
+        Effect.as(Message.SucceededSaveDocument()),
+        Effect.catch(error =>
+          Effect.succeed(Message.FailedSaveDocument({ reason: error.message })),
+        ),
+      )
+  },
+})
+
+const init = EditorComposition.makeInit(({ contents }) => ({
   model: { contents, save: SaveState.Idle() },
 }))
 
@@ -50,13 +76,24 @@ const update = EditorComposition.makeUpdate({
   })),
 })
 
-const prepare = () =>
-  EditorComposition.prepareBlock({
-    init,
-    update,
-    hostHandlers: [SaveDocument],
-  })
-export const EditorBlock: Block.FromAssemblyWithoutViewOrOutMessage<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+const view = EditorComposition.makeView((model, h) =>
+  h.div(
+    [],
+    [
+      h.pre([], [model.contents]),
+      h.button([h.OnClick(Message.ClickedSave())], ['Save']),
+    ],
+  ),
+)
+
+export const layer = EditorBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      EffectsLayer: SaveDocument.layer,
+    }
+  }),
+)

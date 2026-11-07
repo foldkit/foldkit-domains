@@ -2,8 +2,7 @@ import { clsx } from 'clsx'
 import { Array, Option } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import { Button } from '@foldkit/ui'
-import type { OptionInfo } from '@foldkit/ui/radioGroup'
+import { Button, RadioGroup } from '@foldkit/ui'
 
 import {
   type ApplicationViewBuilder,
@@ -25,7 +24,7 @@ import {
 type EditionRadioGroupModel = typeof EditionRadioGroupBlock.Model.Type
 
 export const editionOptionView = (
-  option: OptionInfo,
+  option: RadioGroup.OptionInfo,
   h: ApplicationViewBuilder,
 ): Html => {
   const selectionBadgeClassName =

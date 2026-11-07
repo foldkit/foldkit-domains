@@ -35,7 +35,9 @@ export const Definition = Block.makeDefinition('DiagnosticParent', {
   Message: ParentMessage,
   OutMessage,
 })
-export const Binding = Definition.makeBinding(ChildBlock, { field: 'child' })
+export const Binding = Definition.makeRequiredFieldBinding(ChildBlock, {
+  field: 'child',
+})
 export const Composition = Definition.makeComposition({ bindings: [Binding] })
 export const model = Model.make({ child: { count: 0 } })
 export const init = Composition.makeInit(() => ({ model: {} }))
@@ -65,6 +67,29 @@ export const outMessageSteps = [
   Definition.makeOutMessageStep(() => OutMessage.Changed()),
 ]
 
-export const deferredConnectedStep = Definition.makeStep(() =>
+export const deferredConnected = Definition.makeStep(() =>
   Update.combineSteps(connectedSteps),
 )
+
+export const ProgramFlags = Schema.Struct({ session: Schema.String })
+export type ProgramFlags = typeof ProgramFlags.Type
+const ProgramModel = Schema.Struct({ session: Schema.String })
+type ProgramModel = typeof ProgramModel.Type
+const ProgramComposition = Block.makeDefinition('DiagnosticElement', {
+  Model: ProgramModel,
+  Message: Schema.Never,
+}).makeComposition()
+const prepareElement = () =>
+  ProgramComposition.prepareBlock({
+    init: ProgramComposition.makeInit((flags: ProgramFlags) => ({
+      model: flags,
+    })),
+    update: ProgramComposition.makeUpdate({}),
+    view: ProgramComposition.makeView((_model, h) => h.empty),
+  })
+export const ElementBlock: Block.FromAssemblyWithView<
+  typeof ProgramModel,
+  typeof prepareElement
+> = Block.assemble(prepareElement)
+
+export const UnregisteredComposition = Definition.makeComposition()

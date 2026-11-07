@@ -35,7 +35,7 @@ Scene.subscriptions(
   // @ts-expect-error Root-local Subscriptions must read the Application Model.
   childSubscriptions,
 )
-Scene.scene(
+export const invalidChildSubscriptionPayload = Scene.scene(
   { update, view, subscriptions: sceneSubscriptions },
   Scene.given(init().model),
   Scene.Subscription.emit(
@@ -59,7 +59,8 @@ const foreignSubscriptions = ForeignSubscriptionDefinition.makeSubscriptions(
     }),
   }),
 )
-Scene.scene(
+// oxlint-disable-next-line effecttsgo/any-unknown-in-error-context -- This intentionally rejected overload leaves fallback Effect channels.
+export const invalidForeignSubscriptionSource = Scene.scene(
   {
     update: parentUpdate,
     view: parentView,
@@ -155,14 +156,14 @@ const RepeatedDefinition = Block.makeDefinition('Repeated', {
   Model: RepeatedModel,
   Message: RepeatedMessage,
 })
-const HeaderBinding = RepeatedDefinition.makeBinding(
+const HeaderBinding = RepeatedDefinition.makeRequiredFieldBinding(
   GeneratedDispatchChildBlock,
   {
     field: 'first',
     placement: 'header-search',
   },
 )
-const AliasBinding = RepeatedDefinition.makeBinding(
+const AliasBinding = RepeatedDefinition.makeRequiredFieldBinding(
   GeneratedDispatchChildBlock,
   {
     field: 'second',

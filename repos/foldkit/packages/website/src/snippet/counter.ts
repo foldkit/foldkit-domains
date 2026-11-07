@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -15,10 +15,18 @@ export const Message = defineMessageUnion({
 })
 export type Message = typeof Message.Type
 
-export const ApplicationComposition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
-}).makeComposition()
+})
+
+const { makeComposition } = ApplicationBlock
+
+export const ApplicationComposition = makeComposition()
 
 export const update = ApplicationComposition.makeUpdate({
   ClickedDecrement: model => ({
@@ -68,15 +76,15 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)
 
 const buttonStyle = 'bg-black text-white hover:bg-gray-700 px-4 py-2 transition'

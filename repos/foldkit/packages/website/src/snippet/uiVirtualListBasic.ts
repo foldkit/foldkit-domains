@@ -1,7 +1,4 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -32,37 +29,38 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const ActivityListExampleDefinition = Block.makeDefinition(
-  'ActivityListExample',
-  {
-    Model,
-    Message,
+export const ActivityListExampleKey = Symbol('ActivityListExample')
+export const ActivityListExampleBlock = Block.make('ActivityListExample', {
+  key: ActivityListExampleKey,
+  InitArgs: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message,
+})
+
+const {
+  makeNoopStep,
+  makeOutMessageFold,
+  makeRequiredFieldBinding,
+  makeComposition,
+} = ActivityListExampleBlock
+
+const ActivityListBinding = makeRequiredFieldBinding(ActivityList, {
+  field: 'activityList',
+  init: {
+    contextToArgs: () => [{ id: 'activity-list', rowHeightPx: 56 }],
   },
-)
-
-const { makeNoopStep } = ActivityListExampleDefinition
-
-const foldActivityListOutMessage =
-  ActivityListExampleDefinition.makeOutMessageFold(ActivityList, {
+}).withOutMessagePolicy({
+  fold: makeOutMessageFold(ActivityList, {
     ObservedContainerScroll: makeNoopStep,
     ApproachedLoadedStart: makeNoopStep,
     EndedContainerScroll: makeNoopStep,
-  })
+  }),
+})
 
-const ActivityListBinding = ActivityListExampleDefinition.makeBinding(
-  ActivityList,
-  {
-    field: 'activityList',
-    init: {
-      contextToArgs: () => Tuple.make({ id: 'activity-list', rowHeightPx: 56 }),
-    },
-  },
-).withOutMessagePolicy({ fold: foldActivityListOutMessage })
-
-const ActivityListExampleComposition =
-  ActivityListExampleDefinition.makeComposition({
-    bindings: [ActivityListBinding],
-  })
+const ActivityListExampleComposition = makeComposition({
+  bindings: [ActivityListBinding],
+})
 
 // In your init function, give the list a unique id and a row height in
 // pixels. All rows share this height:
@@ -126,3 +124,16 @@ const view = ActivityListExampleComposition.makeView(
   // component's container Mount owns scroll and resize observation, so no
   // Subscription wiring is required.
 )
+
+export const layer = ActivityListExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const children = yield* ActivityListExampleComposition.acquireChildren()
+
+    return {
+      children,
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(VirtualList.layer))

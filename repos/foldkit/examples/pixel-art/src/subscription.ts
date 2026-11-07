@@ -1,7 +1,7 @@
 import { Effect, Match, Option, Schema, Stream } from 'effect'
 import { Dom } from 'foldkit'
 
-import { ApplicationDefinition } from './definition'
+import { makeSubscriptions } from './block'
 import { Message } from './message'
 import type { ClickedRedo, ClickedUndo, SelectedTool } from './message'
 
@@ -43,7 +43,7 @@ const toToolMessage = (event: KeyboardEvent): Option.Option<SelectedTool> => {
   )
 }
 
-export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
+export const subscriptions = makeSubscriptions(entry => ({
   undoRedoKeyPresses: entry('UndoRedoKeyPresses', {
     messages: [Message.ClickedUndo, Message.ClickedRedo],
     handler: function* () {

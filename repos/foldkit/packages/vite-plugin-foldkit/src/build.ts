@@ -17,6 +17,12 @@ import type {
   ViteBuilder,
 } from 'vite'
 
+import {
+  DEV_TOOLS_OVERLAY_MODULE_ID,
+  DEV_TOOLS_OVERLAY_MODULE_SOURCE,
+  RESOLVED_DEV_TOOLS_OVERLAY_MODULE_ID,
+  shouldInjectDevToolsOverlay,
+} from './devToolsOverlay.js'
 import { installPrerenderPreview } from './preview.js'
 
 /** How a build materializes the URLs a server entry can render. */
@@ -675,6 +681,9 @@ export const foldkitBuild = (
       },
     },
     resolveId(id) {
+      if (id === DEV_TOOLS_OVERLAY_MODULE_ID) {
+        return RESOLVED_DEV_TOOLS_OVERLAY_MODULE_ID
+      }
       if (id === CLIENT_MODULE_ID) {
         return RESOLVED_CLIENT_MODULE_ID
       }
@@ -684,14 +693,23 @@ export const foldkitBuild = (
       return undefined
     },
     load(id) {
+      if (id === RESOLVED_DEV_TOOLS_OVERLAY_MODULE_ID) {
+        return DEV_TOOLS_OVERLAY_MODULE_SOURCE
+      }
       if (id === RESOLVED_CLIENT_MODULE_ID) {
         const { modulePreload } = this.environment.config.build
         const polyfill =
           modulePreload !== false && modulePreload.polyfill
             ? "import 'vite/modulepreload-polyfill'\n"
             : ''
+        const overlay = shouldInjectDevToolsOverlay(
+          'build',
+          this.environment.config.root,
+        )
+          ? `import ${JSON.stringify(DEV_TOOLS_OVERLAY_MODULE_ID)}\n`
+          : ''
 
-        return `${polyfill}import ${JSON.stringify(options.clientEntry)}\n`
+        return `${polyfill}${overlay}import ${JSON.stringify(options.clientEntry)}\n`
       }
       if (id !== RESOLVED_FETCH_MODULE_ID) {
         return
@@ -759,6 +777,16 @@ export const foldkitBuild = (
         : { environments: { client, ssr } }
     },
     configResolved(config) {
+      if (
+        config.command === 'build' &&
+        (config.environments['client']?.build.watch ||
+          config.environments['ssr']?.build.watch)
+      ) {
+        throw new Error(
+          '[foldkit] ssr.build does not support build.watch or vite build --watch. Use the Vite dev server for SSR development, or rerun a full vite build when sources change.',
+        )
+      }
+
       if (config.base === '' || config.base === './') {
         throw new Error(
           '[foldkit] ssr.build requires an absolute URL or root-relative base, such as "/" or "/app/". A relative base cannot locate browser assets consistently across server-rendered routes.',

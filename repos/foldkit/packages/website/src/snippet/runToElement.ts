@@ -1,9 +1,10 @@
 import { Program, Runtime } from 'foldkit'
 
-import { ApplicationBlock } from './application'
+import { ApplicationBlock, layer } from './block'
 
 const element = Program.makeElement({
   block: ApplicationBlock,
+  layer,
   container: document.getElementById('widget'),
 })
 

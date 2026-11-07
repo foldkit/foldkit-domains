@@ -1,5 +1,6 @@
 import {
   Array,
+  Cause,
   Context,
   Duration,
   Effect,
@@ -28,6 +29,7 @@ import type { ManagedResources } from '../managedResource/index.js'
 import type { AnyMountHandler, LayeredMountDefinition } from '../mount/index.js'
 import type { Ports } from '../port/index.js'
 import { RenderCommit, createCommitNotifier } from '../render/commit.js'
+import * as Serialization from '../serialization.js'
 import {
   type Registrations,
   aggregate as aggregateSubscriptions,
@@ -54,9 +56,11 @@ import {
   makePortChannels,
   validatePorts,
 } from './hostConnector.js'
+import { assertRuntimeId } from './hostContainer.js'
 import {
   type BootMode,
   type HydrationConfig,
+  type ResolvedHydrationHandoff,
   resolveHydrationHandoff,
 } from './hydrationHandoff.js'
 import { forkManagedResourceFibers } from './managedResourceFibers.js'
@@ -102,8 +106,8 @@ export type RuntimeConfig<
 > = Readonly<{
   kind: Kind
   ports: P
-  Model: Schema.Codec<Model, any, unknown, unknown>
-  Flags: Schema.Codec<Flags, any, unknown, unknown>
+  Model: Schema.Codec<Model, any, never, never>
+  Flags: Schema.Codec<Flags, any, never, never>
   configuredFlags: Option.Option<Effect.Effect<Flags, never, Resources>>
   isFlagsRequired: boolean
   init: (
@@ -201,16 +205,13 @@ export type RuntimeConfig<
    * registered child bindings supply their occurrence-scoped registrations.
    */
   managedResources?: ManagedResources<Model, Message, ManagedResourceServices>
-  devTools?: RuntimeDevToolsConfig<Resources>
+  devTools?: RuntimeDevToolsConfig
 }>
 
+/** Flags Schema used for startup and the server-to-browser hydration handoff. */
 export type FlagsSchemaConfig<Flags> = Readonly<{
-  // Flags decode synchronously, on hydration through `decodeUnknownSync` and
-  // across development reloads through the sync Model/Flags codec, so the codec
-  // must require no decode or encode services. The `never` service parameters
-  // also make a full application config assignable to the experimental server
-  // render input, which needs the same guarantee to serialize Flags without an
-  // app context.
+  /** Must encode and decode without Services, completing synchronously when
+   * the hydration handoff runs it. Configuration does not evaluate the Codec. */
   Flags: Schema.Codec<Flags, any, never, never>
 }>
 
@@ -257,9 +258,11 @@ type RuntimeInternals = {
     bootMode: BootMode,
     flags: Effect.Effect<any, never, any> | undefined,
     buildId: string | undefined,
-    applicationLayer: Layer.Layer<any, any, any>,
+    applicationLayer: Layer.Layer<never, any, any>,
+    preparedHandoff?: ResolvedHydrationHandoff<any, any>,
+    applicationMemoMap?: Layer.MemoMap,
   ) => Effect.Effect<void>
-  applicationLayer?: Layer.Layer<any, any, any>
+  applicationLayer?: Layer.Layer<never, any, any>
   compositionRoot?: BindableBlock
   kind: 'Application' | 'Element'
   embedLifecycle: EmbedLifecycle
@@ -371,7 +374,9 @@ export const makeRuntime = <
     bootMode: BootMode = 'Fresh',
     bootFlags?: Effect.Effect<Flags, never, Resources>,
     buildId?: string,
-    applicationLayer?: Layer.Layer<any, any, any>,
+    applicationLayer?: Layer.Layer<never, any, any>,
+    preparedHandoff?: ResolvedHydrationHandoff<Flags, Resources>,
+    applicationMemoMap?: Layer.MemoMap,
   ): Effect.Effect<void> => {
     // NOTE: one notifier per runtime, provided across the whole runtime
     // Effect so Commands, Subscriptions, and Mount-forked Effects all resolve
@@ -382,15 +387,7 @@ export const makeRuntime = <
 
     return Effect.scoped(
       Effect.gen(function* () {
-        if (runtimeId === '') {
-          return yield* Effect.die(
-            new Error(
-              '[foldkit] Runtime container must have an `id` for Model preservation across reloads. ' +
-                'Set `container.id = "app"` (or any unique string) before passing it to makeApplication or makeElement. ' +
-                'On a server-rendered page the id comes from the `data-foldkit-app` root stamp instead.',
-            ),
-          )
-        }
+        assertRuntimeId(runtimeId)
 
         // NOTE: every perpetual fiber (for example, Subscription streams
         // and ManagedResource lifecycles) and every Command fiber forks
@@ -400,7 +397,8 @@ export const makeRuntime = <
         const runtimeScope = yield* Effect.scope
 
         const { maybeHydrationRoot, resolveFlags } =
-          yield* resolveHydrationHandoff({
+          preparedHandoff ??
+          (yield* resolveHydrationHandoff({
             bootMode,
             hydration,
             bootFlags,
@@ -410,7 +408,7 @@ export const makeRuntime = <
             preservedModel,
             container,
             buildId,
-          })
+          }))
 
         const maybePortChannels: Option.Option<PortChannelsBundle> = pipe(
           Option.fromNullishOr(ports),
@@ -444,6 +442,7 @@ export const makeRuntime = <
           runtimeScope,
           maybePortChannels,
           applicationLayer,
+          applicationMemoMap,
         })
 
         const declaredComposition =
@@ -452,37 +451,40 @@ export const makeRuntime = <
           assertComposedHandlers(declaredComposition, applicationContext)
         }
 
-        const ModelJsonCodec = Schema.toCodecJson(
-          /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-          Model as Schema.Codec<Model>,
-        )
-        const decodePreservedModel = Schema.decodeUnknownExit(ModelJsonCodec)
-        const encodePreservedModel = Schema.encodeUnknownExit(ModelJsonCodec)
+        const ModelJsonCodec = Schema.toCodecJson(Model)
+        const decodePreservedModel = Schema.decodeUnknownEffect(ModelJsonCodec)
+        const encodePreservedModel = Schema.encodeEffect(ModelJsonCodec)
         let isPreservationFailing = false
 
         const preserveCurrentModel = (
           model: Model,
           isReloadFlush: boolean,
         ): void =>
-          Exit.match(encodePreservedModel(model), {
-            onFailure: error => {
-              preserveModel(runtimeId, undefined, isReloadFlush)
+          Result.match(
+            Serialization.run(
+              encodePreservedModel(model),
+              `Model preservation for runtime "${runtimeId}"`,
+            ),
+            {
+              onFailure: error => {
+                preserveModel(runtimeId, undefined, isReloadFlush)
 
-              if (!isPreservationFailing) {
-                isPreservationFailing = true
-                console.warn(
-                  `[foldkit] Could not preserve Model for runtime "${runtimeId}". ` +
-                    'The live Model is unchanged; the next development reload will initialize fresh. ' +
-                    'Use JSON-capable Schemas for values that must survive a reload.',
-                  error,
-                )
-              }
+                if (!isPreservationFailing) {
+                  isPreservationFailing = true
+                  console.warn(
+                    `[foldkit] Could not preserve Model for runtime "${runtimeId}". ` +
+                      'The live Model is unchanged; the next development reload will initialize fresh. ' +
+                      'Use JSON-capable Schemas for values that must survive a reload.',
+                    error,
+                  )
+                }
+              },
+              onSuccess: encodedModel => {
+                isPreservationFailing = false
+                preserveModel(runtimeId, encodedModel, isReloadFlush)
+              },
             },
-            onSuccess: encodedModel => {
-              isPreservationFailing = false
-              preserveModel(runtimeId, encodedModel, isReloadFlush)
-            },
-          })
+          )
 
         const currentUrl: Option.Option<Url> = Option.fromNullishOr(
           routingConfig,
@@ -502,11 +504,23 @@ export const makeRuntime = <
         )
 
         const init_ = yield* preservedModel !== undefined
-          ? Exit.match(decodePreservedModel(preservedModel), {
-              onFailure: () => runInit,
-              onSuccess: restoredModel =>
-                Effect.succeed<InitResult>({ model: restoredModel }),
-            })
+          ? Result.match(
+              Serialization.run(
+                decodePreservedModel(preservedModel),
+                `Model restoration for runtime "${runtimeId}"`,
+              ),
+              {
+                onFailure: error => {
+                  if (error instanceof Serialization.SerializationError) {
+                    console.warn(error.message, error.cause)
+                  }
+
+                  return runInit
+                },
+                onSuccess: restoredModel =>
+                  Effect.succeed<InitResult>({ model: restoredModel }),
+              },
+            )
           : runInit
         const initModelRaw = init_.model
         const initCommands = init_.commands ?? []
@@ -633,14 +647,12 @@ export const makeRuntime = <
         }
         const devToolsIntegration = yield* makeDevToolsIntegration<
           Model,
-          Message,
-          Resources
+          Message
         >({
           devTools,
           update,
           maybeFreezeModel,
           prepareDispatch,
-          provideDispatchServices: provideApplicationServices,
         })
         const {
           isRecordingCommands,
@@ -779,7 +791,11 @@ export const makeRuntime = <
             // check its effect would run behind the crash view, contradicting
             // the crash-terminality contract. `crashWith` sets `isCrashed`
             // synchronously, so it is already set by the time this runs.
-            if (status.isRuntimeDisposed || status.isCrashed) {
+            if (
+              status.isRuntimeDisposed ||
+              status.isCrashed ||
+              captured?.isCurrent() === false
+            ) {
               return
             }
 
@@ -813,11 +829,22 @@ export const makeRuntime = <
 
             Effect.runForkWith(runtimeContext)(
               Effect.forkIn(captured?.scope ?? runtimeScope)(
-                recordedCommand.pipe(
-                  Effect.flatMap(result =>
-                    enqueueMessageEffect(result, captured?.isCurrent),
+                Effect.uninterruptibleMask(restore =>
+                  restore(
+                    recordedCommand.pipe(
+                      Effect.flatMap(result =>
+                        enqueueMessageEffect(result, captured?.isCurrent),
+                      ),
+                    ),
+                  ).pipe(
+                    Effect.catchCause(cause => {
+                      if (Cause.hasInterruptsOnly(cause)) {
+                        return Effect.void
+                      } else {
+                        return crashWith(cause, message)
+                      }
+                    }),
                   ),
-                  Effect.catchCause(cause => crashWith(cause, message)),
                 ),
               ),
             )
@@ -1069,6 +1096,8 @@ export const makeRuntime = <
       flags,
       buildId,
       applicationLayer,
+      preparedHandoff,
+      applicationMemoMap,
     ) =>
       startWith(
         maybeConnector,
@@ -1077,6 +1106,8 @@ export const makeRuntime = <
         flags,
         buildId,
         applicationLayer,
+        preparedHandoff,
+        applicationMemoMap,
       ),
     kind,
     embedLifecycle: {

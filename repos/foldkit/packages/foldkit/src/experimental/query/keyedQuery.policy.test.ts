@@ -24,7 +24,7 @@ import {
 import { defineMessageUnion } from '../../message/index.js'
 import * as Story from '../../test/story.js'
 import * as Update from '../../update/index.js'
-import * as Query from './index.js'
+import * as Query from './native.js'
 
 const provideRegistry =
   (registry: __Registry) =>
@@ -639,7 +639,7 @@ describe('KeyedQuery accepted completion notifications', () => {
       Model: ParentModel,
       Message: ParentMessage,
     })
-    const BaseBinding = ParentDefinition.makeBinding(reporting, {
+    const BaseBinding = ParentDefinition.makeRequiredFieldBinding(reporting, {
       field: 'windows',
     })
     const WindowsBinding = BaseBinding.withOutMessagePolicy({

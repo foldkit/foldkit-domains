@@ -1,7 +1,4 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
@@ -25,13 +22,21 @@ const Message = defineMessageUnion({
 })
 type Message = typeof Message.Type
 
-const NotificationPreferencesComposition = Block.makeDefinition(
+export const NotificationPreferencesKey = Symbol('NotificationPreferences')
+export const NotificationPreferencesBlock = Block.make(
   'NotificationPreferences',
   {
+    key: NotificationPreferencesKey,
+    InitArgs: Schema.Tuple([]),
+    view: { kind: 'Element' },
     Model,
     Message,
   },
-).makeComposition()
+)
+
+const { makeComposition } = NotificationPreferencesBlock
+
+const NotificationPreferencesComposition = makeComposition()
 
 // In your init function, start each unchecked:
 const init = NotificationPreferencesComposition.makeInit(() => ({
@@ -102,3 +107,14 @@ const view = NotificationPreferencesComposition.makeView((model, h) => {
     h,
   )
 })
+
+export const layer = NotificationPreferencesBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)

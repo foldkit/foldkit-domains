@@ -1,12 +1,15 @@
 import { Context, Effect, Layer, Option, Ref, Schema, Scope } from 'effect'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import { defineMessageUnion } from '../message/index.js'
 import { inspectBinding } from './binding.js'
 import { makeDefinition, makeNamespace } from './define.js'
 import { identityOf } from './identity.js'
+import type { Owner } from './owner.js'
 import * as Block from './public.js'
+import type { RuntimeCapability } from './runtimeCapability.js'
 import {
+  type QualifyOwned,
   invocationContext,
   qualifyCommand,
   qualifyContext,
@@ -70,7 +73,7 @@ const makeFeature = (id: string, onConstruct: () => void = () => {}) => {
     typeof prepareBlock
   > = Block.assemble(prepareBlock)
   const bind = (placement: string) =>
-    ScopeParent.makeBinding(block, {
+    ScopeParent.makeCustomBinding(block, {
       placement,
       read: model => Option.some(model),
       write: (_model, nextChild) => nextChild,
@@ -93,6 +96,25 @@ const execute = <Services, Error, Message>(
   )
 
 describe('Block capability contexts', () => {
+  it('qualifies only the selected owner’s opaque Runtime capability', () => {
+    type RoomCapability = RuntimeCapability<Owner<'Room', true>>
+    type ParentCapability = RuntimeCapability<Owner<'Application', true>>
+    type ScopedRoom = Block.Scoped<'general', RoomCapability>
+
+    expectTypeOf<
+      QualifyOwned<'general', 'Room', RoomCapability>
+    >().toEqualTypeOf<ScopedRoom>()
+    expectTypeOf<
+      QualifyOwned<'general', 'Room', ParentCapability>
+    >().toEqualTypeOf<ParentCapability>()
+    expectTypeOf<
+      QualifyOwned<'general', 'Room', ScopedRoom>
+    >().toEqualTypeOf<ScopedRoom>()
+    expectTypeOf<
+      QualifyOwned<'general', 'Room', RoomCapability | ParentCapability>
+    >().toEqualTypeOf<ScopedRoom | ParentCapability>()
+  })
+
   it('constructs a shared selection once and aliases it to repeated placements', async () => {
     let constructions = 0
     const feature = makeFeature('SharedScope', () => {
@@ -166,7 +188,7 @@ describe('Block capability contexts', () => {
         Layer.provide(Layer.succeed(ValueSource, { value: 'left' })),
       ),
     )
-    const LeftBinding = ScopeParent.makeBinding(leftBlock, {
+    const LeftBinding = ScopeParent.makeCustomBinding(leftBlock, {
       placement: 'Left',
       read: model => Option.some(model),
       write: (_model, nextChild) => nextChild,
@@ -176,7 +198,7 @@ describe('Block capability contexts', () => {
         Layer.provide(Layer.succeed(ValueSource, { value: 'right' })),
       ),
     )
-    const RightBinding = ScopeParent.makeBinding(rightBlock, {
+    const RightBinding = ScopeParent.makeCustomBinding(rightBlock, {
       placement: 'Right',
       read: model => Option.some(model),
       write: (_model, nextChild) => nextChild,
@@ -255,7 +277,7 @@ describe('Block capability contexts', () => {
         Layer.provide(Layer.succeed(ValueSource, { value: 'selected' })),
       ),
     )
-    const SelectedBinding = ScopeParent.makeBinding(selectedBlock, {
+    const SelectedBinding = ScopeParent.makeCustomBinding(selectedBlock, {
       placement: 'Selected',
       read: model => Option.some(model),
       write: (_model, nextChild) => nextChild,
