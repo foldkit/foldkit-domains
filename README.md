@@ -20,7 +20,7 @@ pnpm dev
 - [Architecture](docs/architecture.md): code map, search flow, caching, hydration, and DevTools.
 - [Testing](docs/testing.md): commands, regression invariants, and browser coverage.
 - [Deployment](docs/deployment.md): local production builds, Cloudflare through Alchemy, and social assets.
-- [Framework preview notes](docs/framework-preview.md): pinned versions, integration workarounds, and reference source.
+- [Framework preview notes](docs/framework-preview.md): published package versions, rendering integration, and reference source.
 
 This is an independent Foldkit demo, not affiliated with Vercel. Domain searches use deterministic sample data served by a same-origin Effect RPC backend; they make no registrar API calls.
 

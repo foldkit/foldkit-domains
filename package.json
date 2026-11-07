@@ -22,19 +22,19 @@
   },
   "dependencies": {
     "@effect/platform-browser": "4.1.0",
-    "@foldkit/devtools": "file:vendor/foldkit/29b3f80e4048/foldkit-devtools-0.170.0-canary.29b3f80e4048.tgz",
-    "@foldkit/ui": "file:vendor/foldkit/29b3f80e4048/foldkit-ui-0.170.0-canary.29b3f80e4048.tgz",
+    "@foldkit/devtools": "0.170.0-canary.54f8bcd443b4",
+    "@foldkit/ui": "0.170.0-canary.54f8bcd443b4",
     "@fontsource-variable/geist": "^5.3.0",
     "effect": "4.1.0",
-    "foldkit": "file:vendor/foldkit/29b3f80e4048/foldkit-0.170.0-canary.29b3f80e4048.tgz"
+    "foldkit": "0.170.0-canary.54f8bcd443b4"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@effect/tsgo": "0.50.0",
     "@effect/vitest": "4.1.0",
-    "@foldkit/devtools-mcp": "file:vendor/foldkit/29b3f80e4048/foldkit-devtools-mcp-0.26.0-canary.29b3f80e4048.tgz",
-    "@foldkit/oxlint-plugin": "file:vendor/foldkit/29b3f80e4048/foldkit-oxlint-plugin-0.15.4-canary.29b3f80e4048.tgz",
-    "@foldkit/vite-plugin": "file:vendor/foldkit/29b3f80e4048/foldkit-vite-plugin-0.29.0-canary.29b3f80e4048.tgz",
+    "@foldkit/devtools-mcp": "0.26.0-canary.54f8bcd443b4",
+    "@foldkit/oxlint-plugin": "0.15.4-canary.54f8bcd443b4",
+    "@foldkit/vite-plugin": "0.29.0-canary.54f8bcd443b4",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "26.4.0",

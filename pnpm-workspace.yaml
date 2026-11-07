@@ -4,6 +4,13 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
   workerd: true
+minimumReleaseAgeExclude:
+  - 'foldkit@0.170.0-canary.54f8bcd443b4'
+  - '@foldkit/ui@0.170.0-canary.54f8bcd443b4'
+  - '@foldkit/devtools@0.170.0-canary.54f8bcd443b4'
+  - '@foldkit/devtools-mcp@0.26.0-canary.54f8bcd443b4'
+  - '@foldkit/oxlint-plugin@0.15.4-canary.54f8bcd443b4'
+  - '@foldkit/vite-plugin@0.29.0-canary.54f8bcd443b4'
 overrides:
   effect: 4.1.0
   '@effect/platform-browser': 4.1.0
